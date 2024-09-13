@@ -1,0 +1,13 @@
+[package]
+name = "ekubo_sdk"
+version = "0.1.0"
+authors = ["Mahmoud Salem <moody@ekubo.org>"]
+edition = "2021"
+
+[dependencies]
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
+lazy_static = "1.4"
+
+[lib]
+path = "src/lib.rs"
