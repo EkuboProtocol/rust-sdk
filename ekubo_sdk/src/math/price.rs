@@ -29,44 +29,26 @@ pub fn next_sqrt_ratio_from_amount0(
 
     if amount0 < 0 {
         // amount0 is negative
-        let amount0_abs = U256::from((-amount0) as u128);
+        let amount0_abs = U256::from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?);
 
         // product = amount0_abs * sqrt_ratio
-        let product = muldiv(amount0_abs, sqrt_ratio, U256::one(), false)
-            .map_err(PriceMathError::MuldivError)?;
+        let product = amount0_abs.checked_mul(sqrt_ratio).ok_or(PriceMathError::Overflow)?;
 
-        if product >= numerator1 {
-            return Err(PriceMathError::InvalidDenominator);
-        }
+        let denominator = numerator1.checked_sub(product).ok_or(PriceMathError::Overflow)?;
 
-        let denominator = numerator1 - product;
-
-        // num = numerator1 * sqrt_ratio
-        let num = muldiv(numerator1, sqrt_ratio, U256::one(), false)
-            .map_err(PriceMathError::MuldivError)?;
-
-        // result = (num / denominator), rounded up if there is a remainder
-        let result = muldiv(num, U256::one(), denominator, true)
-            .map_err(PriceMathError::MuldivError)?;
-
-        Ok(result)
+        muldiv(numerator1, sqrt_ratio, denominator, true).map_err(PriceMathError::MuldivError)
     } else {
         // amount0 is positive
-        let amount0_u256 = U256::from(amount0 as u128);
+        let amount0_u256 = U256::from(amount0);
 
-        // denom_p1 = numerator1 / sqrt_ratio
-        let denom_p1 = muldiv(numerator1, U256::one(), sqrt_ratio, false)
-            .map_err(PriceMathError::MuldivError)?;
+        let denom_p1 = numerator1 / sqrt_ratio;
 
         let denom = denom_p1
             .checked_add(amount0_u256)
             .ok_or(PriceMathError::Overflow)?;
 
-        // result = numerator1 / denom, rounded up if there is a remainder
-        let result = muldiv(numerator1, U256::one(), denom, true)
-            .map_err(PriceMathError::MuldivError)?;
-
-        Ok(result)
+        muldiv(numerator1, U256::one(), denom, true)
+            .map_err(PriceMathError::MuldivError)
     }
 }
 
@@ -130,7 +112,7 @@ mod tests {
         let amount0 = -100_000_000_000_000i128;
         let result = next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, amount0);
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), PriceMathError::InvalidDenominator);
+        assert_eq!(result.err().unwrap(), PriceMathError::Overflow);
     }
 
     #[test]
