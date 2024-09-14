@@ -6,9 +6,7 @@ use num_traits::Zero;
 pub enum PriceMathError {
     NoLiquidity,
     Overflow,
-    InvalidDenominator,
     NegativeResult,
-    ExceedsMaxValue,
     MuldivError(MuldivError),
 }
 
