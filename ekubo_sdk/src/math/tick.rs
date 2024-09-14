@@ -38,12 +38,9 @@ pub const MAX_TICK: i32 = 88722883;
 pub const MIN_SQRT_RATIO: U256 = U256([4363438787445, 1, 0, 0]);
 pub const MAX_SQRT_RATIO: U256 = U256([17632034473660873000, 8013356184008655433, 18446739710271796309, 0]);
 
-#[derive(Debug)]
-pub struct TickOutOfRangeError;
-
-pub fn to_sqrt_ratio(tick: i32) -> Result<U256, TickOutOfRangeError> {
+pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
     if tick < MIN_TICK || tick > MAX_TICK {
-        return Err(TickOutOfRangeError);
+        return None;
     }
 
     let mut ratio = ONE_X128.clone();
@@ -60,7 +57,7 @@ pub fn to_sqrt_ratio(tick: i32) -> Result<U256, TickOutOfRangeError> {
         ratio = U256::MAX / ratio;
     }
 
-    Ok(ratio)
+    Some(ratio)
 }
 
 #[cfg(test)]
@@ -89,6 +86,12 @@ mod tests {
     }
 
     #[test]
+    fn test_tick_too_small() {
+        assert!(to_sqrt_ratio(MIN_TICK - 1).is_none());
+        assert!(to_sqrt_ratio(i32::MIN).is_none());
+    }
+
+    #[test]
     fn test_min_tick() {
         assert_eq!(
             to_sqrt_ratio(MIN_TICK).unwrap(),
@@ -102,5 +105,11 @@ mod tests {
             to_sqrt_ratio(MAX_TICK).unwrap(),
             MAX_SQRT_RATIO,
         );
+    }
+
+    #[test]
+    fn test_tick_too_large() {
+        assert!(to_sqrt_ratio(MAX_TICK + 1).is_none());
+        assert!(to_sqrt_ratio(i32::MAX).is_none());
     }
 }

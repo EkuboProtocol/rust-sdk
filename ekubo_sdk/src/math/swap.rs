@@ -1,9 +1,7 @@
 use crate::math::delta::AmountDeltaError;
 use crate::math::sqrt_ratio::{next_sqrt_ratio_from_amount0, next_sqrt_ratio_from_amount1};
-use crate::math::swap::ComputeStepError::WrongDirection;
 use crate::math::uint::U256;
 use num_traits::Zero;
-
 
 pub struct SwapResult {
     pub consumed_amount: i128,
@@ -33,6 +31,8 @@ pub fn amount_before_fee(after_fee: u128, fee: u128) -> Option<u128> {
         }
     }
 }
+
+
 pub fn compute_fee(amount: u128, fee: u128) -> u128 {
     let num = U256::from(amount) * U256::from(fee);
     let (quotient, remainder) = num.div_mod(TWO_POW_128);
@@ -77,7 +77,7 @@ fn compute_step(
     let increasing = is_price_increasing(amount, is_token1);
 
     if (sqrt_ratio_limit < sqrt_ratio) == increasing {
-        return Err(WrongDirection);
+        return Err(ComputeStepError::WrongDirection);
     }
 
     if liquidity.is_zero() {
