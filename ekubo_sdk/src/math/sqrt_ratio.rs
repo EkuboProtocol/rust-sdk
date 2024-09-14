@@ -52,6 +52,8 @@ pub fn next_sqrt_ratio_from_amount0(
     }
 }
 
+const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
+
 pub fn next_sqrt_ratio_from_amount1(
     sqrt_ratio: U256,
     liquidity: u128,
@@ -65,25 +67,21 @@ pub fn next_sqrt_ratio_from_amount1(
         return Err(PriceMathError::NoLiquidity);
     }
 
-    let amount1_abs = U256::from(amount1.abs() as u128);
-    let shift_factor = U256::one() << 128;
+    let amount1_abs = U256::from(amount1.abs());
 
     let round_up = amount1 < 0;
 
-    // quotient = (amount1_abs * shift_factor) / liquidity
-    let quotient = muldiv(amount1_abs, shift_factor, liquidity.into(), round_up)
+    let quotient = muldiv(amount1_abs, TWO_POW_128, liquidity.into(), round_up)
         .map_err(PriceMathError::MuldivError)?;
 
     if amount1 < 0 {
-        let res = sqrt_ratio
+        sqrt_ratio
             .checked_sub(quotient)
-            .ok_or(PriceMathError::NegativeResult)?;
-        Ok(res)
+            .ok_or(PriceMathError::NegativeResult)
     } else {
-        let res = sqrt_ratio
+        sqrt_ratio
             .checked_add(quotient)
-            .ok_or(PriceMathError::Overflow)?;
-        Ok(res)
+            .ok_or(PriceMathError::Overflow)
     }
 }
 
