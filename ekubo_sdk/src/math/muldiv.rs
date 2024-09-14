@@ -1,5 +1,4 @@
 use crate::math::uint::{U256, U512};
-use core::ops::Div;
 use num_traits::{One, Zero};
 
 #[derive(Debug, PartialEq)]
