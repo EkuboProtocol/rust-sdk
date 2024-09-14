@@ -1,5 +1,4 @@
 use crate::math::uint::{U256, U512};
-use num_traits::{One, Zero};
 
 #[derive(Debug, PartialEq)]
 pub enum MuldivError {

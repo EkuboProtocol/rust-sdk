@@ -1,6 +1,6 @@
 use crate::math::muldiv::{muldiv, MuldivError};
 use crate::math::uint::U256;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 
 #[derive(Debug, PartialEq)]
 pub enum PriceMathError {
