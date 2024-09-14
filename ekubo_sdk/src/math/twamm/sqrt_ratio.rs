@@ -33,7 +33,7 @@ pub fn calculate_next_sqrt_ratio(
         U256::from(liquidity),
         round_up,
     )
-        .ok()?;
+    .ok()?;
 
     if exponent > EXPONENT_LIMIT {
         return Some(sqrt_sale_ratio);
@@ -56,7 +56,7 @@ pub fn calculate_next_sqrt_ratio(
     } else {
         muldiv(term1, TWO_POW_128, term2, round_up)
     }
-        .ok()?;
+    .ok()?;
 
     muldiv(sqrt_sale_ratio, scale, TWO_POW_128, false).ok()
 }
@@ -186,7 +186,7 @@ mod tests {
                 test_case.time_elapsed,
                 test_case.fee,
             )
-                .unwrap(); // Assuming the function returns Option<U256>
+            .unwrap(); // Assuming the function returns Option<U256>
 
             assert_eq!(
                 result, test_case.expected,

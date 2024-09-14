@@ -115,7 +115,7 @@ pub fn compute_step(
             } else {
                 amount1_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount < 0)
             }
-                .map_err(ComputeStepError::AmountDeltaError)?;
+            .map_err(ComputeStepError::AmountDeltaError)?;
 
             return if amount < 0 {
                 let including_fee = amount_before_fee(calculated_amount_excluding_fee, fee)
@@ -213,7 +213,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 0i128);
         assert_eq!(result.consumed_amount, 0i128);
@@ -238,7 +238,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 0i128);
         assert_eq!(result.consumed_amount, 0i128);
@@ -263,7 +263,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 0i128);
         assert_eq!(result.consumed_amount, 0i128);
@@ -288,7 +288,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 4_761i128);
         assert_eq!(result.consumed_amount, 10_000i128);
@@ -316,7 +316,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 4_761i128);
         assert_eq!(result.consumed_amount, 10_000i128);
@@ -344,7 +344,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 22_224i128);
         assert_eq!(result.consumed_amount, -10_000i128);
@@ -372,7 +372,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 22_224i128);
         assert_eq!(result.consumed_amount, -10_000i128);
@@ -401,7 +401,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 11_112i128);
         assert_eq!(result.consumed_amount, -5_263i128);
@@ -427,7 +427,7 @@ mod tests {
             is_token1,
             fee,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(result.calculated_amount, 10_528i128);
         assert_eq!(result.consumed_amount, -5_000i128);
