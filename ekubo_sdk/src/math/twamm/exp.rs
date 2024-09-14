@@ -14,9 +14,8 @@ pub fn exp(x: u128) -> Option<U256> {
     }
 }
 
-const STARTING_VALUE: U256 = U256([0, 18446744073709551615, 0, 0]);
-
-const MASKS: [U256; 64] = [
+const MASKS: [U256; 65] = [
+    U256([0, 18446744073709551615, 0, 0]),
     U256([2, 18446744073709551614, 0, 0]),
     U256([8, 18446744073709551612, 0, 0]),
     U256([32, 18446744073709551608, 0, 0]),
@@ -83,18 +82,15 @@ const MASKS: [U256; 64] = [
     U256([13465419299465525518, 6786177901268885274, 0, 0]),
 ];
 
+const ONE_X128: U256 = U256([0, 0, 1, 0]);
+
 fn exp_inner(x: u128) -> U256 {
     assert!(x < 0x20000000000000000, "Invalid input");
 
-    let mut ratio = U256([0, 0, 1, 0]);
-
-    // Handle the first bit separately
-    if !(x & 1).is_zero() {
-        ratio = STARTING_VALUE;
-    }
+    let mut ratio = ONE_X128;
 
     for (i, constant) in MASKS.iter().enumerate() {
-        let bitmask = 2u128 << i;
+        let bitmask = 1u128 << i;
         if !(x & bitmask).is_zero() {
             ratio = (ratio * constant) >> 128u8;
         }
