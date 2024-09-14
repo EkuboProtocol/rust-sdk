@@ -35,7 +35,7 @@ pub fn amount0_delta(
         return Ok(0);
     }
 
-    let result_0 = muldiv(upper - lower, U256::from(liquidity) << 128, upper, round_up).map_err(|e| { AmountDeltaError::MuldivError(e) })?;
+    let result_0 = muldiv(upper - lower, U256::from(liquidity) << 128, upper, round_up).map_err(AmountDeltaError::MuldivError)?;
 
     let (result, remainder) = result_0.div_mod(lower);
     let rounded = if round_up && !remainder.is_zero() {
@@ -114,7 +114,7 @@ pub fn amount1_delta(sqrt_ratio_a: U256, sqrt_ratio_b: U256, liquidity: u128, ro
         return Ok(Zero::zero());
     }
 
-    let result = muldiv(U256::from(liquidity), upper - lower, TWO_POW_128.clone(), round_up).map_err(|e| { AmountDeltaError::MuldivError(e) })?;
+    let result = muldiv(U256::from(liquidity), upper - lower, TWO_POW_128.clone(), round_up).map_err(AmountDeltaError::MuldivError)?;
     if result > u128::MAX.into() {
         Err(AmountDeltaError::Overflow)
     } else {

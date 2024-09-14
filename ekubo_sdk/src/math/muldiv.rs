@@ -13,11 +13,11 @@ pub(crate) fn muldiv(x: U256, y: U256, d: U256, round_up: bool) -> Result<U256, 
 
     if y == U256::one() {
         let (quotient, remainder) = x.div_mod(d);
-        if round_up && !remainder.is_zero() {
-            return Ok(quotient + 1);
+        return if round_up && !remainder.is_zero() {
+            Ok(quotient + 1)
         } else {
-            return Ok(quotient);
-        }
+            Ok(quotient)
+        };
     }
 
     let intermediate: U512 = U512::from(x) * U512::from(y);
