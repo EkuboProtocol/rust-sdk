@@ -1,10 +1,6 @@
-use crate::math::u256::U256;
-use std::error::Error;
-use std::fmt;
-use std::str::FromStr;
+use crate::math::uint::U256;
 
 lazy_static::lazy_static! {
-    pub static ref MIN_SQRT_RATIO: U256 = U256::from_str("18446748437148339061").unwrap();
     pub static ref MASKS: [U256;27] =  [
         U256::from_str_radix("fffff79c8499329c7cbb2510d893283b", 16).unwrap(),
         U256::from_str_radix("ffffef390978c398134b4ff3764fe410", 16).unwrap(),
@@ -40,17 +36,8 @@ lazy_static::lazy_static! {
 pub const MIN_TICK: i32 = -88722883;
 pub const MAX_TICK: i32 = 88722883;
 
-// Define a custom error type for more contextual errors
 #[derive(Debug)]
 pub struct InvalidTickError(i32);
-
-impl fmt::Display for InvalidTickError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid tick: {}", self.0)
-    }
-}
-
-impl Error for InvalidTickError {}
 
 pub fn to_sqrt_ratio(tick: i32) -> Result<U256, InvalidTickError> {
     if tick < MIN_TICK || tick > MAX_TICK {
@@ -77,7 +64,7 @@ pub fn to_sqrt_ratio(tick: i32) -> Result<U256, InvalidTickError> {
 #[cfg(test)]
 mod tests {
     use super::to_sqrt_ratio;
-    use crate::math::u256::U256;
+    use crate::math::uint::U256;
 
     #[test]
     fn test_tick_examples() {
