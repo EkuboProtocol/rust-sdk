@@ -54,6 +54,7 @@ fn no_op(sqrt_ratio_next: U256) -> SwapResult {
     }
 }
 
+#[derive(Debug, PartialEq)]
 enum ComputeStepError {
     WrongDirection,
     AmountBeforeFeeOverflow,
@@ -186,7 +187,7 @@ fn compute_step(
         let before_fee = amount_before_fee(amount_after_fee, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
         Ok(SwapResult {
-            consumed_amount: specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?
+            consumed_amount: -specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?
                 .try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
             calculated_amount: before_fee.try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
             fee_amount: before_fee - amount_after_fee,
@@ -203,5 +204,250 @@ fn compute_step(
             fee_amount: before_fee - specified_amount,
             sqrt_ratio_next: sqrt_ratio_limit,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+
+    #[test]
+    fn zero_amount_token0() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = U256::zero();
+        let amount = 0i128;
+        let is_token1 = false;
+        let fee = 0u128;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 0i128);
+        assert_eq!(result.consumed_amount, 0i128);
+        assert_eq!(result.fee_amount, 0u128);
+        assert_eq!(result.sqrt_ratio_next, sqrt_ratio);
+    }
+
+    #[test]
+    fn zero_amount_token1() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = U256::zero();
+        let amount = 0i128;
+        let is_token1 = true;
+        let fee = 0u128;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 0i128);
+        assert_eq!(result.consumed_amount, 0i128);
+        assert_eq!(result.fee_amount, 0u128);
+        assert_eq!(result.sqrt_ratio_next, sqrt_ratio);
+    }
+
+    #[test]
+    fn swap_ratio_equal_limit_token1() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = sqrt_ratio;
+        let amount = 10_000i128;
+        let is_token1 = true;
+        let fee = 0u128;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 0i128);
+        assert_eq!(result.consumed_amount, 0i128);
+        assert_eq!(result.fee_amount, 0u128);
+        assert_eq!(result.sqrt_ratio_next, sqrt_ratio);
+    }
+
+    #[test]
+    fn max_limit_token0_input() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = MIN_SQRT_RATIO;
+        let amount = 10_000i128;
+        let is_token1 = false;
+        let fee = 1u128 << 127;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 4_761i128);
+        assert_eq!(result.consumed_amount, 10_000i128);
+        assert_eq!(result.fee_amount, 5_000u128);
+        assert_eq!(
+            result.sqrt_ratio_next,
+            U256::from_dec_str("324078444686608060441309149935017344244").unwrap()
+        );
+    }
+
+    #[test]
+    fn max_limit_token1_input() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = MAX_SQRT_RATIO;
+        let amount = 10_000i128;
+        let is_token1 = true;
+        let fee = 1u128 << 127;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 4_761i128);
+        assert_eq!(result.consumed_amount, 10_000i128);
+        assert_eq!(result.fee_amount, 5_000u128);
+        assert_eq!(
+            result.sqrt_ratio_next,
+            U256::from_dec_str("357296485266985386636543337803356622028").unwrap()
+        );
+    }
+
+    #[test]
+    fn max_limit_token0_output() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = MAX_SQRT_RATIO;
+        let amount = -10_000i128;
+        let is_token1 = false;
+        let fee = 1u128 << 127;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 22_224i128);
+        assert_eq!(result.consumed_amount, -10_000i128);
+        assert_eq!(result.fee_amount, 11_112u128);
+        assert_eq!(
+            result.sqrt_ratio_next,
+            U256::from_dec_str("378091518801042737181527341590853568285").unwrap()
+        );
+    }
+
+    #[test]
+    fn max_limit_token1_output() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit = MIN_SQRT_RATIO;
+        let amount = -10_000i128;
+        let is_token1 = true;
+        let fee = 1u128 << 127;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 22_224i128);
+        assert_eq!(result.consumed_amount, -10_000i128);
+        assert_eq!(result.fee_amount, 11_112u128);
+        assert_eq!(
+            result.sqrt_ratio_next,
+            U256::from_dec_str("306254130228844617117037146688591390310").unwrap()
+        );
+    }
+
+    #[test]
+    fn limited_token0_output() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit =
+            U256::from_dec_str("359186942860990600322450974511310889870").unwrap();
+        let amount = -10_000i128;
+        let is_token1 = false;
+        let fee = 1u128 << 127;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 11_112i128);
+        assert_eq!(result.consumed_amount, -5_263i128);
+        assert_eq!(result.fee_amount, 5_556u128);
+        assert_eq!(result.sqrt_ratio_next, sqrt_ratio_limit);
+    }
+
+    #[test]
+    fn limited_token1_output() {
+        let sqrt_ratio = U256::from(1u128) << 128;
+        let liquidity = 100_000u128;
+        let sqrt_ratio_limit =
+            U256::from_dec_str("323268248574891540290205877060179800883").unwrap();
+        let amount = -10_000i128;
+        let is_token1 = true;
+        let fee = 1u128 << 127;
+
+        let result = compute_step(
+            sqrt_ratio,
+            liquidity,
+            sqrt_ratio_limit,
+            amount,
+            is_token1,
+            fee,
+        )
+            .unwrap();
+
+        assert_eq!(result.calculated_amount, 10_528i128);
+        assert_eq!(result.consumed_amount, -5_000i128);
+        assert_eq!(result.fee_amount, 5_264u128);
+        assert_eq!(result.sqrt_ratio_next, sqrt_ratio_limit);
     }
 }
