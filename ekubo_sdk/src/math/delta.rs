@@ -32,7 +32,7 @@ pub fn amount0_delta(
     liquidity: u128,
     round_up: bool,
 ) -> Result<u128, AmountDeltaError> {
-    let (lower, upper) = sort_ratios(sqrt_ratio_a, sqrt_ratio_b).map_err(|e| { AmountDeltaError::ZeroRatio })?;
+    let (lower, upper) = sort_ratios(sqrt_ratio_a, sqrt_ratio_b).map_err(|_| { AmountDeltaError::ZeroRatio })?;
 
     if liquidity == 0 || lower == upper {
         return Ok(0);
@@ -112,7 +112,7 @@ mod amount0_delta_tests {
 const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
 
 pub fn amount1_delta(sqrt_ratio_a: U256, sqrt_ratio_b: U256, liquidity: u128, round_up: bool) -> Result<u128, AmountDeltaError> {
-    let (lower, upper) = sort_ratios(sqrt_ratio_a, sqrt_ratio_b).map_err(|e| { AmountDeltaError::ZeroRatio })?;
+    let (lower, upper) = sort_ratios(sqrt_ratio_a, sqrt_ratio_b).map_err(|_| { AmountDeltaError::ZeroRatio })?;
     if liquidity.is_zero() || lower == upper {
         return Ok(Zero::zero());
     }

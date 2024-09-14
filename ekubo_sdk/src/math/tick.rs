@@ -35,12 +35,15 @@ const MASKS: [U256; 27] = [
 pub const MIN_TICK: i32 = -88722883;
 pub const MAX_TICK: i32 = 88722883;
 
+pub const MIN_SQRT_RATIO: U256 = U256([4363438787445, 1, 0, 0]);
+pub const MAX_SQRT_RATIO: U256 = U256([17632034473660873000, 8013356184008655433, 18446739710271796309, 0]);
+
 #[derive(Debug)]
-pub struct InvalidTickError(i32);
+pub struct InvalidTickError;
 
 pub fn to_sqrt_ratio(tick: i32) -> Result<U256, InvalidTickError> {
     if tick < MIN_TICK || tick > MAX_TICK {
-        return Err(InvalidTickError(tick));
+        return Err(InvalidTickError);
     }
 
     let mut ratio = ONE_X128.clone();
@@ -85,6 +88,3 @@ mod tests {
         );
     }
 }
-
-pub const MIN_SQRT_RATIO: U256 = U256([4363438787445, 1, 0, 0]);
-pub const MAX_SQRT_RATIO: U256 = U256([17632034473660873000, 8013356184008655433, 18446739710271796309, 0]);
