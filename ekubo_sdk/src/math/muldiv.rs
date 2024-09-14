@@ -8,7 +8,7 @@ pub enum MuldivError {
 }
 
 uint::construct_uint! {
-    pub(crate) struct U512(8);
+    struct U512(8);
 }
 
 impl From<U256> for U512 {

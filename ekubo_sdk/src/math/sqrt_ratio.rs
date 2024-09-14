@@ -6,7 +6,7 @@ use num_traits::Zero;
 pub enum PriceMathError {
     NoLiquidity,
     Overflow,
-    NegativeResult,
+    Underflow,
     MuldivError(MuldivError),
 }
 
@@ -75,7 +75,7 @@ pub fn next_sqrt_ratio_from_amount1(
     if amount1 < 0 {
         sqrt_ratio
             .checked_sub(quotient)
-            .ok_or(PriceMathError::NegativeResult)
+            .ok_or(PriceMathError::Underflow)
     } else {
         sqrt_ratio
             .checked_add(quotient)
@@ -157,7 +157,7 @@ mod tests {
         let amount1 = -100_000_000_000_000i128;
         let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1);
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), PriceMathError::NegativeResult);
+        assert_eq!(result.err().unwrap(), PriceMathError::Underflow);
     }
 
     #[test]
