@@ -19,9 +19,8 @@ pub fn is_price_increasing(amount: i128, is_token1: bool) -> bool {
 const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
 
 pub fn amount_before_fee(after_fee: u128, fee: u128) -> Option<u128> {
-    let (quotient, remainder) = (U256::from(after_fee) << 128).div_mod(
-        TWO_POW_128 - U256::from(fee),
-    );
+    let (quotient, remainder) =
+        (U256::from(after_fee) << 128).div_mod(TWO_POW_128 - U256::from(fee));
 
     if !quotient.0[3].is_zero() || !quotient.0[2].is_zero() {
         None
@@ -33,7 +32,6 @@ pub fn amount_before_fee(after_fee: u128, fee: u128) -> Option<u128> {
         }
     }
 }
-
 
 pub fn compute_fee(amount: u128, fee: u128) -> u128 {
     let num = U256::from(amount) * U256::from(fee);
@@ -55,15 +53,14 @@ fn no_op(sqrt_ratio_next: U256) -> SwapResult {
 }
 
 #[derive(Debug, PartialEq)]
-enum ComputeStepError {
+pub enum ComputeStepError {
     WrongDirection,
     AmountBeforeFeeOverflow,
     SignedIntegerOverflow(TryFromIntError),
     AmountDeltaError(AmountDeltaError),
-    TODO,
 }
 
-fn compute_step(
+pub fn compute_step(
     sqrt_ratio: U256,
     liquidity: u128,
     sqrt_ratio_limit: U256,
@@ -114,34 +111,29 @@ fn compute_step(
             }
 
             let calculated_amount_excluding_fee = if is_token1 {
-                amount0_delta(
-                    sqrt_ratio_next,
-                    sqrt_ratio,
-                    liquidity,
-                    amount < 0,
-                )
+                amount0_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount < 0)
             } else {
-                amount1_delta(
-                    sqrt_ratio_next,
-                    sqrt_ratio,
-                    liquidity,
-                    amount < 0,
-                )
-            }.map_err(ComputeStepError::AmountDeltaError)?;
+                amount1_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount < 0)
+            }
+                .map_err(ComputeStepError::AmountDeltaError)?;
 
             return if amount < 0 {
                 let including_fee = amount_before_fee(calculated_amount_excluding_fee, fee)
                     .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
                 Ok(SwapResult {
                     consumed_amount: amount,
-                    calculated_amount: including_fee.try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
+                    calculated_amount: including_fee
+                        .try_into()
+                        .map_err(ComputeStepError::SignedIntegerOverflow)?,
                     sqrt_ratio_next,
                     fee_amount: including_fee - calculated_amount_excluding_fee,
                 })
             } else {
                 Ok(SwapResult {
                     consumed_amount: amount,
-                    calculated_amount: calculated_amount_excluding_fee.try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
+                    calculated_amount: calculated_amount_excluding_fee
+                        .try_into()
+                        .map_err(ComputeStepError::SignedIntegerOverflow)?,
                     sqrt_ratio_next,
                     fee_amount: amount.unsigned_abs() - price_impact_amount.unsigned_abs(),
                 })
@@ -152,55 +144,47 @@ fn compute_step(
     // this branch is only reached if we are trading all the way up to the limit
     let (specified_amount_delta, calculated_amount_delta) = if is_token1 {
         (
-            amount1_delta(
-                sqrt_ratio_limit,
-                sqrt_ratio,
-                liquidity,
-                amount > 0,
-            ),
-            amount0_delta(
-                sqrt_ratio_limit,
-                sqrt_ratio,
-                liquidity,
-                amount < 0,
-            ),
+            amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount > 0),
+            amount0_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount < 0),
         )
     } else {
         (
-            amount0_delta(
-                sqrt_ratio_limit,
-                sqrt_ratio,
-                liquidity,
-                amount > 0,
-            ),
-            amount1_delta(
-                sqrt_ratio_limit,
-                sqrt_ratio,
-                liquidity,
-                amount < 0,
-            ),
+            amount0_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount > 0),
+            amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount < 0),
         )
     };
 
     if amount < 0 {
-        let amount_after_fee = calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
+        let amount_after_fee =
+            calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
         let before_fee = amount_before_fee(amount_after_fee, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
         Ok(SwapResult {
-            consumed_amount: -specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?
-                .try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
-            calculated_amount: before_fee.try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
+            consumed_amount: -specified_amount_delta
+                .map_err(ComputeStepError::AmountDeltaError)?
+                .try_into()
+                .map_err(ComputeStepError::SignedIntegerOverflow)?,
+            calculated_amount: before_fee
+                .try_into()
+                .map_err(ComputeStepError::SignedIntegerOverflow)?,
             fee_amount: before_fee - amount_after_fee,
             sqrt_ratio_next: sqrt_ratio_limit,
         })
     } else {
-        let specified_amount = specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
-        let before_fee = amount_before_fee(specified_amount, fee).ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
-        let calculated_amount = calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
+        let specified_amount =
+            specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
+        let before_fee = amount_before_fee(specified_amount, fee)
+            .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
+        let calculated_amount =
+            calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
 
         Ok(SwapResult {
-            consumed_amount: before_fee.try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
-            calculated_amount: calculated_amount.try_into().map_err(ComputeStepError::SignedIntegerOverflow)?,
+            consumed_amount: before_fee
+                .try_into()
+                .map_err(ComputeStepError::SignedIntegerOverflow)?,
+            calculated_amount: calculated_amount
+                .try_into()
+                .map_err(ComputeStepError::SignedIntegerOverflow)?,
             fee_amount: before_fee - specified_amount,
             sqrt_ratio_next: sqrt_ratio_limit,
         })
