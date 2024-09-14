@@ -1,6 +1,7 @@
 use crate::math::uint::{U256, U512};
 
-pub(crate) enum MuldivError {
+#[derive(Debug)]
+pub enum MuldivError {
     Overflow,
     DenominatorZero,
 }
