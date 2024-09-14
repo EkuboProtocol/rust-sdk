@@ -39,11 +39,11 @@ pub const MIN_SQRT_RATIO: U256 = U256([4363438787445, 1, 0, 0]);
 pub const MAX_SQRT_RATIO: U256 = U256([17632034473660873000, 8013356184008655433, 18446739710271796309, 0]);
 
 #[derive(Debug)]
-pub struct InvalidTickError;
+pub struct TickOutOfRangeError;
 
-pub fn to_sqrt_ratio(tick: i32) -> Result<U256, InvalidTickError> {
+pub fn to_sqrt_ratio(tick: i32) -> Result<U256, TickOutOfRangeError> {
     if tick < MIN_TICK || tick > MAX_TICK {
-        return Err(InvalidTickError);
+        return Err(TickOutOfRangeError);
     }
 
     let mut ratio = ONE_X128.clone();
@@ -65,7 +65,7 @@ pub fn to_sqrt_ratio(tick: i32) -> Result<U256, InvalidTickError> {
 
 #[cfg(test)]
 mod tests {
-    use super::to_sqrt_ratio;
+    use super::{to_sqrt_ratio, MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
     use crate::math::uint::U256;
 
     #[test]
@@ -85,6 +85,22 @@ mod tests {
         assert_eq!(
             to_sqrt_ratio(-10000000).unwrap(),
             U256::from_str_radix("2292810285051363400276741638672651165", 10).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_min_tick() {
+        assert_eq!(
+            to_sqrt_ratio(MIN_TICK).unwrap(),
+            MIN_SQRT_RATIO,
+        );
+    }
+
+    #[test]
+    fn test_max_tick() {
+        assert_eq!(
+            to_sqrt_ratio(MAX_TICK).unwrap(),
+            MAX_SQRT_RATIO,
         );
     }
 }
