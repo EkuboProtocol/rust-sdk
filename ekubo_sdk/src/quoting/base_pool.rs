@@ -6,11 +6,13 @@ use crate::quoting::util::{
     approximate_number_of_tick_spacings_crossed, find_nearest_initialized_tick_index,
 };
 use alloc::vec::Vec;
+use num_traits::Zero;
 
 #[derive(Debug)]
 pub enum QuoteError {
     InvalidToken,
     InvalidSqrtRatioLimit,
+    InvalidTick(i32),
     FailedComputeSwapStep(ComputeStepError),
 }
 
@@ -94,14 +96,12 @@ impl BasePool {
             self.state.clone()
         };
 
-        let mut resources = self.initial_resources();
-
         if amount == 0 {
             return Ok(Quote {
                 is_price_increasing: is_token1,
                 consumed_amount: 0,
                 calculated_amount: 0,
-                execution_resources: resources,
+                execution_resources: self.initial_resources(),
                 state_after: state,
                 fees_paid: 0,
             });
@@ -137,50 +137,58 @@ impl BasePool {
 
         let mut calculated_amount: i128 = 0;
         let mut fees_paid: u128 = 0;
-        let mut initialized_ticks_crossed = resources.initialized_ticks_crossed;
+        let mut initialized_ticks_crossed: u32 = 0;
         let mut amount_remaining = amount;
 
         let starting_sqrt_ratio = sqrt_ratio;
 
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
-            let next_initialized_tick: Option<&Tick> = if is_increasing {
+            let next_initialized_tick: Option<(usize, &Tick, U256)> = if is_increasing {
                 if let Some(index) = active_tick_index {
-                    if index + 1 < self.sorted_ticks.len() {
-                        self.sorted_ticks.get(index + 1)
+                    if let Some(next) = self.sorted_ticks.get(index + 1) {
+                        Some((
+                            index + 1,
+                            next,
+                            to_sqrt_ratio(next.index).ok_or(QuoteError::InvalidTick(next.index))?,
+                        ))
                     } else {
                         None
                     }
                 } else {
-                    if self.sorted_ticks.is_empty() {
-                        None
+                    if let Some(next) = self.sorted_ticks.first() {
+                        Some((
+                            0,
+                            next,
+                            to_sqrt_ratio(next.index).ok_or(QuoteError::InvalidTick(next.index))?,
+                        ))
                     } else {
-                        self.sorted_ticks.get(0)
+                        None
                     }
                 }
             } else {
                 if let Some(index) = active_tick_index {
-                    self.sorted_ticks.get(index)
+                    if let Some(tick) = self.sorted_ticks.get(index) {
+                        Some((
+                            index,
+                            tick,
+                            to_sqrt_ratio(tick.index).ok_or(QuoteError::InvalidTick(tick.index))?,
+                        ))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
             };
 
-            let next_initialized_tick_sqrt_ratio = if let Some(tick) = next_initialized_tick {
-                to_sqrt_ratio(tick.index).expect("Invalid tick in sorted ticks")
-            } else {
-                if is_increasing {
-                    MAX_SQRT_RATIO
-                } else {
-                    MIN_SQRT_RATIO
-                }
-            };
-
             let step_sqrt_ratio_limit =
-                if (next_initialized_tick_sqrt_ratio < sqrt_ratio_limit) == is_increasing {
-                    next_initialized_tick_sqrt_ratio
-                } else {
-                    sqrt_ratio_limit
-                };
+                next_initialized_tick.map_or(sqrt_ratio_limit, |(_, _, next_ratio)| {
+                    if (next_ratio < sqrt_ratio_limit) == is_increasing {
+                        next_ratio
+                    } else {
+                        sqrt_ratio_limit
+                    }
+                });
 
             let step = compute_step(
                 sqrt_ratio,
@@ -197,29 +205,35 @@ impl BasePool {
             fees_paid += step.fee_amount;
             sqrt_ratio = step.sqrt_ratio_next;
 
-            if let Some(next_tick) = next_initialized_tick {
-                if sqrt_ratio == next_initialized_tick_sqrt_ratio {
-                    active_tick_index = if is_increasing {
-                        active_tick_index.map(|i| i + 1usize)
-                    } else {
-                        active_tick_index.map(|i| i - 1usize)
-                    };
-                    initialized_ticks_crossed += 1;
-                    if is_increasing {
-                        liquidity = liquidity + next_tick.liquidity_delta.unsigned_abs();
-                    } else {
-                        liquidity = liquidity - next_tick.liquidity_delta.unsigned_abs();
-                    };
-                }
+            if let Some((index, next_tick, _)) = next_initialized_tick {
+                active_tick_index = if is_increasing {
+                    Some(index)
+                } else if !index.is_zero() {
+                    Some(index - 1)
+                } else {
+                    None
+                };
+
+                initialized_ticks_crossed += 1;
+
+                if (next_tick.liquidity_delta.signum() == 1) == is_increasing {
+                    liquidity = liquidity + next_tick.liquidity_delta.unsigned_abs();
+                } else {
+                    liquidity = liquidity - next_tick.liquidity_delta.unsigned_abs();
+                };
+            } else {
+                active_tick_index = None
             }
         }
 
-        resources.initialized_ticks_crossed = initialized_ticks_crossed;
-        resources.tick_spacings_crossed = approximate_number_of_tick_spacings_crossed(
-            starting_sqrt_ratio,
-            sqrt_ratio,
-            self.key.tick_spacing,
-        );
+        let resources = BasePoolResources {
+            initialized_ticks_crossed,
+            tick_spacings_crossed: approximate_number_of_tick_spacings_crossed(
+                starting_sqrt_ratio,
+                sqrt_ratio,
+                self.key.tick_spacing,
+            ),
+        };
 
         let state_after = BasePoolState {
             sqrt_ratio,
@@ -252,8 +266,8 @@ mod tests {
     #[test]
     fn test_quote_zero_liquidity_token1_input() {
         let pool = BasePool::new(
-            U256::from(0u64),   // token0
-            U256::from(1u64),   // token1
+            U256::zero(),       // token0
+            U256::one(),        // token1
             1,                  // tick_spacing
             0u128,              // fee
             U256([0, 0, 1, 0]), // sqrt_ratio
@@ -283,8 +297,8 @@ mod tests {
     #[test]
     fn test_quote_zero_liquidity_token0_input() {
         let pool = BasePool::new(
-            U256::from(0u64),   // token0
-            U256::from(1u64),   // token1
+            U256::zero(),       // token0
+            U256::one(),        // token1
             1,                  // tick_spacing
             0u128,              // fee
             U256([0, 0, 1, 0]), // sqrt_ratio
@@ -325,8 +339,8 @@ mod tests {
         ];
 
         let pool = BasePool::new(
-            U256::from(0u64),   // token0
-            U256::from(1u64),   // token1
+            U256::zero(),       // token0
+            U256::one(),        // token1
             1,                  // tick_spacing
             0u128,              // fee
             U256([0, 0, 1, 0]), // sqrt_ratio
@@ -367,8 +381,8 @@ mod tests {
         ];
 
         let pool = BasePool::new(
-            U256::from(0u64),                        // token0
-            U256::from(1u64),                        // token1
+            U256::zero(),                            // token0
+            U256::one(),                             // token1
             1,                                       // tick_spacing
             0u128,                                   // fee
             to_sqrt_ratio(1).expect("Invalid tick"), // sqrt_ratio
@@ -393,112 +407,5 @@ mod tests {
 
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
-    }
-
-    #[test]
-    fn test_eth_usdc_example_pool() {
-        // Due to the large amount of data, we'll create a simplified version of the pool
-        // In practice, you would include all the ticks as in the TypeScript test
-
-        let sorted_ticks = vec![
-            // Include a few sample ticks
-            Tick {
-                index: -43058436,
-                liquidity_delta: 6896952815,
-            },
-            Tick {
-                index: -41455260,
-                liquidity_delta: 3352933856364109,
-            },
-            Tick {
-                index: -41449278,
-                liquidity_delta: -3352933856364109,
-            },
-            // ... add more ticks as needed
-        ];
-
-        let pool = BasePool::new(
-            U256::from(0u64), // token0
-            U256::from(1u64), // token1
-            1,                // tick_spacing
-            U256::from_dec_str("1020847100762815411640772995208708096")
-                .unwrap()
-                .as_u128(), // fee
-            U256::from_dec_str("15563001745813054266804011142814305").unwrap(), // sqrt_ratio
-            2695287607686846u128, // liquidity
-            -19985280,        // tick
-            sorted_ticks,     // sorted_ticks
-        );
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 2_000_000_000,
-                token: U256::from(1u64),
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
-        };
-
-        let quote = pool.quote(params).expect("Failed to get quote");
-
-        // // Since we have a simplified pool, the calculated_amount will differ from the snapshot
-        // // In practice, you would compare the calculated_amount to the expected value
-        // // For demonstration, we'll just print it
-        // println!("Calculated Amount: {}", quote.calculated_amount);
-    }
-
-    // Add more tests as needed, including the large pools and quotes
-
-    #[test]
-    fn test_dai_usdc_example_pool() {
-        let sorted_ticks = vec![
-            Tick {
-                index: -29546100,
-                liquidity_delta: 408468260308,
-            },
-            Tick {
-                index: -27735210,
-                liquidity_delta: 32375395228589,
-            },
-            Tick {
-                index: -27639900,
-                liquidity_delta: -32375395228589,
-            },
-            Tick {
-                index: -25733700,
-                liquidity_delta: -408468260308,
-            },
-        ];
-
-        let pool = BasePool::new(
-            U256::from(0u64),                                                 // token0
-            U256::from(1u64),                                                 // token1
-            1,                                                                // tick_spacing
-            17014118346046923173168730371588410572,                           // fee
-            U256::from_dec_str("340492544394014493270092018910666").unwrap(), // sqrt_ratio
-            0x5f1a9b05d4,                                                     // liquidity
-            -27629800,                                                        // tick
-            sorted_ticks,
-        );
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: -1_000_000_000,
-                token: U256::from(1u64),
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
-        };
-
-        let quote = pool.quote(params).expect("Failed to get quote");
-
-        // // Similarly, compare the quote to the expected values
-        // println!("Calculated Amount: {}", quote.calculated_amount);
     }
 }

@@ -205,6 +205,8 @@ mod tests {
             1386295
         );
     }
+
+    #[test]
     fn test_approximate_number_of_tick_spacings_crossed_for_doubling_big_tick_spacing() {
         // 2x sqrt ratio increase ~= 4x price increase
         assert_eq!(
