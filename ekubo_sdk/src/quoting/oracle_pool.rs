@@ -1,5 +1,5 @@
-use crate::quoting::base_pool::BasePool;
-use crate::quoting::types::{Pool, Quote, QuoteError, QuoteParams};
+use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
+use crate::quoting::types::{Pool, Quote, QuoteParams};
 
 pub struct OraclePool {
     base_pool: BasePool,
@@ -12,7 +12,14 @@ impl OraclePool {
 }
 
 impl Pool for OraclePool {
-    fn quote(&self, params: QuoteParams) -> Result<Quote, QuoteError> {
+    type Resources = BasePoolResources;
+    type Error = BasePoolQuoteError;
+    type State = BasePoolState;
+
+    fn quote(
+        &self,
+        params: QuoteParams<Self::State>,
+    ) -> Result<Quote<Self::Resources, Self::State>, Self::Error> {
         self.base_pool.quote(params)
     }
 

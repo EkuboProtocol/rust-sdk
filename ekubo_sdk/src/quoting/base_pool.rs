@@ -1,12 +1,38 @@
-use crate::math::swap::{compute_step, is_price_increasing};
+use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
 use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
-use crate::quoting::types::{
-    BasePoolResources, BasePoolState, NodeKey, Pool, Quote, QuoteError, QuoteParams, Tick,
-};
+use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
 use alloc::vec::Vec;
+use core::ops::Add;
 use num_traits::Zero;
+
+// Resources consumed during any swap execution.
+pub struct BasePoolResources {
+    pub initialized_ticks_crossed: u32,
+    pub tick_spacings_crossed: u32,
+}
+
+impl Default for BasePoolResources {
+    fn default() -> Self {
+        BasePoolResources {
+            initialized_ticks_crossed: 0,
+            tick_spacings_crossed: 0,
+        }
+    }
+}
+
+impl Add for BasePoolResources {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        BasePoolResources {
+            initialized_ticks_crossed: self.initialized_ticks_crossed
+                + rhs.initialized_ticks_crossed,
+            tick_spacings_crossed: self.tick_spacings_crossed + rhs.tick_spacings_crossed,
+        }
+    }
+}
 
 // Main struct representing the pool.
 pub struct BasePool {
@@ -65,15 +91,30 @@ impl BasePool {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum BasePoolQuoteError {
+    InvalidToken,
+    InvalidSqrtRatioLimit,
+    InvalidTick(i32),
+    FailedComputeSwapStep(ComputeStepError),
+}
+
 impl Pool for BasePool {
+    type Resources = BasePoolResources;
+    type Error = BasePoolQuoteError;
+    type State = BasePoolState;
+
     // Quotes a swap given the parameters.
-    fn quote(&self, params: QuoteParams) -> Result<Quote, QuoteError> {
+    fn quote(
+        &self,
+        params: QuoteParams<Self::State>,
+    ) -> Result<Quote<Self::Resources, Self::State>, Self::Error> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
         let is_token1 = token == self.key.token1;
 
         if !is_token1 && token != self.key.token0 {
-            return Err(QuoteError::InvalidToken);
+            return Err(BasePoolQuoteError::InvalidToken);
         }
 
         let state = if let Some(ref override_state) = params.override_state {
@@ -101,16 +142,16 @@ impl Pool for BasePool {
 
         let sqrt_ratio_limit = if let Some(limit) = params.sqrt_ratio_limit {
             if is_increasing && limit < sqrt_ratio {
-                return Err(QuoteError::InvalidSqrtRatioLimit);
+                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
             if !is_increasing && limit > sqrt_ratio {
-                return Err(QuoteError::InvalidSqrtRatioLimit);
+                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
             if limit < MIN_SQRT_RATIO {
-                return Err(QuoteError::InvalidSqrtRatioLimit);
+                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
             if limit > MAX_SQRT_RATIO {
-                return Err(QuoteError::InvalidSqrtRatioLimit);
+                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
         } else {
@@ -135,7 +176,8 @@ impl Pool for BasePool {
                         Some((
                             index + 1,
                             next,
-                            to_sqrt_ratio(next.index).ok_or(QuoteError::InvalidTick(next.index))?,
+                            to_sqrt_ratio(next.index)
+                                .ok_or(BasePoolQuoteError::InvalidTick(next.index))?,
                         ))
                     } else {
                         None
@@ -145,7 +187,8 @@ impl Pool for BasePool {
                         Some((
                             0,
                             next,
-                            to_sqrt_ratio(next.index).ok_or(QuoteError::InvalidTick(next.index))?,
+                            to_sqrt_ratio(next.index)
+                                .ok_or(BasePoolQuoteError::InvalidTick(next.index))?,
                         ))
                     } else {
                         None
@@ -157,7 +200,8 @@ impl Pool for BasePool {
                         Some((
                             index,
                             tick,
-                            to_sqrt_ratio(tick.index).ok_or(QuoteError::InvalidTick(tick.index))?,
+                            to_sqrt_ratio(tick.index)
+                                .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?,
                         ))
                     } else {
                         None
@@ -184,7 +228,7 @@ impl Pool for BasePool {
                 is_token1,
                 self.key.fee,
             )
-            .map_err(QuoteError::FailedComputeSwapStep)?;
+            .map_err(BasePoolQuoteError::FailedComputeSwapStep)?;
 
             amount_remaining -= step.consumed_amount;
             calculated_amount += step.calculated_amount;
@@ -403,4 +447,12 @@ mod tests {
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
     }
+}
+
+// State of the pool that can change with every swap
+#[derive(Clone)]
+pub struct BasePoolState {
+    pub sqrt_ratio: U256,
+    pub liquidity: u128,
+    pub active_tick_index: Option<usize>,
 }

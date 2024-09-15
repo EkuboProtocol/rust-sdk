@@ -1,4 +1,3 @@
-use crate::math::swap::ComputeStepError;
 use crate::math::uint::U256;
 use core::ops::Add;
 
@@ -11,42 +10,7 @@ pub struct NodeKey {
     pub extension: U256,
 }
 
-// Resources consumed during any swap execution.
-pub struct BasePoolResources {
-    pub initialized_ticks_crossed: u32,
-    pub tick_spacings_crossed: u32,
-}
-
-impl Default for BasePoolResources {
-    fn default() -> Self {
-        BasePoolResources {
-            initialized_ticks_crossed: 0,
-            tick_spacings_crossed: 0,
-        }
-    }
-}
-
-impl Add for BasePoolResources {
-    type Output = BasePoolResources;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        BasePoolResources {
-            initialized_ticks_crossed: self.initialized_ticks_crossed
-                + rhs.initialized_ticks_crossed,
-            tick_spacings_crossed: self.tick_spacings_crossed + rhs.tick_spacings_crossed,
-        }
-    }
-}
-
-// State of the pool that can change with every swap
-#[derive(Clone)]
-pub struct BasePoolState {
-    pub sqrt_ratio: U256,
-    pub liquidity: u128,
-    pub active_tick_index: Option<usize>,
-}
-
-// A boundary to a position on a pool
+// The aggregate effect of all positions on a pool that are bounded by the specific tick
 #[derive(Clone)]
 pub struct Tick {
     pub index: i32,
@@ -65,10 +29,10 @@ pub struct QuoteMeta {
 }
 
 // Parameters for a quote operation.
-pub struct QuoteParams {
+pub struct QuoteParams<S> {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
-    pub override_state: Option<BasePoolState>,
+    pub override_state: Option<S>,
     pub meta: QuoteMeta,
 }
 
@@ -78,28 +42,25 @@ pub struct TokenAmount {
     pub token: U256,
 }
 
-// Result of a quote operation.
-pub struct Quote {
+// The result of all pool swaps is some input and output delta
+pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
     pub calculated_amount: i128,
-    pub execution_resources: BasePoolResources,
-    pub state_after: BasePoolState,
+    pub execution_resources: R,
+    pub state_after: S,
     pub fees_paid: u128,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum QuoteError {
-    InvalidToken,
-    InvalidSqrtRatioLimit,
-    InvalidTick(i32),
-    FailedComputeSwapStep(ComputeStepError),
-}
-
 pub trait Pool {
-    // Given the quote parameters, return the result of a swap
-    fn quote(&self, params: QuoteParams) -> Result<Quote, QuoteError>;
+    type Resources: Add<Output = Self::Resources> + Default;
+    type Error;
+    type State: Clone;
 
-    // Whether the pool has any liquidity, i.e. can support quotes of any size
+    fn quote(
+        &self,
+        params: QuoteParams<Self::State>,
+    ) -> Result<Quote<Self::Resources, Self::State>, Self::Error>;
+
     fn has_liquidity(&self) -> bool;
 }
