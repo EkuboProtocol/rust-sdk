@@ -3,6 +3,12 @@ name = "ekubo_sdk"
 version = "0.1.0"
 authors = ["Mahmoud Salem <moody@ekubo.org>"]
 edition = "2021"
+license = "LGPL-2"
+description = "Types for interacting with Ekubo Protocol"
+homepage = "https://ekubo.org"
+repository = "https://github.com/EkuboProtocol/rust-sdk"
+readme = "README.md"
+keywords = ["crypto", "math", "ekubo", "protocol", "defi"]
 
 
 [dependencies]
