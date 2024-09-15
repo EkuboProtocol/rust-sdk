@@ -8,18 +8,10 @@ use core::ops::Add;
 use num_traits::Zero;
 
 // Resources consumed during any swap execution.
+#[derive(Clone, Default)]
 pub struct BasePoolResources {
     pub initialized_ticks_crossed: u32,
     pub tick_spacings_crossed: u32,
-}
-
-impl Default for BasePoolResources {
-    fn default() -> Self {
-        BasePoolResources {
-            initialized_ticks_crossed: 0,
-            tick_spacings_crossed: 0,
-        }
-    }
 }
 
 impl Add for BasePoolResources {
@@ -34,14 +26,37 @@ impl Add for BasePoolResources {
     }
 }
 
-// Main struct representing the pool.
+pub const MAX_TICK_SPACING: u32 = 354892;
+pub const MIN_TICK_AT_MAX_TICK_SPACING: i32 = -88368108;
+pub const MAX_TICK_AT_MAX_TICK_SPACING: i32 = 88368108;
+pub const MIN_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = U256([3580400339970425059, 1, 0, 0]);
+pub const MAX_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = U256([
+    6538062197914670769,
+    14200015713685041661,
+    15448319606494512814,
+    0,
+]);
+
+#[derive(Debug, PartialEq)]
+pub enum BasePoolQuoteError {
+    InvalidToken,
+    InvalidSqrtRatioLimit,
+    InvalidTick(i32),
+    FailedComputeSwapStep(ComputeStepError),
+}
+
+#[derive(Clone)]
+pub struct BasePoolState {
+    pub sqrt_ratio: U256,
+    pub liquidity: u128,
+    pub active_tick_index: Option<usize>,
+}
+
 pub struct BasePool {
     key: NodeKey,
     state: BasePoolState,
     sorted_ticks: Vec<Tick>,
 }
-
-pub const MAX_TICK_SPACING: u32 = 354892;
 
 impl BasePool {
     pub fn new(key: NodeKey, state: BasePoolState, sorted_ticks: Vec<Tick>) -> Self {
@@ -91,24 +106,19 @@ impl BasePool {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum BasePoolQuoteError {
-    InvalidToken,
-    InvalidSqrtRatioLimit,
-    InvalidTick(i32),
-    FailedComputeSwapStep(ComputeStepError),
-}
-
 impl Pool for BasePool {
     type Resources = BasePoolResources;
-    type Error = BasePoolQuoteError;
     type State = BasePoolState;
+    type QuoteError = BasePoolQuoteError;
 
-    // Quotes a swap given the parameters.
+    fn get_key(&self) -> NodeKey {
+        self.key.clone()
+    }
+
     fn quote(
         &self,
         params: QuoteParams<Self::State>,
-    ) -> Result<Quote<Self::Resources, Self::State>, Self::Error> {
+    ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
         let is_token1 = token == self.key.token1;
@@ -117,8 +127,8 @@ impl Pool for BasePool {
             return Err(BasePoolQuoteError::InvalidToken);
         }
 
-        let state = if let Some(ref override_state) = params.override_state {
-            override_state.clone()
+        let state = if let Some(override_state) = params.override_state {
+            override_state
         } else {
             self.state.clone()
         };
@@ -235,22 +245,24 @@ impl Pool for BasePool {
             fees_paid += step.fee_amount;
             sqrt_ratio = step.sqrt_ratio_next;
 
-            if let Some((index, next_tick, _)) = next_initialized_tick {
-                active_tick_index = if is_increasing {
-                    Some(index)
-                } else if !index.is_zero() {
-                    Some(index - 1)
-                } else {
-                    None
-                };
+            if let Some((index, next_tick, tick_sqrt_ratio)) = next_initialized_tick {
+                if sqrt_ratio == tick_sqrt_ratio {
+                    active_tick_index = if is_increasing {
+                        Some(index)
+                    } else if !index.is_zero() {
+                        Some(index - 1)
+                    } else {
+                        None
+                    };
 
-                initialized_ticks_crossed += 1;
+                    initialized_ticks_crossed += 1;
 
-                if (next_tick.liquidity_delta.signum() == 1) == is_increasing {
-                    liquidity = liquidity + next_tick.liquidity_delta.unsigned_abs();
-                } else {
-                    liquidity = liquidity - next_tick.liquidity_delta.unsigned_abs();
-                };
+                    if (next_tick.liquidity_delta.signum() == 1) == is_increasing {
+                        liquidity = liquidity + next_tick.liquidity_delta.unsigned_abs();
+                    } else {
+                        liquidity = liquidity - next_tick.liquidity_delta.unsigned_abs();
+                    };
+                }
             } else {
                 active_tick_index = None
             }
@@ -315,7 +327,7 @@ mod tests {
                 liquidity: 0u128,
                 active_tick_index: None,
             },
-            vec![], // sorted_ticks
+            vec![],
         );
 
         let params = QuoteParams {
@@ -345,7 +357,7 @@ mod tests {
                 liquidity: 0u128,
                 active_tick_index: None,
             },
-            vec![], // sorted_ticks
+            vec![],
         );
 
         let params = QuoteParams {
@@ -447,12 +459,4 @@ mod tests {
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
     }
-}
-
-// State of the pool that can change with every swap
-#[derive(Clone)]
-pub struct BasePoolState {
-    pub sqrt_ratio: U256,
-    pub liquidity: u128,
-    pub active_tick_index: Option<usize>,
 }

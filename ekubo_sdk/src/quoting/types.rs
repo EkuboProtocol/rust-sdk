@@ -1,7 +1,9 @@
 use crate::math::uint::U256;
+use core::fmt::Debug;
 use core::ops::Add;
 
 // Unique key identifying the pool.
+#[derive(Clone)]
 pub struct NodeKey {
     pub token0: U256,
     pub token1: U256,
@@ -30,6 +32,13 @@ pub struct QuoteMeta {
     pub block: Block,
 }
 
+// Amount and token information.
+#[derive(Clone)]
+pub struct TokenAmount {
+    pub amount: i128,
+    pub token: U256,
+}
+
 // Parameters for a quote operation.
 #[derive(Clone)]
 pub struct QuoteParams<S> {
@@ -39,14 +48,8 @@ pub struct QuoteParams<S> {
     pub meta: QuoteMeta,
 }
 
-// Amount and token information.
-#[derive(Clone)]
-pub struct TokenAmount {
-    pub amount: i128,
-    pub token: U256,
-}
-
 // The result of all pool swaps is some input and output delta
+#[derive(Clone)]
 pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
@@ -57,14 +60,16 @@ pub struct Quote<R, S> {
 }
 
 pub trait Pool {
-    type Resources: Add<Output = Self::Resources> + Default;
-    type Error;
+    type Resources: Add<Output = Self::Resources> + Default + Clone;
     type State: Clone;
+    type QuoteError: Debug;
+
+    fn get_key(&self) -> NodeKey;
 
     fn quote(
         &self,
         params: QuoteParams<Self::State>,
-    ) -> Result<Quote<Self::Resources, Self::State>, Self::Error>;
+    ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError>;
 
     fn has_liquidity(&self) -> bool;
 }
