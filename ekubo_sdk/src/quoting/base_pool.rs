@@ -15,7 +15,7 @@ pub enum QuoteError {
 }
 
 // Main struct representing the pool.
-struct BasePool {
+pub struct BasePool {
     key: NodeKey,
     state: BasePoolState,
     sorted_ticks: Vec<Tick>,
@@ -57,7 +57,7 @@ impl BasePool {
     }
 
     // Combines two resource usages.
-    fn combine_resources(
+    pub fn combine_resources(
         &self,
         resource: BasePoolResources,
         additional_resources: BasePoolResources,
