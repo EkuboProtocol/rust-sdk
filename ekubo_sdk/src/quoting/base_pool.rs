@@ -1,18 +1,12 @@
-use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
+use crate::math::swap::{compute_step, is_price_increasing};
 use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
-use crate::quoting::types::{BasePoolResources, BasePoolState, NodeKey, Quote, QuoteParams, Tick};
+use crate::quoting::types::{
+    BasePoolResources, BasePoolState, NodeKey, Pool, Quote, QuoteError, QuoteParams, Tick,
+};
 use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
 use alloc::vec::Vec;
 use num_traits::Zero;
-
-#[derive(Debug)]
-pub enum QuoteError {
-    InvalidToken,
-    InvalidSqrtRatioLimit,
-    InvalidTick(i32),
-    FailedComputeSwapStep(ComputeStepError),
-}
 
 // Main struct representing the pool.
 pub struct BasePool {
@@ -69,30 +63,11 @@ impl BasePool {
             sorted_ticks,
         }
     }
+}
 
-    pub fn combine_resources(
-        &self,
-        resource: BasePoolResources,
-        additional_resources: BasePoolResources,
-    ) -> BasePoolResources {
-        BasePoolResources {
-            initialized_ticks_crossed: resource.initialized_ticks_crossed
-                + additional_resources.initialized_ticks_crossed,
-            tick_spacings_crossed: resource.tick_spacings_crossed
-                + additional_resources.tick_spacings_crossed,
-        }
-    }
-
-    // Initializes resource usage.
-    fn initial_resources(&self) -> BasePoolResources {
-        BasePoolResources {
-            initialized_ticks_crossed: 0,
-            tick_spacings_crossed: 0,
-        }
-    }
-
+impl Pool for BasePool {
     // Quotes a swap given the parameters.
-    pub fn quote(&self, params: QuoteParams) -> Result<Quote, QuoteError> {
+    fn quote(&self, params: QuoteParams) -> Result<Quote, QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
         let is_token1 = token == self.key.token1;
@@ -112,7 +87,7 @@ impl BasePool {
                 is_price_increasing: is_token1,
                 consumed_amount: 0,
                 calculated_amount: 0,
-                execution_resources: self.initial_resources(),
+                execution_resources: Default::default(),
                 state_after: state,
                 fees_paid: 0,
             });
@@ -263,7 +238,7 @@ impl BasePool {
     }
 
     // Checks if the pool has any liquidity.
-    pub fn has_liquidity(&self) -> bool {
+    fn has_liquidity(&self) -> bool {
         self.state.liquidity > 0 || !self.sorted_ticks.is_empty()
     }
 }
