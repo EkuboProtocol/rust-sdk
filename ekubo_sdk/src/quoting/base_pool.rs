@@ -26,23 +26,12 @@ pub struct BasePool {
 impl BasePool {
     // Constructor for BasePool.
     pub fn new(
-        token0: U256,
-        token1: U256,
-        tick_spacing: u32,
-        fee: u128,
+        key: NodeKey,
         sqrt_ratio: U256,
         liquidity: u128,
         tick: i32,
         sorted_ticks: Vec<Tick>,
     ) -> Self {
-        let key = NodeKey {
-            token0,
-            token1,
-            fee,
-            tick_spacing,
-            extension: U256::zero(),
-        };
-
         let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
 
         let state = BasePoolState {
@@ -263,13 +252,20 @@ mod tests {
     use crate::quoting::types::{Block, QuoteMeta, TokenAmount};
     use alloc::vec;
 
+    fn node_key(tick_spacing: u32, fee: u128) -> NodeKey {
+        NodeKey {
+            token0: U256::zero(),
+            token1: U256::one(),
+            tick_spacing,
+            fee,
+            extension: U256::zero(),
+        }
+    }
+
     #[test]
     fn test_quote_zero_liquidity_token1_input() {
         let pool = BasePool::new(
-            U256::zero(),       // token0
-            U256::one(),        // token1
-            1,                  // tick_spacing
-            0u128,              // fee
+            node_key(1, 0),
             U256([0, 0, 1, 0]), // sqrt_ratio
             0u128,              // liquidity
             0,                  // tick
@@ -297,10 +293,7 @@ mod tests {
     #[test]
     fn test_quote_zero_liquidity_token0_input() {
         let pool = BasePool::new(
-            U256::zero(),       // token0
-            U256::one(),        // token1
-            1,                  // tick_spacing
-            0u128,              // fee
+            node_key(1, 0),
             U256([0, 0, 1, 0]), // sqrt_ratio
             0u128,              // liquidity
             0,                  // tick
@@ -339,10 +332,7 @@ mod tests {
         ];
 
         let pool = BasePool::new(
-            U256::zero(),       // token0
-            U256::one(),        // token1
-            1,                  // tick_spacing
-            0u128,              // fee
+            node_key(1, 0),
             U256([0, 0, 1, 0]), // sqrt_ratio
             1_000_000_000u128,  // liquidity
             0,                  // tick
@@ -381,10 +371,7 @@ mod tests {
         ];
 
         let pool = BasePool::new(
-            U256::zero(),                            // token0
-            U256::one(),                             // token1
-            1,                                       // tick_spacing
-            0u128,                                   // fee
+            node_key(1, 0),
             to_sqrt_ratio(1).expect("Invalid tick"), // sqrt_ratio
             0u128,                                   // liquidity
             1,                                       // tick
