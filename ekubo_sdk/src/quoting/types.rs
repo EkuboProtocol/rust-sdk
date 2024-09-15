@@ -18,17 +18,20 @@ pub struct Tick {
 }
 
 // Information about a block necessary for quoting against some pools
+#[derive(Clone)]
 pub struct Block {
     pub number: u64,
     pub time: u64,
 }
 
 // Information about the state of the network necessary for quoting against some kinds of pools (not used by base pools)
+#[derive(Clone)]
 pub struct QuoteMeta {
     pub block: Block,
 }
 
 // Parameters for a quote operation.
+#[derive(Clone)]
 pub struct QuoteParams<S> {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
@@ -37,6 +40,7 @@ pub struct QuoteParams<S> {
 }
 
 // Amount and token information.
+#[derive(Clone)]
 pub struct TokenAmount {
     pub amount: i128,
     pub token: U256,
