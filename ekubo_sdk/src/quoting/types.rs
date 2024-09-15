@@ -9,13 +9,13 @@ pub struct NodeKey {
     pub extension: U256,
 }
 
-// Define the resources consumed during execution.
+// Resources consumed during any swap execution.
 pub struct BasePoolResources {
-    pub initialized_ticks_crossed: u64,
-    pub tick_spacings_crossed: u64,
+    pub initialized_ticks_crossed: u32,
+    pub tick_spacings_crossed: u32,
 }
 
-// Represent the state of the pool at a given time.
+// State of the pool that can change with every swap
 #[derive(Clone)]
 pub struct BasePoolState {
     pub sqrt_ratio: U256,
@@ -23,10 +23,22 @@ pub struct BasePoolState {
     pub active_tick_index: Option<usize>,
 }
 
-// Represents a tick with a liquidity delta.
+// A boundary to a position on a pool
+#[derive(Clone)]
 pub struct Tick {
-    pub tick: i32,
+    pub index: i32,
     pub liquidity_delta: i128,
+}
+
+// Information about a block necessary for quoting against some pools
+pub struct Block {
+    pub number: u64,
+    pub time: u64,
+}
+
+// Information about the state of the network necessary for quoting against some kinds of pools (not used by base pools)
+pub struct QuoteMeta {
+    pub block: Block,
 }
 
 // Parameters for a quote operation.
@@ -34,6 +46,7 @@ pub struct QuoteParams {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
     pub override_state: Option<BasePoolState>,
+    pub meta: QuoteMeta,
 }
 
 // Amount and token information.
