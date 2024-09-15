@@ -10,14 +10,14 @@ use alloc::vec::Vec;
 use core::ops::Add;
 use num_traits::ToPrimitive;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct TwammPoolState {
     last_execution_time: u64,
     sale_rate0: u128,
     sale_rate1: u128,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct TwammPoolResources {
     base_pool_resources: BasePoolResources,
     num_virtual_order_times_crossed: u32,

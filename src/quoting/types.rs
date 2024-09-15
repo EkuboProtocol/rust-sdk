@@ -60,8 +60,8 @@ pub struct Quote<R, S> {
 }
 
 pub trait Pool {
-    type Resources: Add<Output = Self::Resources> + Default + Clone;
-    type State: Clone;
+    type Resources: Add<Output = Self::Resources> + Default + Clone + Copy;
+    type State: Clone + Copy;
     type QuoteError: Debug;
 
     fn get_key(&self) -> NodeKey;

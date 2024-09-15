@@ -9,13 +9,13 @@ use alloc::vec;
 use core::ops::Add;
 use num_traits::ToPrimitive;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct OraclePoolState {
     base_pool_state: BasePoolState,
     last_snapshot_time: u64,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Copy)]
 pub struct OraclePoolResources {
     base_pool_resources: BasePoolResources,
     snapshot_updated: bool,

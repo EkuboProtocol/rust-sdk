@@ -8,7 +8,7 @@ use core::ops::Add;
 use num_traits::Zero;
 
 // Resources consumed during any swap execution.
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct BasePoolResources {
     pub initialized_ticks_crossed: u32,
     pub tick_spacings_crossed: u32,
@@ -45,7 +45,7 @@ pub enum BasePoolQuoteError {
     FailedComputeSwapStep(ComputeStepError),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BasePoolState {
     pub sqrt_ratio: U256,
     pub liquidity: u128,
