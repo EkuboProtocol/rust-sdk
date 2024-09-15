@@ -21,9 +21,48 @@ pub struct BasePool {
     sorted_ticks: Vec<Tick>,
 }
 
+pub const MAX_TICK_SPACING: u32 = 354892;
+
 impl BasePool {
     pub fn new(key: NodeKey, state: BasePoolState, sorted_ticks: Vec<Tick>) -> Self {
-        // todo: apply some validation to the arguments
+        assert!(key.token0 < key.token1, "token0 must be less than token1");
+        assert!(!key.token0.is_zero(), "token0 must be non-zero");
+        assert!(
+            key.tick_spacing <= MAX_TICK_SPACING,
+            "tick spacing must be less than max tick spacing"
+        );
+        assert!(
+            key.tick_spacing > 0,
+            "tick spacing must be greater than zero"
+        );
+        if let Some(active) = state.active_tick_index {
+            let tick = sorted_ticks
+                .get(active)
+                .expect("active tick index is out of bounds");
+
+            assert!(
+                to_sqrt_ratio(tick.index).expect("invalid active tick") <= state.sqrt_ratio,
+                "sqrt_ratio of active tick is not less than or equal to current sqrt_ratio"
+            );
+        } else {
+            if let Some(first) = sorted_ticks.first() {
+                assert!(
+                    state.sqrt_ratio
+                        <= to_sqrt_ratio(first.index).expect("first tick has invalid index"),
+                    "sqrt ratio must be less than or equal to first tick"
+                );
+            }
+        }
+
+        // check ticks are sorted in linear time
+        let mut last_tick: Option<i32> = None;
+        for tick in sorted_ticks.iter() {
+            if let Some(last) = last_tick {
+                assert!(tick.index > last, "ticks must be sorted");
+            };
+            last_tick = Some(tick.index);
+        }
+
         Self {
             key,
             state,
@@ -31,7 +70,6 @@ impl BasePool {
         }
     }
 
-    // Combines two resource usages.
     pub fn combine_resources(
         &self,
         resource: BasePoolResources,
@@ -236,10 +274,13 @@ mod tests {
     use crate::quoting::types::{Block, QuoteMeta, TokenAmount};
     use alloc::vec;
 
+    const TOKEN0: U256 = U256([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+
     fn node_key(tick_spacing: u32, fee: u128) -> NodeKey {
         NodeKey {
-            token0: U256::zero(),
-            token1: U256::one(),
+            token0: TOKEN0,
+            token1: TOKEN1,
             tick_spacing,
             fee,
             extension: U256::zero(),
@@ -261,7 +302,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1,
-                token: U256::from(1u64),
+                token: TOKEN1,
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -291,7 +332,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1,
-                token: U256::from(0u64),
+                token: TOKEN0,
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -332,7 +373,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: U256::from(1u64),
+                token: TOKEN1,
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -373,7 +414,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: U256::from(0u64),
+                token: TOKEN0,
             },
             sqrt_ratio_limit: None,
             override_state: None,
