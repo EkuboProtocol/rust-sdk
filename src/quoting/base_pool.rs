@@ -112,7 +112,11 @@ impl Pool for BasePool {
     type QuoteError = BasePoolQuoteError;
 
     fn get_key(&self) -> NodeKey {
-        self.key.clone()
+        self.key
+    }
+
+    fn get_state(&self) -> Self::State {
+        self.state
     }
 
     fn quote(

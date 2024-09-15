@@ -15,7 +15,7 @@ pub struct OraclePoolState {
     last_snapshot_time: u64,
 }
 
-#[derive(Clone, Default, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct OraclePoolResources {
     base_pool_resources: BasePoolResources,
     snapshot_updated: bool,
@@ -92,6 +92,13 @@ impl Pool for OraclePool {
         self.base_pool.get_key()
     }
 
+    fn get_state(&self) -> Self::State {
+        OraclePoolState {
+            base_pool_state: self.base_pool.get_state(),
+            last_snapshot_time: self.last_snapshot_time,
+        }
+    }
+
     fn quote(
         &self,
         params: QuoteParams<Self::State>,
@@ -99,7 +106,6 @@ impl Pool for OraclePool {
         let block_time = params.meta.block.time;
         let pool_time = params
             .override_state
-            .clone()
             .map_or(self.last_snapshot_time, |os| os.last_snapshot_time);
 
         let result = self.base_pool.quote(QuoteParams {

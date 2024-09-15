@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use core::ops::Add;
 
 // Unique key identifying the pool.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct NodeKey {
     pub token0: U256,
     pub token1: U256,
@@ -13,34 +13,34 @@ pub struct NodeKey {
 }
 
 // The aggregate effect of all positions on a pool that are bounded by the specific tick
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Tick {
     pub index: i32,
     pub liquidity_delta: i128,
 }
 
 // Information about a block necessary for quoting against some pools
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Block {
     pub number: u64,
     pub time: u64,
 }
 
 // Information about the state of the network necessary for quoting against some kinds of pools (not used by base pools)
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct QuoteMeta {
     pub block: Block,
 }
 
 // Amount and token information.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct TokenAmount {
     pub amount: i128,
     pub token: U256,
 }
 
 // Parameters for a quote operation.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct QuoteParams<S> {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
@@ -49,7 +49,7 @@ pub struct QuoteParams<S> {
 }
 
 // The result of all pool swaps is some input and output delta
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
@@ -60,11 +60,13 @@ pub struct Quote<R, S> {
 }
 
 pub trait Pool {
-    type Resources: Add<Output = Self::Resources> + Default + Clone + Copy;
-    type State: Clone + Copy;
+    type Resources: Add<Output = Self::Resources> + Default + Copy;
+    type State: Copy;
     type QuoteError: Debug;
 
     fn get_key(&self) -> NodeKey;
+
+    fn get_state(&self) -> Self::State;
 
     fn quote(
         &self,
