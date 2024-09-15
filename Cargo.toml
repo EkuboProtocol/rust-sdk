@@ -10,7 +10,6 @@ repository = "https://github.com/EkuboProtocol/rust-sdk"
 readme = "README.md"
 keywords = ["crypto", "math", "ekubo", "protocol", "defi"]
 
-
 [dependencies]
 num-traits = "0.2.19"
 uint = "0.10.0"

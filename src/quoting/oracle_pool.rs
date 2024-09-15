@@ -59,9 +59,9 @@ impl OraclePool {
                 BasePoolState {
                     sqrt_ratio,
                     liquidity,
-                    active_tick_index: if sqrt_ratio >= MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
-                        && sqrt_ratio < MAX_SQRT_RATIO_AT_MAX_TICK_SPACING
-                    {
+                    active_tick_index: if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING {
+                        None
+                    } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
                         Some(0)
                     } else {
                         None

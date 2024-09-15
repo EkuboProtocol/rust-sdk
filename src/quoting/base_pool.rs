@@ -81,21 +81,33 @@ impl BasePool {
             );
         } else {
             if let Some(first) = sorted_ticks.first() {
-                assert!(
-                    state.sqrt_ratio
-                        <= to_sqrt_ratio(first.index).expect("first tick has invalid index"),
-                    "sqrt ratio must be less than or equal to first tick"
-                );
+                if state.sqrt_ratio
+                    > to_sqrt_ratio(first.index).expect("first tick has invalid index")
+                {
+                    if let Some(last) = sorted_ticks.last() {
+                        assert!(
+                            state.sqrt_ratio
+                                >= to_sqrt_ratio(last.index).expect("last tick has invalid index"),
+                            "tick must be outside first and last tick if active_tick_index is none"
+                        );
+                    }
+                }
             }
         }
 
         // check ticks are sorted in linear time
         let mut last_tick: Option<i32> = None;
+        let mut total_liquidity: u128 = 0;
         for tick in sorted_ticks.iter() {
             if let Some(last) = last_tick {
                 assert!(tick.index > last, "ticks must be sorted");
             };
             last_tick = Some(tick.index);
+            total_liquidity = if tick.liquidity_delta < 0 {
+                total_liquidity - tick.liquidity_delta.unsigned_abs()
+            } else {
+                total_liquidity + tick.liquidity_delta.unsigned_abs()
+            }
         }
 
         Self {
