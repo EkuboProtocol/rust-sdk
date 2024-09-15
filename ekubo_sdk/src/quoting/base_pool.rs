@@ -2,9 +2,7 @@ use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
 use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::types::{BasePoolResources, BasePoolState, NodeKey, Quote, QuoteParams, Tick};
-use crate::quoting::util::{
-    approximate_number_of_tick_spacings_crossed, find_nearest_initialized_tick_index,
-};
+use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
 use alloc::vec::Vec;
 use num_traits::Zero;
 
@@ -24,22 +22,8 @@ pub struct BasePool {
 }
 
 impl BasePool {
-    // Constructor for BasePool.
-    pub fn new(
-        key: NodeKey,
-        sqrt_ratio: U256,
-        liquidity: u128,
-        tick: i32,
-        sorted_ticks: Vec<Tick>,
-    ) -> Self {
-        let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
-
-        let state = BasePoolState {
-            sqrt_ratio,
-            liquidity,
-            active_tick_index,
-        };
-
+    pub fn new(key: NodeKey, state: BasePoolState, sorted_ticks: Vec<Tick>) -> Self {
+        // todo: apply some validation to the arguments
         Self {
             key,
             state,
@@ -266,10 +250,12 @@ mod tests {
     fn test_quote_zero_liquidity_token1_input() {
         let pool = BasePool::new(
             node_key(1, 0),
-            U256([0, 0, 1, 0]), // sqrt_ratio
-            0u128,              // liquidity
-            0,                  // tick
-            vec![],             // sorted_ticks
+            BasePoolState {
+                sqrt_ratio: U256([0, 0, 1, 0]),
+                liquidity: 0u128,
+                active_tick_index: None,
+            },
+            vec![], // sorted_ticks
         );
 
         let params = QuoteParams {
@@ -294,10 +280,12 @@ mod tests {
     fn test_quote_zero_liquidity_token0_input() {
         let pool = BasePool::new(
             node_key(1, 0),
-            U256([0, 0, 1, 0]), // sqrt_ratio
-            0u128,              // liquidity
-            0,                  // tick
-            vec![],             // sorted_ticks
+            BasePoolState {
+                sqrt_ratio: U256([0, 0, 1, 0]),
+                liquidity: 0u128,
+                active_tick_index: None,
+            },
+            vec![], // sorted_ticks
         );
 
         let params = QuoteParams {
@@ -333,9 +321,11 @@ mod tests {
 
         let pool = BasePool::new(
             node_key(1, 0),
-            U256([0, 0, 1, 0]), // sqrt_ratio
-            1_000_000_000u128,  // liquidity
-            0,                  // tick
+            BasePoolState {
+                sqrt_ratio: U256([0, 0, 1, 0]),
+                liquidity: 1_000_000_000u128,
+                active_tick_index: Some(0),
+            },
             sorted_ticks,
         );
 
@@ -372,9 +362,11 @@ mod tests {
 
         let pool = BasePool::new(
             node_key(1, 0),
-            to_sqrt_ratio(1).expect("Invalid tick"), // sqrt_ratio
-            0u128,                                   // liquidity
-            1,                                       // tick
+            BasePoolState {
+                sqrt_ratio: to_sqrt_ratio(1).expect("Invalid tick"),
+                liquidity: 0,
+                active_tick_index: Some(1),
+            },
             sorted_ticks,
         );
 
