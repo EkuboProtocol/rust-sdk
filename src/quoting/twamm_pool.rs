@@ -1,4 +1,3 @@
-use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
 use crate::math::uint::U256;
 use crate::quoting::base_pool::{
@@ -64,15 +63,15 @@ impl TwammPool {
         fee: u128,
         extension: U256,
         sqrt_ratio: U256,
-        liquidity: u128,
+        active_liquidity: u128,
         last_execution_time: u64,
         token0_sale_rate: u128,
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
     ) -> Self {
-        let signed_liquidity: i128 = liquidity.to_i128().expect("Liquidity overflow i128");
+        let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
         TwammPool {
-            liquidity,
+            liquidity: active_liquidity,
             base_pool: BasePool::new(
                 NodeKey {
                     token0,
@@ -83,10 +82,12 @@ impl TwammPool {
                 },
                 BasePoolState {
                     // we just force the pool state to always be within the bounds of min/max to simplify the state
+                    // this does not change accuracy of quote results
+                    // it just reduces accuracy of resource estimations in extreme cases by a negligible amount.
                     sqrt_ratio: sqrt_ratio
                         .min(MAX_SQRT_RATIO_AT_MAX_TICK_SPACING)
                         .max(MIN_SQRT_RATIO_AT_MAX_TICK_SPACING),
-                    liquidity,
+                    liquidity: active_liquidity,
                     active_tick_index: Some(0),
                 },
                 vec![
@@ -188,6 +189,7 @@ impl Pool for TwammPool {
                 "too much time has passed since execution"
             );
 
+            // we know this will never overflow because token0_sale_rate is a u128 and time_elapsed is a u32
             let amount0: u128 =
                 ((U256::from(token0_sale_rate) * U256::from(time_elapsed)) >> 32).low_u128();
             let amount1: u128 =
@@ -235,9 +237,9 @@ impl Pool for TwammPool {
                     base_pool_execution_resources + quote.execution_resources;
             } else if amount0 > 0 || amount1 > 0 {
                 let (amount, is_token1, sqrt_ratio_limit) = if amount0 != 0 {
-                    (amount0, false, MIN_SQRT_RATIO)
+                    (amount0, false, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING)
                 } else {
-                    (amount1, true, MAX_SQRT_RATIO)
+                    (amount1, true, MAX_SQRT_RATIO_AT_MAX_TICK_SPACING)
                 };
 
                 let token = if is_token1 {
@@ -579,13 +581,13 @@ mod tests {
             })
             .expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 0);
+        assert_eq!(quote.calculated_amount, 2555);
         assert_eq!(
             quote
                 .execution_resources
                 .base_pool_resources
                 .initialized_ticks_crossed,
-            1
+            0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -636,7 +638,7 @@ mod tests {
                 .execution_resources
                 .base_pool_resources
                 .initialized_ticks_crossed,
-            2
+            0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -681,13 +683,13 @@ mod tests {
             })
             .expect("swap succeeds");
 
-        assert_eq!(quote.calculated_amount, 0);
+        assert_eq!(quote.calculated_amount, 390);
         assert_eq!(
             quote
                 .execution_resources
                 .base_pool_resources
                 .initialized_ticks_crossed,
-            1
+            0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -738,7 +740,7 @@ mod tests {
                 .execution_resources
                 .base_pool_resources
                 .initialized_ticks_crossed,
-            2
+            0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -1165,40 +1167,38 @@ mod tests {
             .expect("first swap succeeds");
 
         // Second quote: no swap after full day
-        let second_swap = pool
-            .quote(QuoteParams {
-                token_amount: TokenAmount {
-                    amount: 0,
-                    token: TOKEN0,
+        pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 0,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 86_400u64,
                 },
-                sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 86_400u64,
-                    },
-                },
-                override_state: None,
-            })
-            .expect("second swap succeeds");
+            },
+            override_state: None,
+        })
+        .expect("second swap succeeds");
 
         // Third quote: using override_state from first quote
-        let third = pool
-            .quote(QuoteParams {
-                token_amount: TokenAmount {
-                    amount: 0,
-                    token: TOKEN0,
+        pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 0,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 86_400u64,
                 },
-                sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 86_400u64,
-                    },
-                },
-                override_state: Some(first.state_after),
-            })
-            .expect("third is ok");
+            },
+            override_state: Some(first.state_after),
+        })
+        .expect("third is ok");
     }
 
     #[test]
@@ -1221,134 +1221,133 @@ mod tests {
         );
 
         // Quote at time 60 (0 seconds pass)
-        let quote_0 = pool.quote(QuoteParams {
+        pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: 0,
                 token: TOKEN0,
             },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
             meta: QuoteMeta {
                 block: Block {
                     number: 1u64,
                     time: 60u64,
                 },
             },
+            sqrt_ratio_limit: None,
             override_state: None,
-        });
+        })
+        .expect("quote after 60 seconds");
 
-        // Replace with actual snapshot or expected values
-        // insta::assert_debug_snapshot!(quote_0, @"0 seconds pass");
-
-        // Quote at time 90 (30 seconds pass)
-        let quote_30 = pool.quote(QuoteParams {
+        pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: 0,
                 token: TOKEN0,
             },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
             meta: QuoteMeta {
                 block: Block {
                     number: 1u64,
                     time: 90u64,
                 },
             },
+            sqrt_ratio_limit: None,
             override_state: None,
-        });
+        })
+        .expect("quote after 90 seconds");
 
-        // Replace with actual snapshot or expected values
-        // insta::assert_debug_snapshot!(quote_30, @"30 seconds pass");
-
-        // Quote at time 120 (60 seconds pass)
-        let fully_executed_twamm = pool.quote(QuoteParams {
-            token_amount: TokenAmount {
-                amount: 0,
-                token: TOKEN0,
-            },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 120u64,
+        let fully_executed_twamm = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 0,
+                    token: TOKEN0,
                 },
-            },
-            override_state: None,
-        });
-
-        let state_after_fully_executed = fully_executed_twamm.map(|q| q.state_after).unwrap();
-
-        // Replace with actual snapshot or expected values
-        // insta::assert_debug_snapshot!(fully_executed_twamm, @"60 seconds pass");
-
-        // Quote token0 with override_state
-        let quote_token0 = pool.quote(QuoteParams {
-            token_amount: TokenAmount {
-                amount: 10u128.pow(18) as i128,
-                token: TOKEN0,
-            },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 120u64,
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 120u64,
+                    },
                 },
-            },
-            override_state: Some(state_after_fully_executed),
-        });
+                sqrt_ratio_limit: None,
+                override_state: None,
+            })
+            .expect("quote after 120 seconds");
+
+        let state_after_fully_executed = fully_executed_twamm.state_after;
+
+        let quote_token0_with_override = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 10u128.pow(18) as i128,
+                    token: TOKEN0,
+                },
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 120u64,
+                    },
+                },
+                sqrt_ratio_limit: None,
+                override_state: Some(state_after_fully_executed),
+            })
+            .expect("quote with override");
+
+        assert_eq!(
+            quote_token0_with_override.calculated_amount,
+            pool.base_pool
+                .quote(QuoteParams {
+                    token_amount: TokenAmount {
+                        token: TOKEN0,
+                        amount: 10u128.pow(18) as i128,
+                    },
+                    meta: QuoteMeta {
+                        block: Block {
+                            number: 1u64,
+                            time: 120u64,
+                        },
+                    },
+                    override_state: Some(state_after_fully_executed.base_pool_state),
+                    sqrt_ratio_limit: None,
+                })
+                .expect("base pool quote")
+                .calculated_amount
+        );
+
+        let quote_token1_with_override = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 10u128.pow(18) as i128,
+                    token: TOKEN1,
+                },
+                sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 120u64,
+                    },
+                },
+                override_state: Some(state_after_fully_executed),
+            })
+            .expect("quote token1 with override");
 
         // Replace with actual expected value comparison
-        // Assuming pool has a base_pool with its own quote method
-        // assert_eq!(
-        //     quote_token0.calculated_amount,
-        //     pool.base_pool.quote(QuoteParams {
-        //         token_amount: TokenAmount {
-        //             token: TOKEN0
-        //             amount: 10u128.pow(18).into(),
-        //         },
-        //         meta: QuoteMeta {
-        //             block: Block {
-        //                 number: 1u64,
-        //                 time: 120u64,
-        //             },
-        //         },
-        //         override_state: fully_executed_twamm.state_after.clone(),
-        //         sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-        //     }).unwrap().calculated_amount
-        // );
-
-        // Quote token1 with override_state
-        let quote_token1 = pool.quote(QuoteParams {
-            token_amount: TokenAmount {
-                amount: 10u128.pow(18) as i128,
-                token: TOKEN1,
-            },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 120u64,
-                },
-            },
-            override_state: Some(state_after_fully_executed),
-        });
-
-        // Replace with actual expected value comparison
-        // assert_eq!(
-        //     quote_token1.calculated_amount,
-        //     pool.base_pool.quote(QuoteParams {
-        //         token_amount: TokenAmount {
-        //             token: TOKEN1,
-        //             amount: 10u128.pow(18).into(),
-        //         },
-        //         meta: QuoteMeta {
-        //             block: Block {
-        //                 number: 1u64,
-        //                 time: 120u64,
-        //             },
-        //         },
-        //         override_state: fully_executed_twamm.state_after.clone(),
-        //         sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-        //     }).unwrap().calculated_amount
-        // );
+        assert_eq!(
+            quote_token1_with_override.calculated_amount,
+            pool.base_pool
+                .quote(QuoteParams {
+                    token_amount: TokenAmount {
+                        token: TOKEN1,
+                        amount: 10u128.pow(18) as i128,
+                    },
+                    meta: QuoteMeta {
+                        block: Block {
+                            number: 1u64,
+                            time: 120u64,
+                        },
+                    },
+                    override_state: Some(fully_executed_twamm.state_after.base_pool_state),
+                    sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+                })
+                .unwrap()
+                .calculated_amount
+        );
     }
 
     #[test]
@@ -1360,43 +1359,77 @@ mod tests {
             U256::from(1u8),
             to_sqrt_ratio(693147i32).unwrap(),
             70_710_696_755_630_728_101_718_334u128,
-            693147u64,
+            0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
             vec![],
         );
 
         // First swap
-        let first_swap = pool.quote(QuoteParams {
-            token_amount: TokenAmount {
-                amount: (10_000u128 * 10u128.pow(18)) as i128,
-                token: TOKEN0,
-            },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 2_040u64,
+        let first_swap = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: (10_000u128 * 10u128.pow(18)) as i128,
+                    token: TOKEN0,
                 },
-            },
-            override_state: None,
-        });
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 2_040u64,
+                    },
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+            })
+            .expect("first swap succeeds");
+
+        assert_eq!(first_swap.calculated_amount, 19993991114278719145825);
+        assert_eq!(first_swap.consumed_amount, 10000000000000000000000);
+        assert_eq!(
+            first_swap
+                .execution_resources
+                .virtual_order_seconds_executed,
+            2040
+        );
+        assert_eq!(
+            first_swap
+                .execution_resources
+                .virtual_order_delta_times_crossed,
+            0
+        );
 
         // Second swap using override_state from first swap
-        let second_swap = pool.quote(QuoteParams {
-            token_amount: TokenAmount {
-                amount: (10_000u128 * 10u128.pow(18)) as i128,
-                token: TOKEN0,
-            },
-            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 2u64,
-                    time: 2_100u64,
+        let second_swap = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: (10_000u128 * 10u128.pow(18)) as i128,
+                    token: TOKEN0,
                 },
-            },
-            override_state: first_swap.map(|q| q.state_after).ok(),
-        });
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 2u64,
+                        time: 2_100u64,
+                    },
+                },
+                sqrt_ratio_limit: None,
+                override_state: Some(first_swap.state_after),
+            })
+            .expect("second swap succeeds");
+
+        assert_eq!(second_swap.calculated_amount, 19985938387207888688304);
+        assert_eq!(second_swap.consumed_amount, 10000000000000000000000);
+        assert_eq!(
+            second_swap
+                .execution_resources
+                .virtual_order_seconds_executed,
+            60
+        );
+        assert_eq!(
+            second_swap
+                .execution_resources
+                .virtual_order_delta_times_crossed,
+            0
+        );
     }
 
     #[test]
@@ -1433,21 +1466,20 @@ mod tests {
             .expect("first swap succeeds");
 
         // Second swap in opposite direction using override_state from first swap
-        let second_swap_opposite = pool
-            .quote(QuoteParams {
-                token_amount: TokenAmount {
-                    amount: (10_000u128 * 10u128.pow(18)) as i128,
-                    token: TOKEN1,
+        pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: (10_000u128 * 10u128.pow(18)) as i128,
+                token: TOKEN1,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 2u64,
+                    time: 2_100u64,
                 },
-                sqrt_ratio_limit: None,
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 2u64,
-                        time: 2_100u64,
-                    },
-                },
-                override_state: Some(first_swap.state_after),
-            })
-            .expect("second swap succeeds");
+            },
+            override_state: Some(first_swap.state_after),
+        })
+        .expect("second swap succeeds");
     }
 }
