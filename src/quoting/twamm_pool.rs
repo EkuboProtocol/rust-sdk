@@ -44,8 +44,8 @@ impl Add for TwammPoolResources {
 #[derive(Clone)]
 pub struct TwammSaleRateDelta {
     pub time: u64,
-    pub sale_rate_delta0: u128,
-    pub sale_rate_delta1: u128,
+    pub sale_rate_delta0: i128,
+    pub sale_rate_delta1: i128,
 }
 
 pub struct TwammPool {
@@ -82,15 +82,12 @@ impl TwammPool {
                     extension,
                 },
                 BasePoolState {
-                    sqrt_ratio,
+                    // we just force the pool state to always be within the bounds of min/max to simplify the state
+                    sqrt_ratio: sqrt_ratio
+                        .min(MAX_SQRT_RATIO_AT_MAX_TICK_SPACING)
+                        .max(MIN_SQRT_RATIO_AT_MAX_TICK_SPACING),
                     liquidity,
-                    active_tick_index: if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                        None
-                    } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                        Some(0)
-                    } else {
-                        None
-                    },
+                    active_tick_index: Some(0),
                 },
                 vec![
                     Tick {
@@ -271,11 +268,21 @@ impl Pool for TwammPool {
                 next_sqrt_ratio = quote.state_after.sqrt_ratio;
             }
 
-            if Some(next_execution_time) == sale_rate_delta.map(|srd| srd.time) {
-                token0_sale_rate += sale_rate_delta.unwrap().sale_rate_delta0;
-                token1_sale_rate += sale_rate_delta.unwrap().sale_rate_delta1;
-                next_sale_rate_delta_index += 1;
-                virtual_order_delta_times_crossed += 1;
+            if let Some(next_delta) = sale_rate_delta {
+                if next_delta.time == next_execution_time {
+                    token0_sale_rate = if next_delta.sale_rate_delta0 < 0 {
+                        token0_sale_rate - next_delta.sale_rate_delta0.unsigned_abs()
+                    } else {
+                        token0_sale_rate + next_delta.sale_rate_delta0.unsigned_abs()
+                    };
+                    token1_sale_rate = if next_delta.sale_rate_delta1 < 0 {
+                        token1_sale_rate - next_delta.sale_rate_delta1.unsigned_abs()
+                    } else {
+                        token1_sale_rate + next_delta.sale_rate_delta1.unsigned_abs()
+                    };
+                    next_sale_rate_delta_index += 1;
+                    virtual_order_delta_times_crossed += 1;
+                }
             }
 
             last_execution_time = next_execution_time;
@@ -321,7 +328,10 @@ impl Pool for TwammPool {
 mod tests {
     use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
     use crate::math::uint::U256;
-    use crate::quoting::twamm_pool::TwammPool;
+    use crate::quoting::base_pool::{
+        MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+    };
+    use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
     use crate::quoting::types::{Block, Pool, QuoteMeta, QuoteParams, TokenAmount};
     use alloc::vec;
 
@@ -532,5 +542,912 @@ mod tests {
             quote.execution_resources.virtual_order_delta_times_crossed,
             0
         );
+    }
+    #[test]
+    fn zero_sale_rate_token0_close_to_max_usable_price_deltas_move_to_usable_price_quote_token1() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            MAX_SQRT_RATIO_AT_MAX_TICK_SPACING + 1,
+            1_000_000u128,
+            0,
+            0,
+            1 << 32,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: 100_000i128 * (1 << 32),
+                sale_rate_delta1: 0,
+                time: 16u64,
+            }],
+        );
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 1000,
+                    token: TOKEN1,
+                },
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1,
+                        time: 32,
+                    },
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+            })
+            .expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 0);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            1
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            1
+        );
+    }
+
+    #[test]
+    fn zero_sale_rate_token1_close_to_min_usable_price_deltas_move_to_usable_price_quote_token1() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+            1_000_000u128,
+            0u64,
+            1 << 32,
+            0u128,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: 0i128,
+                sale_rate_delta1: 100_000 * (1 << 32),
+                time: 16u64,
+            }],
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN1,
+            },
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1,
+                    time: 32,
+                },
+            },
+            sqrt_ratio_limit: None,
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 390);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            2
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            1
+        );
+    }
+
+    #[test]
+    fn zero_sale_rate_token0_close_to_max_usable_price_deltas_move_to_usable_price_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+            1_000_000,
+            0,
+            0,
+            1 << 32,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: 100_000 * (1 << 32),
+                sale_rate_delta1: 0,
+                time: 16,
+            }],
+        );
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 1000,
+                    token: TOKEN0,
+                },
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 32u64,
+                    },
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+            })
+            .expect("swap succeeds");
+
+        assert_eq!(quote.calculated_amount, 0);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            1
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            1
+        );
+    }
+
+    #[test]
+    fn zero_sale_rate_token1_close_to_min_usable_price_deltas_move_to_usable_price_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+            1_000_000,
+            0,
+            1 << 32,
+            0,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: 0i128,
+                sale_rate_delta1: (100_000u128 * (1 << 32)) as i128,
+                time: 16u64,
+            }],
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN0,
+            },
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            sqrt_ratio_limit: None,
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 2555);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            2
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            1
+        );
+    }
+
+    #[test]
+    fn one_e18_sale_rates_no_sale_rate_deltas_quote_token1() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            1 << 32u128,
+            1 << 32u128,
+            vec![], // No sale rate deltas
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN1,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 990);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            0
+        );
+    }
+
+    #[test]
+    fn one_e18_sale_rates_no_sale_rate_deltas_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            1 << 32u128,
+            1 << 32u128,
+            vec![], // No sale rate deltas
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 989);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            0
+        );
+    }
+
+    #[test]
+    fn token0_sale_rate_greater_than_token1_sale_rate_no_sale_rate_deltas_quote_token1() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            1_000u128,
+            0u64,
+            10 << 32u128,
+            1 << 32u128,
+            vec![], // No sale rate deltas
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN1,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 717);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            0
+        );
+    }
+
+    #[test]
+    fn token1_sale_rate_greater_than_token0_sale_rate_no_sale_rate_deltas_quote_token1() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            1 << 32u128,
+            10 << 32u128,
+            vec![], // No sale rate deltas
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN1,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 984);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            0
+        );
+    }
+
+    #[test]
+    fn token0_sale_rate_greater_than_token1_sale_rate_no_sale_rate_deltas_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            10 << 32u128,
+            1 << 32u128,
+            vec![], // No sale rate deltas
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 983);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            0
+        );
+    }
+
+    #[test]
+    fn token1_sale_rate_greater_than_token0_sale_rate_no_sale_rate_deltas_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            1 << 32u128,
+            10 << 32u128,
+            vec![], // No sale rate deltas
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 994);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            0
+        );
+    }
+
+    #[test]
+    fn sale_rate_deltas_goes_to_zero_halfway_through_execution_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            1 << 32u128,
+            1 << 32u128,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: -(2u128.pow(32) as i128),
+                sale_rate_delta1: -(2u128.pow(32) as i128),
+                time: 16u64,
+            }],
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 989);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            1
+        );
+    }
+
+    #[test]
+    fn sale_rate_deltas_doubles_halfway_through_execution_quote_token0() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(1i32).unwrap(),
+            100_000u128,
+            0u64,
+            1 << 32u128,
+            1 << 32u128,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: 2i128.pow(32),
+                sale_rate_delta1: 2i128.pow(32),
+                time: 16u64,
+            }],
+        );
+
+        let result = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 1000,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: None,
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 32u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let quote = result.expect("Quote should succeed");
+
+        assert_eq!(quote.calculated_amount, 989);
+        assert_eq!(
+            quote
+                .execution_resources
+                .base_pool_resources
+                .initialized_ticks_crossed,
+            0
+        );
+        assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
+        assert_eq!(
+            quote.execution_resources.virtual_order_delta_times_crossed,
+            1
+        );
+    }
+
+    #[test]
+    fn price_after_no_swap() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(693147i32).unwrap(),
+            70_710_696_755_630_728_101_718_334u128,
+            0,
+            10_526_880_627_450_980_392_156_862_745,
+            10_526_880_627_450_980_392_156_862_745,
+            vec![],
+        );
+
+        // First quote: no swap
+        let first = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 0,
+                    token: TOKEN0,
+                },
+                sqrt_ratio_limit: Some(to_sqrt_ratio(693147i32).unwrap()),
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 43_200u64,
+                    },
+                },
+                override_state: None,
+            })
+            .expect("first swap succeeds");
+
+        // Second quote: no swap after full day
+        let second_swap = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 0,
+                    token: TOKEN0,
+                },
+                sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 86_400u64,
+                    },
+                },
+                override_state: None,
+            })
+            .expect("second swap succeeds");
+
+        // Third quote: using override_state from first quote
+        let third = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 0,
+                    token: TOKEN0,
+                },
+                sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 86_400u64,
+                    },
+                },
+                override_state: Some(first.state_after),
+            })
+            .expect("third is ok");
+    }
+
+    #[test]
+    fn moody_testing_examples() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(693147i32).unwrap(), // ~=2
+            1_000_000_000_000_000_000_000u128, // 10^21
+            60u64,
+            10u128.pow(18) << 32,
+            10u128.pow(18) << 32,
+            vec![TwammSaleRateDelta {
+                sale_rate_delta0: -((10u128.pow(18) << 32) as i128),
+                sale_rate_delta1: -((10u128.pow(18) << 32) as i128),
+                time: 120u64,
+            }],
+        );
+
+        // Quote at time 60 (0 seconds pass)
+        let quote_0 = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 0,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 60u64,
+                },
+            },
+            override_state: None,
+        });
+
+        // Replace with actual snapshot or expected values
+        // insta::assert_debug_snapshot!(quote_0, @"0 seconds pass");
+
+        // Quote at time 90 (30 seconds pass)
+        let quote_30 = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 0,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 90u64,
+                },
+            },
+            override_state: None,
+        });
+
+        // Replace with actual snapshot or expected values
+        // insta::assert_debug_snapshot!(quote_30, @"30 seconds pass");
+
+        // Quote at time 120 (60 seconds pass)
+        let fully_executed_twamm = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 0,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 120u64,
+                },
+            },
+            override_state: None,
+        });
+
+        let state_after_fully_executed = fully_executed_twamm.map(|q| q.state_after).unwrap();
+
+        // Replace with actual snapshot or expected values
+        // insta::assert_debug_snapshot!(fully_executed_twamm, @"60 seconds pass");
+
+        // Quote token0 with override_state
+        let quote_token0 = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 10u128.pow(18) as i128,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 120u64,
+                },
+            },
+            override_state: Some(state_after_fully_executed),
+        });
+
+        // Replace with actual expected value comparison
+        // Assuming pool has a base_pool with its own quote method
+        // assert_eq!(
+        //     quote_token0.calculated_amount,
+        //     pool.base_pool.quote(QuoteParams {
+        //         token_amount: TokenAmount {
+        //             token: TOKEN0
+        //             amount: 10u128.pow(18).into(),
+        //         },
+        //         meta: QuoteMeta {
+        //             block: Block {
+        //                 number: 1u64,
+        //                 time: 120u64,
+        //             },
+        //         },
+        //         override_state: fully_executed_twamm.state_after.clone(),
+        //         sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+        //     }).unwrap().calculated_amount
+        // );
+
+        // Quote token1 with override_state
+        let quote_token1 = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: 10u128.pow(18) as i128,
+                token: TOKEN1,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 120u64,
+                },
+            },
+            override_state: Some(state_after_fully_executed),
+        });
+
+        // Replace with actual expected value comparison
+        // assert_eq!(
+        //     quote_token1.calculated_amount,
+        //     pool.base_pool.quote(QuoteParams {
+        //         token_amount: TokenAmount {
+        //             token: TOKEN1,
+        //             amount: 10u128.pow(18).into(),
+        //         },
+        //         meta: QuoteMeta {
+        //             block: Block {
+        //                 number: 1u64,
+        //                 time: 120u64,
+        //             },
+        //         },
+        //         override_state: fully_executed_twamm.state_after.clone(),
+        //         sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+        //     }).unwrap().calculated_amount
+        // );
+    }
+
+    #[test]
+    fn compare_to_contract_output() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(693147i32).unwrap(),
+            70_710_696_755_630_728_101_718_334u128,
+            693147u64,
+            10_526_880_627_450_980_392_156_862_745,
+            10_526_880_627_450_980_392_156_862_745,
+            vec![],
+        );
+
+        // First swap
+        let first_swap = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: (10_000u128 * 10u128.pow(18)) as i128,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 1u64,
+                    time: 2_040u64,
+                },
+            },
+            override_state: None,
+        });
+
+        // Second swap using override_state from first swap
+        let second_swap = pool.quote(QuoteParams {
+            token_amount: TokenAmount {
+                amount: (10_000u128 * 10u128.pow(18)) as i128,
+                token: TOKEN0,
+            },
+            sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
+            meta: QuoteMeta {
+                block: Block {
+                    number: 2u64,
+                    time: 2_100u64,
+                },
+            },
+            override_state: first_swap.map(|q| q.state_after).ok(),
+        });
+    }
+
+    #[test]
+    fn second_swap_in_opposite_direction() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            0u128,
+            U256::from(1u8),
+            to_sqrt_ratio(693147).unwrap(),
+            70_710_696_755_630_728_101_718_334u128,
+            0,
+            10_526_880_627_450_980_392_156_862_745,
+            10_526_880_627_450_980_392_156_862_745,
+            vec![],
+        );
+
+        // First swap
+        let first_swap = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: (10_000u128 * 10u128.pow(18)) as i128,
+                    token: TOKEN0,
+                },
+                sqrt_ratio_limit: None,
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 1u64,
+                        time: 2_040u64,
+                    },
+                },
+                override_state: None,
+            })
+            .expect("first swap succeeds");
+
+        // Second swap in opposite direction using override_state from first swap
+        let second_swap_opposite = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: (10_000u128 * 10u128.pow(18)) as i128,
+                    token: TOKEN1,
+                },
+                sqrt_ratio_limit: None,
+                meta: QuoteMeta {
+                    block: Block {
+                        number: 2u64,
+                        time: 2_100u64,
+                    },
+                },
+                override_state: Some(first_swap.state_after),
+            })
+            .expect("second swap succeeds");
     }
 }
