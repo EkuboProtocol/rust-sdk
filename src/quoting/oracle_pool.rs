@@ -4,7 +4,7 @@ use crate::quoting::base_pool::{
     MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MAX_TICK_AT_MAX_TICK_SPACING, MAX_TICK_SPACING,
     MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
 };
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
+use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
 use alloc::vec;
 use core::ops::Add;
 use num_traits::ToPrimitive;
@@ -87,6 +87,7 @@ impl Pool for OraclePool {
     type Resources = OraclePoolResources;
     type State = OraclePoolState;
     type QuoteError = BasePoolQuoteError;
+    type Meta = BlockTimestamp;
 
     fn get_key(&self) -> NodeKey {
         self.base_pool.get_key()
@@ -101,18 +102,18 @@ impl Pool for OraclePool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State>,
+        params: QuoteParams<Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
-        let block_time = params.meta.block.time;
+        let block_time = params.meta;
         let pool_time = params
             .override_state
             .map_or(self.last_snapshot_time, |os| os.last_snapshot_time);
 
         let result = self.base_pool.quote(QuoteParams {
             sqrt_ratio_limit: params.sqrt_ratio_limit,
-            meta: params.meta,
             override_state: params.override_state.map(|s| s.base_pool_state),
             token_amount: params.token_amount,
+            meta: (),
         })?;
 
         Ok(Quote {
@@ -145,7 +146,7 @@ mod tests {
         MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
     };
     use crate::quoting::oracle_pool::OraclePool;
-    use crate::quoting::types::{Block, Pool, QuoteMeta, QuoteParams, TokenAmount};
+    use crate::quoting::types::{Pool, QuoteParams, TokenAmount};
 
     #[test]
     fn test_max_values() {
@@ -181,9 +182,7 @@ mod tests {
             },
             sqrt_ratio_limit: None,
             override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
+            meta: 2,
         };
 
         let quote = pool.quote(params).expect("Failed to get quote");
@@ -219,9 +218,7 @@ mod tests {
             },
             sqrt_ratio_limit: None,
             override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
+            meta: 2,
         };
 
         let quote = pool.quote(params).expect("Failed to get quote");

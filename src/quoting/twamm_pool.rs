@@ -5,6 +5,7 @@ use crate::quoting::base_pool::{
     MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MAX_TICK_AT_MAX_TICK_SPACING, MAX_TICK_SPACING,
     MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
 };
+use crate::quoting::types::BlockTimestamp;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick, TokenAmount};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -121,6 +122,7 @@ impl Pool for TwammPool {
     type Resources = TwammPoolResources;
     type State = TwammPoolState;
     type QuoteError = TwammPoolQuoteError;
+    type Meta = BlockTimestamp;
 
     fn get_key(&self) -> NodeKey {
         self.base_pool.get_key()
@@ -137,7 +139,7 @@ impl Pool for TwammPool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State>,
+        params: QuoteParams<Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let QuoteParams {
             token_amount,
@@ -146,7 +148,7 @@ impl Pool for TwammPool {
             meta,
         } = params;
 
-        let current_time = meta.block.time;
+        let current_time = meta;
         let initial_state = override_state.unwrap_or_else(|| self.get_state());
 
         let mut next_sqrt_ratio = initial_state.base_pool_state.sqrt_ratio;
@@ -228,7 +230,7 @@ impl Pool for TwammPool {
                         },
                         sqrt_ratio_limit: Some(next_sqrt_ratio),
                         override_state: base_pool_state_override,
-                        meta,
+                        meta: (),
                     })
                     .map_err(TwammPoolQuoteError::BasePoolQuoteError)?;
 
@@ -259,7 +261,7 @@ impl Pool for TwammPool {
                         },
                         sqrt_ratio_limit: Some(sqrt_ratio_limit),
                         override_state: base_pool_state_override,
-                        meta,
+                        meta: (),
                     })
                     .map_err(TwammPoolQuoteError::BasePoolQuoteError)?;
 
@@ -295,7 +297,7 @@ impl Pool for TwammPool {
             .quote(QuoteParams {
                 token_amount,
                 sqrt_ratio_limit,
-                meta,
+                meta: (),
                 override_state: base_pool_state_override,
             })
             .map_err(TwammPoolQuoteError::BasePoolQuoteError)?;
@@ -334,7 +336,7 @@ mod tests {
         MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
     };
     use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
-    use crate::quoting::types::{Block, Pool, QuoteMeta, QuoteParams, TokenAmount};
+    use crate::quoting::types::{Pool, QuoteParams, TokenAmount};
     use alloc::vec;
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
@@ -361,12 +363,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: Some(MIN_SQRT_RATIO),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1,
-                    time: 32,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -401,12 +398,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: Some(MAX_SQRT_RATIO),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1,
-                    time: 32,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -441,12 +433,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: Some(MIN_SQRT_RATIO),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1,
-                    time: 32,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -481,12 +468,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: Some(MAX_SQRT_RATIO),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1,
-                    time: 32,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -524,12 +506,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: Some(MAX_SQRT_RATIO),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1,
-                    time: 32,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -570,12 +547,7 @@ mod tests {
                     amount: 1000,
                     token: TOKEN1,
                 },
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1,
-                        time: 32,
-                    },
-                },
+                meta: 32,
                 sqrt_ratio_limit: None,
                 override_state: None,
             })
@@ -620,12 +592,7 @@ mod tests {
                 amount: 1000,
                 token: TOKEN1,
             },
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1,
-                    time: 32,
-                },
-            },
+            meta: 32,
             sqrt_ratio_limit: None,
             override_state: None,
         });
@@ -672,12 +639,7 @@ mod tests {
                     amount: 1000,
                     token: TOKEN0,
                 },
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 32u64,
-                    },
-                },
+                meta: 32,
                 sqrt_ratio_limit: None,
                 override_state: None,
             })
@@ -722,12 +684,7 @@ mod tests {
                 amount: 1000,
                 token: TOKEN0,
             },
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             sqrt_ratio_limit: None,
             override_state: None,
         });
@@ -770,12 +727,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -817,12 +769,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -864,12 +811,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -911,12 +853,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -958,12 +895,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -1005,12 +937,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -1056,12 +983,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -1107,12 +1029,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 32u64,
-                },
-            },
+            meta: 32,
             override_state: None,
         });
 
@@ -1156,12 +1073,7 @@ mod tests {
                     token: TOKEN0,
                 },
                 sqrt_ratio_limit: Some(to_sqrt_ratio(693147i32).unwrap()),
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 43_200u64,
-                    },
-                },
+                meta: 43_200,
                 override_state: None,
             })
             .expect("first swap succeeds");
@@ -1173,12 +1085,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 86_400u64,
-                },
-            },
+            meta: 86_400,
             override_state: None,
         })
         .expect("second swap succeeds");
@@ -1190,12 +1097,7 @@ mod tests {
                 token: TOKEN0,
             },
             sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 86_400u64,
-                },
-            },
+            meta: 86_400,
             override_state: Some(first.state_after),
         })
         .expect("third is ok");
@@ -1226,12 +1128,7 @@ mod tests {
                 amount: 0,
                 token: TOKEN0,
             },
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 60u64,
-                },
-            },
+            meta: 60,
             sqrt_ratio_limit: None,
             override_state: None,
         })
@@ -1242,12 +1139,7 @@ mod tests {
                 amount: 0,
                 token: TOKEN0,
             },
-            meta: QuoteMeta {
-                block: Block {
-                    number: 1u64,
-                    time: 90u64,
-                },
-            },
+            meta: 90,
             sqrt_ratio_limit: None,
             override_state: None,
         })
@@ -1259,12 +1151,7 @@ mod tests {
                     amount: 0,
                     token: TOKEN0,
                 },
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 120u64,
-                    },
-                },
+                meta: 120,
                 sqrt_ratio_limit: None,
                 override_state: None,
             })
@@ -1278,12 +1165,7 @@ mod tests {
                     amount: 10u128.pow(18) as i128,
                     token: TOKEN0,
                 },
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 120u64,
-                    },
-                },
+                meta: 120,
                 sqrt_ratio_limit: None,
                 override_state: Some(state_after_fully_executed),
             })
@@ -1297,12 +1179,7 @@ mod tests {
                         token: TOKEN0,
                         amount: 10u128.pow(18) as i128,
                     },
-                    meta: QuoteMeta {
-                        block: Block {
-                            number: 1u64,
-                            time: 120u64,
-                        },
-                    },
+                    meta: (),
                     override_state: Some(state_after_fully_executed.base_pool_state),
                     sqrt_ratio_limit: None,
                 })
@@ -1317,12 +1194,7 @@ mod tests {
                     token: TOKEN1,
                 },
                 sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 120u64,
-                    },
-                },
+                meta: 120,
                 override_state: Some(state_after_fully_executed),
             })
             .expect("quote token1 with override");
@@ -1336,12 +1208,7 @@ mod tests {
                         token: TOKEN1,
                         amount: 10u128.pow(18) as i128,
                     },
-                    meta: QuoteMeta {
-                        block: Block {
-                            number: 1u64,
-                            time: 120u64,
-                        },
-                    },
+                    meta: (),
                     override_state: Some(fully_executed_twamm.state_after.base_pool_state),
                     sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
                 })
@@ -1372,12 +1239,7 @@ mod tests {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
                     token: TOKEN0,
                 },
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 2_040u64,
-                    },
-                },
+                meta: 2_040,
                 sqrt_ratio_limit: None,
                 override_state: None,
             })
@@ -1405,12 +1267,7 @@ mod tests {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
                     token: TOKEN0,
                 },
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 2u64,
-                        time: 2_100u64,
-                    },
-                },
+                meta: 2_100,
                 sqrt_ratio_limit: None,
                 override_state: Some(first_swap.state_after),
             })
@@ -1455,12 +1312,7 @@ mod tests {
                     token: TOKEN0,
                 },
                 sqrt_ratio_limit: None,
-                meta: QuoteMeta {
-                    block: Block {
-                        number: 1u64,
-                        time: 2_040u64,
-                    },
-                },
+                meta: 2_040,
                 override_state: None,
             })
             .expect("first swap succeeds");
@@ -1472,12 +1324,7 @@ mod tests {
                 token: TOKEN1,
             },
             sqrt_ratio_limit: None,
-            meta: QuoteMeta {
-                block: Block {
-                    number: 2u64,
-                    time: 2_100u64,
-                },
-            },
+            meta: 2_100,
             override_state: Some(first_swap.state_after),
         })
         .expect("second swap succeeds");

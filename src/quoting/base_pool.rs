@@ -122,6 +122,7 @@ impl Pool for BasePool {
     type Resources = BasePoolResources;
     type State = BasePoolState;
     type QuoteError = BasePoolQuoteError;
+    type Meta = ();
 
     fn get_key(&self) -> NodeKey {
         self.key
@@ -133,7 +134,7 @@ impl Pool for BasePool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State>,
+        params: QuoteParams<Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
@@ -318,7 +319,7 @@ impl Pool for BasePool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quoting::types::{Block, QuoteMeta, TokenAmount};
+    use crate::quoting::types::TokenAmount;
     use alloc::vec;
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
@@ -353,9 +354,7 @@ mod tests {
             },
             sqrt_ratio_limit: None,
             override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
+            meta: (),
         };
 
         let quote = pool.quote(params).expect("Failed to get quote");
@@ -383,9 +382,7 @@ mod tests {
             },
             sqrt_ratio_limit: None,
             override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
+            meta: (),
         };
 
         let quote = pool.quote(params).expect("Failed to get quote");
@@ -424,9 +421,7 @@ mod tests {
             },
             sqrt_ratio_limit: None,
             override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
+            meta: (),
         };
 
         let quote = pool.quote(params).expect("Failed to get quote");
@@ -465,9 +460,7 @@ mod tests {
             },
             sqrt_ratio_limit: None,
             override_state: None,
-            meta: QuoteMeta {
-                block: Block { number: 1, time: 2 },
-            },
+            meta: (),
         };
 
         let quote = pool.quote(params).expect("Failed to get quote");

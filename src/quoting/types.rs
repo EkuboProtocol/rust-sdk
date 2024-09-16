@@ -19,19 +19,6 @@ pub struct Tick {
     pub liquidity_delta: i128,
 }
 
-// Information about a block necessary for quoting against some pools
-#[derive(Clone, Copy)]
-pub struct Block {
-    pub number: u64,
-    pub time: u64,
-}
-
-// Information about the state of the network necessary for quoting against some kinds of pools (not used by base pools)
-#[derive(Clone, Copy)]
-pub struct QuoteMeta {
-    pub block: Block,
-}
-
 // Amount and token information.
 #[derive(Clone, Copy)]
 pub struct TokenAmount {
@@ -41,11 +28,11 @@ pub struct TokenAmount {
 
 // Parameters for a quote operation.
 #[derive(Clone, Copy)]
-pub struct QuoteParams<S> {
+pub struct QuoteParams<S, M> {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
     pub override_state: Option<S>,
-    pub meta: QuoteMeta,
+    pub meta: M,
 }
 
 // The result of all pool swaps is some input and output delta
@@ -59,10 +46,15 @@ pub struct Quote<R, S> {
     pub fees_paid: u128,
 }
 
-pub trait Pool {
+// Commonly used as meta
+pub type BlockTimestamp = u64;
+
+pub trait Pool: Send + Sync {
     type Resources: Add<Output = Self::Resources> + Default + Copy;
     type State: Copy;
     type QuoteError: Debug;
+    // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
+    type Meta: Copy;
 
     fn get_key(&self) -> NodeKey;
 
@@ -70,7 +62,7 @@ pub trait Pool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State>,
+        params: QuoteParams<Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError>;
 
     fn has_liquidity(&self) -> bool;
