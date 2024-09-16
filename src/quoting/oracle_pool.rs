@@ -11,14 +11,14 @@ use num_traits::ToPrimitive;
 
 #[derive(Clone, Copy)]
 pub struct OraclePoolState {
-    base_pool_state: BasePoolState,
-    last_snapshot_time: u64,
+    pub base_pool_state: BasePoolState,
+    pub last_snapshot_time: u64,
 }
 
 #[derive(Default, Clone, Copy)]
 pub struct OraclePoolResources {
-    base_pool_resources: BasePoolResources,
-    snapshot_updated: bool,
+    pub base_pool_resources: BasePoolResources,
+    pub snapshot_updated: bool,
 }
 
 impl Add for OraclePoolResources {

@@ -14,17 +14,17 @@ use num_traits::ToPrimitive;
 
 #[derive(Clone, Copy)]
 pub struct TwammPoolState {
-    base_pool_state: BasePoolState,
-    token0_sale_rate: u128,
-    token1_sale_rate: u128,
-    last_execution_time: u64,
+    pub base_pool_state: BasePoolState,
+    pub token0_sale_rate: u128,
+    pub token1_sale_rate: u128,
+    pub last_execution_time: u64,
 }
 
 #[derive(Clone, Copy, Default)]
 pub struct TwammPoolResources {
-    base_pool_resources: BasePoolResources,
-    virtual_order_seconds_executed: u32,
-    virtual_order_delta_times_crossed: u32,
+    pub base_pool_resources: BasePoolResources,
+    pub virtual_order_seconds_executed: u32,
+    pub virtual_order_delta_times_crossed: u32,
 }
 
 impl Add for TwammPoolResources {
@@ -43,9 +43,9 @@ impl Add for TwammPoolResources {
 
 #[derive(Clone)]
 pub struct TwammSaleRateDelta {
-    time: u64,
-    sale_rate_delta0: u128,
-    sale_rate_delta1: u128,
+    pub time: u64,
+    pub sale_rate_delta0: u128,
+    pub sale_rate_delta1: u128,
 }
 
 pub struct TwammPool {
