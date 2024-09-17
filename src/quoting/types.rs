@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use core::ops::Add;
 
 // Unique key identifying the pool.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct NodeKey {
     pub token0: U256,
     pub token1: U256,
@@ -13,17 +13,17 @@ pub struct NodeKey {
 }
 
 // The aggregate effect of all positions on a pool that are bounded by the specific tick
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Tick {
     pub index: i32,
     pub liquidity_delta: i128,
 }
 
 // Amount and token information.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug, Ord, PartialOrd, Eq)]
 pub struct TokenAmount {
-    pub amount: i128,
     pub token: U256,
+    pub amount: i128,
 }
 
 // Parameters for a quote operation.
@@ -66,4 +66,60 @@ pub trait Pool: Send + Sync {
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError>;
 
     fn has_liquidity(&self) -> bool;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::math::uint::U256;
+    use crate::quoting::types::TokenAmount;
+
+    #[test]
+    fn test_ordering_token_amount() {
+        assert!(
+            TokenAmount {
+                token: U256::one(),
+                amount: 0,
+            } > TokenAmount {
+                token: U256::zero(),
+                amount: 1,
+            }
+        );
+        assert_eq!(
+            TokenAmount {
+                token: U256::zero(),
+                amount: 0,
+            },
+            TokenAmount {
+                token: U256::zero(),
+                amount: 0,
+            }
+        );
+        assert!(
+            TokenAmount {
+                token: U256::zero(),
+                amount: 0,
+            } > TokenAmount {
+                token: U256::zero(),
+                amount: -1,
+            }
+        );
+        assert!(
+            TokenAmount {
+                token: U256::zero(),
+                amount: 0,
+            } < TokenAmount {
+                token: U256::one(),
+                amount: -1,
+            }
+        );
+        assert!(
+            TokenAmount {
+                token: U256::zero(),
+                amount: 0,
+            } < TokenAmount {
+                token: U256::zero(),
+                amount: 1,
+            }
+        );
+    }
 }
