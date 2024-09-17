@@ -38,7 +38,7 @@ impl TryFrom<U512> for U256 {
     }
 }
 
-pub(crate) fn muldiv(x: U256, y: U256, d: U256, round_up: bool) -> Result<U256, MuldivError> {
+pub fn muldiv(x: U256, y: U256, d: U256, round_up: bool) -> Result<U256, MuldivError> {
     if d.is_zero() {
         return Err(MuldivError::DenominatorZero);
     }
@@ -63,7 +63,6 @@ pub(crate) fn muldiv(x: U256, y: U256, d: U256, round_up: bool) -> Result<U256, 
 
     result.try_into().map_err(|_| MuldivError::Overflow)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -128,7 +127,9 @@ mod tests {
         let d = U256::from(1);
         let result = muldiv(x, y, d, false).unwrap();
 
-        let expected = U256::from_dec_str("121932631137021795226185032733622923332237463801111263526900").unwrap();
+        let expected =
+            U256::from_dec_str("121932631137021795226185032733622923332237463801111263526900")
+                .unwrap();
         assert_eq!(result, expected);
     }
 
@@ -168,7 +169,6 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-
     #[test]
     fn test_muldiv_max_values_no_rounding() {
         // Test with maximum U256 values that result in a valid U256 output
@@ -195,7 +195,13 @@ mod tests {
         let y = U256::from(1);
         let d = U256::from(2);
         let result = muldiv(x, y, d, true);
-        assert_eq!(result.unwrap(), U256::from_dec_str("57896044618658097711785492504343953926634992332820282019728792003956564819968").unwrap());
+        assert_eq!(
+            result.unwrap(),
+            U256::from_dec_str(
+                "57896044618658097711785492504343953926634992332820282019728792003956564819968"
+            )
+            .unwrap()
+        );
     }
 
     #[test]
@@ -257,7 +263,10 @@ mod tests {
         let result = muldiv(x, y, d, true);
         assert_eq!(
             result.unwrap(),
-            U256::from_dec_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap()
+            U256::from_dec_str(
+                "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+            )
+            .unwrap()
         );
     }
 
@@ -287,7 +296,8 @@ mod tests {
         // Test where intermediate multiplication is large but result fits in U256
         let x = U256::from_dec_str("123456789012345678901234567890").unwrap();
         let y = U256::from_dec_str("98765432109876543210987654321").unwrap();
-        let d = U256::from_dec_str("1219326311370217952261850327336229233322374638011112635269").unwrap();
+        let d = U256::from_dec_str("1219326311370217952261850327336229233322374638011112635269")
+            .unwrap();
         let result = muldiv(x, y, d, false).unwrap();
         assert_eq!(result, U256::from(10));
     }

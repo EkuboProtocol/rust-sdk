@@ -56,7 +56,7 @@ pub trait Pool: Send + Sync {
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
     type Meta: Copy;
 
-    fn get_key(&self) -> NodeKey;
+    fn get_key(&self) -> &NodeKey;
 
     fn get_state(&self) -> Self::State;
 

@@ -124,7 +124,7 @@ impl Pool for TwammPool {
     type QuoteError = TwammPoolQuoteError;
     type Meta = BlockTimestamp;
 
-    fn get_key(&self) -> NodeKey {
+    fn get_key(&self) -> &NodeKey {
         self.base_pool.get_key()
     }
 
@@ -209,7 +209,7 @@ impl Pool for TwammPool {
                     token0_sale_rate,
                     token1_sale_rate,
                     time_elapsed as u32,
-                    fee,
+                    *fee,
                 )
                 .ok_or(TwammPoolQuoteError::FailedCalculateNextSqrtRatio)?;
 
@@ -226,7 +226,7 @@ impl Pool for TwammPool {
                             amount: amount
                                 .to_i128()
                                 .ok_or(TwammPoolQuoteError::SaleAmountOverflow)?,
-                            token,
+                            token: *token,
                         },
                         sqrt_ratio_limit: Some(next_sqrt_ratio),
                         override_state: base_pool_state_override,

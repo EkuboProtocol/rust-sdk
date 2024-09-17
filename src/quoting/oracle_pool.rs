@@ -89,7 +89,7 @@ impl Pool for OraclePool {
     type QuoteError = BasePoolQuoteError;
     type Meta = BlockTimestamp;
 
-    fn get_key(&self) -> NodeKey {
+    fn get_key(&self) -> &NodeKey {
         self.base_pool.get_key()
     }
 

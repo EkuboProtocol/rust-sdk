@@ -124,8 +124,8 @@ impl Pool for BasePool {
     type QuoteError = BasePoolQuoteError;
     type Meta = ();
 
-    fn get_key(&self) -> NodeKey {
-        self.key
+    fn get_key(&self) -> &NodeKey {
+        &self.key
     }
 
     fn get_state(&self) -> Self::State {
