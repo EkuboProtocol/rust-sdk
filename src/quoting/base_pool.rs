@@ -251,7 +251,7 @@ impl Pool for BasePool {
                 sqrt_ratio,
                 liquidity,
                 step_sqrt_ratio_limit,
-                amount,
+                amount_remaining,
                 is_token1,
                 self.key.fee,
             )
@@ -466,6 +466,131 @@ mod tests {
         let quote = pool.quote(params).expect("Failed to get quote");
 
         assert_eq!(quote.calculated_amount, 499);
+        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
+    }
+
+    #[test]
+    fn test_example_failing_quote() {
+        let pool = BasePool::new(
+            node_key(100, 17014118346046923988514818429550592),
+            BasePoolState {
+                sqrt_ratio: U256([16035209758820767612, 757181812420893, 0, 0]),
+                liquidity: 99999,
+                active_tick_index: Some(16),
+            },
+            vec![
+                Tick {
+                    index: -88722000,
+                    liquidity_delta: 99999,
+                },
+                Tick {
+                    index: -24124600,
+                    liquidity_delta: 103926982998885,
+                },
+                Tick {
+                    index: -24124500,
+                    liquidity_delta: -103926982998885,
+                },
+                Tick {
+                    index: -20236100,
+                    liquidity_delta: 20192651866847,
+                },
+                Tick {
+                    index: -20235900,
+                    liquidity_delta: 676843433645,
+                },
+                Tick {
+                    index: -20235400,
+                    liquidity_delta: 620315686813,
+                },
+                Tick {
+                    index: -20235000,
+                    liquidity_delta: 3899271022058,
+                },
+                Tick {
+                    index: -20234900,
+                    liquidity_delta: 1985516133391,
+                },
+                Tick {
+                    index: -20233000,
+                    liquidity_delta: 2459469409600,
+                },
+                Tick {
+                    index: -20232100,
+                    liquidity_delta: -20192651866847,
+                },
+                Tick {
+                    index: -20231900,
+                    liquidity_delta: -663892969024,
+                },
+                Tick {
+                    index: -20231400,
+                    liquidity_delta: -620315686813,
+                },
+                Tick {
+                    index: -20231000,
+                    liquidity_delta: -3516445235227,
+                },
+                Tick {
+                    index: -20230900,
+                    liquidity_delta: -1985516133391,
+                },
+                Tick {
+                    index: -20229000,
+                    liquidity_delta: -2459469409600,
+                },
+                Tick {
+                    index: -20227900,
+                    liquidity_delta: -12950464621,
+                },
+                Tick {
+                    index: -20227000,
+                    liquidity_delta: -382825786831,
+                },
+                Tick {
+                    index: -2000,
+                    liquidity_delta: 140308196,
+                },
+                Tick {
+                    index: 2000,
+                    liquidity_delta: -140308196,
+                },
+                Tick {
+                    index: 88722000,
+                    liquidity_delta: -99999,
+                },
+            ],
+        );
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 1000000,
+                    token: TOKEN0,
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+                meta: (),
+            })
+            .expect("Failed to get quote of token0");
+
+        assert_eq!(quote.calculated_amount, 0);
+        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 1000000,
+                    token: TOKEN1,
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+                meta: (),
+            })
+            .expect("Failed to get quote of token1");
+
+        assert_eq!(quote.consumed_amount, 1_000_000);
+        assert_eq!(quote.calculated_amount, 2436479431);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
     }
 }
