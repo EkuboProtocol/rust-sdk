@@ -29,14 +29,19 @@ const MASKS: [U256; 27] = [
     U256([14440677137918516476, 278200272243057167, 0, 0]),
     U256([11954280435123913168, 4195612578938288, 0, 0]),
     U256([1943989925737446246, 954269482040, 0, 0]),
-    U256([6723154418996326713, 49365, 0, 0])
+    U256([6723154418996326713, 49365, 0, 0]),
 ];
 
 pub const MIN_TICK: i32 = -88722883;
 pub const MAX_TICK: i32 = 88722883;
 
 pub const MIN_SQRT_RATIO: U256 = U256([4363438787445, 1, 0, 0]);
-pub const MAX_SQRT_RATIO: U256 = U256([17632034473660873000, 8013356184008655433, 18446739710271796309, 0]);
+pub const MAX_SQRT_RATIO: U256 = U256([
+    17632034473660873000,
+    8013356184008655433,
+    18446739710271796309,
+    0,
+]);
 
 pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
     if tick < MIN_TICK || tick > MAX_TICK {
@@ -93,18 +98,12 @@ mod tests {
 
     #[test]
     fn test_min_tick() {
-        assert_eq!(
-            to_sqrt_ratio(MIN_TICK).unwrap(),
-            MIN_SQRT_RATIO,
-        );
+        assert_eq!(to_sqrt_ratio(MIN_TICK).unwrap(), MIN_SQRT_RATIO,);
     }
 
     #[test]
     fn test_max_tick() {
-        assert_eq!(
-            to_sqrt_ratio(MAX_TICK).unwrap(),
-            MAX_SQRT_RATIO,
-        );
+        assert_eq!(to_sqrt_ratio(MAX_TICK).unwrap(), MAX_SQRT_RATIO,);
     }
 
     #[test]

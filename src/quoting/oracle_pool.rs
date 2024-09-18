@@ -18,7 +18,7 @@ pub struct OraclePoolState {
 #[derive(Default, Clone, Copy)]
 pub struct OraclePoolResources {
     pub base_pool_resources: BasePoolResources,
-    pub snapshot_updated: bool,
+    pub snapshots_written: u32,
 }
 
 impl Add for OraclePoolResources {
@@ -27,7 +27,7 @@ impl Add for OraclePoolResources {
     fn add(self, rhs: Self) -> Self::Output {
         OraclePoolResources {
             base_pool_resources: self.base_pool_resources + rhs.base_pool_resources,
-            snapshot_updated: self.snapshot_updated || rhs.snapshot_updated,
+            snapshots_written: self.snapshots_written + rhs.snapshots_written,
         }
     }
 }
@@ -120,7 +120,7 @@ impl Pool for OraclePool {
             calculated_amount: result.calculated_amount,
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
-                snapshot_updated: pool_time != block_time,
+                snapshots_written: if pool_time != block_time { 1 } else { 0 },
                 base_pool_resources: result.execution_resources,
             },
             fees_paid: result.fees_paid,
@@ -196,7 +196,7 @@ mod tests {
                 .initialized_ticks_crossed,
             0
         );
-        assert!(quote.execution_resources.snapshot_updated);
+        assert_eq!(quote.execution_resources.snapshots_written, 1);
         assert_eq!(quote.state_after.last_snapshot_time, 2);
     }
 
@@ -232,7 +232,7 @@ mod tests {
                 .initialized_ticks_crossed,
             0
         );
-        assert!(quote.execution_resources.snapshot_updated);
+        assert_eq!(quote.execution_resources.snapshots_written, 1);
         assert_eq!(quote.state_after.last_snapshot_time, 2);
     }
 }

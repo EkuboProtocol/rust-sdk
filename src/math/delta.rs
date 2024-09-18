@@ -29,17 +29,21 @@ pub fn amount0_delta(
     liquidity: u128,
     round_up: bool,
 ) -> Result<u128, AmountDeltaError> {
-    let (lower, upper) = sort_ratios(sqrt_ratio_a, sqrt_ratio_b).ok_or(AmountDeltaError::ZeroRatio)?;
+    let (lower, upper) =
+        sort_ratios(sqrt_ratio_a, sqrt_ratio_b).ok_or(AmountDeltaError::ZeroRatio)?;
 
     if liquidity == 0 || lower == upper {
         return Ok(0);
     }
 
-    let result_0 = muldiv(upper - lower, U256::from(liquidity) << 128, upper, round_up).map_err(AmountDeltaError::MuldivError)?;
+    let result_0 = muldiv(upper - lower, U256::from(liquidity) << 128, upper, round_up)
+        .map_err(AmountDeltaError::MuldivError)?;
 
     let (result, remainder) = result_0.div_mod(lower);
     let rounded = if round_up && !remainder.is_zero() {
-        result.checked_add(U256::from(1)).ok_or(AmountDeltaError::Overflow)?
+        result
+            .checked_add(U256::from(1))
+            .ok_or(AmountDeltaError::Overflow)?
     } else {
         result
     };
@@ -83,7 +87,8 @@ mod amount0_delta_tests {
     fn price_example_down() {
         let sqrt_ratio_a = U256::from_str_radix("100000000000000000000000000000000", 16).unwrap(); // Equivalent to 2^128
         let two_pow_128 = U256::from(1u64) << 128;
-        let sqrt_ratio_b = U256::from_dec_str("34028236692093846346337460743176821145").unwrap() + two_pow_128;
+        let sqrt_ratio_b =
+            U256::from_dec_str("34028236692093846346337460743176821145").unwrap() + two_pow_128;
         let liquidity = 1_000_000_000_000_000_000u128; // 1e18
         let round_up = false;
 
@@ -96,7 +101,8 @@ mod amount0_delta_tests {
     fn price_example_up() {
         let sqrt_ratio_a = U256::from_str_radix("100000000000000000000000000000000", 16).unwrap(); // Equivalent to 2^128
         let two_pow_128 = U256::from(1u64) << 128;
-        let sqrt_ratio_b = U256::from_dec_str("34028236692093846346337460743176821145").unwrap() + two_pow_128;
+        let sqrt_ratio_b =
+            U256::from_dec_str("34028236692093846346337460743176821145").unwrap() + two_pow_128;
         let liquidity = 1_000_000_000_000_000_000u128; // 1e18
         let round_up = true;
 
@@ -108,13 +114,25 @@ mod amount0_delta_tests {
 
 const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
 
-pub fn amount1_delta(sqrt_ratio_a: U256, sqrt_ratio_b: U256, liquidity: u128, round_up: bool) -> Result<u128, AmountDeltaError> {
-    let (lower, upper) = sort_ratios(sqrt_ratio_a, sqrt_ratio_b).ok_or(AmountDeltaError::ZeroRatio)?;
+pub fn amount1_delta(
+    sqrt_ratio_a: U256,
+    sqrt_ratio_b: U256,
+    liquidity: u128,
+    round_up: bool,
+) -> Result<u128, AmountDeltaError> {
+    let (lower, upper) =
+        sort_ratios(sqrt_ratio_a, sqrt_ratio_b).ok_or(AmountDeltaError::ZeroRatio)?;
     if liquidity.is_zero() || lower == upper {
         return Ok(Zero::zero());
     }
 
-    let result = muldiv(U256::from(liquidity), upper - lower, TWO_POW_128.clone(), round_up).map_err(AmountDeltaError::MuldivError)?;
+    let result = muldiv(
+        U256::from(liquidity),
+        upper - lower,
+        TWO_POW_128.clone(),
+        round_up,
+    )
+    .map_err(AmountDeltaError::MuldivError)?;
     if result > u128::MAX.into() {
         Err(AmountDeltaError::Overflow)
     } else {
@@ -122,13 +140,11 @@ pub fn amount1_delta(sqrt_ratio_a: U256, sqrt_ratio_b: U256, liquidity: u128, ro
     }
 }
 
-
 #[cfg(test)]
 mod amount1_delta_tests {
     use super::*;
     use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
     use crate::math::uint::U256;
-
 
     #[test]
     fn price_down() {
@@ -156,7 +172,8 @@ mod amount1_delta_tests {
 
     #[test]
     fn price_up() {
-        let sqrt_ratio_a = U256::from_dec_str("340622989910849312776150758189957120").unwrap() + (U256::one() << 128);
+        let sqrt_ratio_a = U256::from_dec_str("340622989910849312776150758189957120").unwrap()
+            + (U256::one() << 128);
         let sqrt_ratio_b = U256::from_str_radix("100000000000000000000000000000000", 16).unwrap(); // 2^128
         let liquidity = 1_000_000u128;
         let round_up = false;
@@ -211,7 +228,12 @@ mod amount1_delta_tests {
 
         let result = amount1_delta(sqrt_ratio_a, sqrt_ratio_b, liquidity, round_up).unwrap();
 
-        assert_eq!(result, U256::from_dec_str("340282286429718909724583623827301092853").unwrap().as_u128());
+        assert_eq!(
+            result,
+            U256::from_dec_str("340282286429718909724583623827301092853")
+                .unwrap()
+                .as_u128()
+        );
     }
 
     #[test]

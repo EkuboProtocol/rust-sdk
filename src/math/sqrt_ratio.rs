@@ -30,9 +30,13 @@ pub fn next_sqrt_ratio_from_amount0(
         let amount0_abs = U256::from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?);
 
         // product = amount0_abs * sqrt_ratio
-        let product = amount0_abs.checked_mul(sqrt_ratio).ok_or(PriceMathError::Overflow)?;
+        let product = amount0_abs
+            .checked_mul(sqrt_ratio)
+            .ok_or(PriceMathError::Overflow)?;
 
-        let denominator = numerator1.checked_sub(product).ok_or(PriceMathError::Overflow)?;
+        let denominator = numerator1
+            .checked_sub(product)
+            .ok_or(PriceMathError::Overflow)?;
 
         muldiv(numerator1, sqrt_ratio, denominator, true).map_err(PriceMathError::MuldivError)
     } else {
@@ -45,8 +49,7 @@ pub fn next_sqrt_ratio_from_amount0(
             .checked_add(amount0_u256)
             .ok_or(PriceMathError::Overflow)?;
 
-        muldiv(numerator1, U256::one(), denom, true)
-            .map_err(PriceMathError::MuldivError)
+        muldiv(numerator1, U256::one(), denom, true).map_err(PriceMathError::MuldivError)
     }
 }
 
@@ -131,8 +134,7 @@ mod tests {
         let liquidity = 100_000_000_000u128;
         let amount0 = -1000i128;
         let result = next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, amount0).unwrap();
-        let expected =
-            U256::from_dec_str("340282370323762166700996274441730955874").unwrap();
+        let expected = U256::from_dec_str("340282370323762166700996274441730955874").unwrap();
         assert_eq!(result, expected);
     }
 
@@ -168,7 +170,8 @@ mod tests {
         let liquidity = 1u128;
         let amount1 = 100_000_000_000_000i128;
         let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1).unwrap();
-        let expected = U256::from_dec_str("34028236692094186628704381681640284520207431768211456").unwrap();
+        let expected =
+            U256::from_dec_str("34028236692094186628704381681640284520207431768211456").unwrap();
         assert_eq!(result, expected);
     }
 
@@ -180,9 +183,7 @@ mod tests {
         let liquidity = 100_000_000_000u128;
         let amount1 = -1000i128;
         let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1).unwrap();
-        let expected =
-            U256::from_dec_str("340282363518114794253989972798022137138").unwrap();
+        let expected = U256::from_dec_str("340282363518114794253989972798022137138").unwrap();
         assert_eq!(result, expected);
     }
 }
-
