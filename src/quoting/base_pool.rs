@@ -10,6 +10,7 @@ use num_traits::Zero;
 // Resources consumed during any swap execution.
 #[derive(Clone, Copy, Default)]
 pub struct BasePoolResources {
+    pub no_override_price_change: u32,
     pub initialized_ticks_crossed: u32,
     pub tick_spacings_crossed: u32,
 }
@@ -19,6 +20,7 @@ impl Add for BasePoolResources {
 
     fn add(self, rhs: Self) -> Self::Output {
         BasePoolResources {
+            no_override_price_change: self.no_override_price_change + rhs.no_override_price_change,
             initialized_ticks_crossed: self.initialized_ticks_crossed
                 + rhs.initialized_ticks_crossed,
             tick_spacings_crossed: self.tick_spacings_crossed + rhs.tick_spacings_crossed,
@@ -286,6 +288,14 @@ impl Pool for BasePool {
         }
 
         let resources = BasePoolResources {
+            // we ignore changes from the override price because we assume the price has already changed
+            no_override_price_change: if starting_sqrt_ratio == self.state.sqrt_ratio
+                && starting_sqrt_ratio != sqrt_ratio
+            {
+                1
+            } else {
+                0
+            },
             initialized_ticks_crossed,
             tick_spacings_crossed: approximate_number_of_tick_spacings_crossed(
                 starting_sqrt_ratio,
