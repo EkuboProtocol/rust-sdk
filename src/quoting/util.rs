@@ -25,11 +25,11 @@ pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> 
 
 const LOG_BASE_SQRT_TICK_SIZE: f64 = 4.9999975000016666654166676666658333340476184226196031741031750577196410537756684185262518589393595459766211405607685305832e-7;
 
-fn u256_to_float_base_x128(sqrt_ratio: U256) -> f64 {
-    sqrt_ratio.0[0] as f64 / 340282366920938463463374607431768211456f64
-        + (sqrt_ratio.0[1] as f64 / 18446744073709551616f64)
-        + sqrt_ratio.0[2] as f64
-        + (sqrt_ratio.0[2] as f64 * 18446744073709551616f64)
+pub fn u256_to_float_base_x128(x128: U256) -> f64 {
+    x128.0[0] as f64 / 340282366920938463463374607431768211456f64
+        + (x128.0[1] as f64 / 18446744073709551616f64)
+        + x128.0[2] as f64
+        + (x128.0[2] as f64 * 18446744073709551616f64)
 }
 
 pub fn approximate_number_of_tick_spacings_crossed(
