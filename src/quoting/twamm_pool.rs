@@ -120,7 +120,7 @@ impl TwammPool {
     }
 
     // Returns the list of sale rate deltas
-    fn get_sale_rate_deltas(&self) -> &Vec<TwammSaleRateDelta> {
+    pub fn get_sale_rate_deltas(&self) -> &Vec<TwammSaleRateDelta> {
         &self.virtual_order_deltas
     }
 }
