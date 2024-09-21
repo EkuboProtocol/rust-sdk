@@ -71,6 +71,16 @@ impl TwammPool {
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
     ) -> Self {
         let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
+
+        let mut last_time = last_execution_time;
+        for t in virtual_order_deltas.iter() {
+            assert!(
+                t.time > last_time,
+                "Sale rate deltas are not ordered and greater than `last_execution_time`"
+            );
+            last_time = t.time;
+        }
+
         TwammPool {
             liquidity: active_liquidity,
             base_pool: BasePool::new(
@@ -108,6 +118,11 @@ impl TwammPool {
             token1_sale_rate,
         }
     }
+
+    // Returns the list of sale rate deltas
+    fn get_sale_rate_deltas(&self) -> &Vec<TwammSaleRateDelta> {
+        &self.virtual_order_deltas
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -115,6 +130,7 @@ pub enum TwammPoolQuoteError {
     ExecutionTimeExceedsBlockTime,
     FailedCalculateNextSqrtRatio,
     SaleAmountOverflow,
+    TooMuchTimePassedSinceLastExecution,
     BasePoolQuoteError(BasePoolQuoteError),
 }
 
@@ -186,10 +202,9 @@ impl Pool for TwammPool {
                 .unwrap_or(current_time);
 
             let time_elapsed = next_execution_time - last_execution_time;
-            assert!(
-                time_elapsed <= u32::MAX.into(),
-                "too much time has passed since execution"
-            );
+            if time_elapsed > u32::MAX.into() {
+                return Err(TwammPoolQuoteError::TooMuchTimePassedSinceLastExecution);
+            }
 
             // we know this will never overflow because token0_sale_rate is a u128 and time_elapsed is a u32
             let amount0: u128 =
