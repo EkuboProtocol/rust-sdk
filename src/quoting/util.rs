@@ -29,7 +29,7 @@ pub fn u256_to_float_base_x128(x128: U256) -> f64 {
     x128.0[0] as f64 / 340282366920938463463374607431768211456f64
         + (x128.0[1] as f64 / 18446744073709551616f64)
         + x128.0[2] as f64
-        + (x128.0[2] as f64 * 18446744073709551616f64)
+        + (x128.0[3] as f64 * 18446744073709551616f64)
 }
 
 pub fn approximate_number_of_tick_spacings_crossed(
@@ -48,8 +48,10 @@ mod tests {
     use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
     use crate::math::uint::U256;
     use crate::quoting::types::Tick;
-    use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
     use crate::quoting::util::find_nearest_initialized_tick_index;
+    use crate::quoting::util::{
+        approximate_number_of_tick_spacings_crossed, u256_to_float_base_x128,
+    };
     use alloc::vec;
     use alloc::vec::Vec;
 
@@ -220,6 +222,27 @@ mod tests {
         assert_eq!(
             approximate_number_of_tick_spacings_crossed(MAX_SQRT_RATIO, MAX_SQRT_RATIO / 2, 200),
             6931
+        );
+    }
+
+    #[test]
+    fn test_u256_to_fraction() {
+        assert_eq!(
+            u256_to_float_base_x128(U256([16403144882676588163, 1525053501570699700, 35, 0])),
+            35.08267331597798
+        );
+        assert_eq!(
+            u256_to_float_base_x128(U256([123456, 0, 0, 0])),
+            3.628045764377908e-34
+        );
+        assert_eq!(
+            u256_to_float_base_x128(U256([0, 123456, 0, 0])),
+            6.692563170318522e-15
+        );
+        assert_eq!(u256_to_float_base_x128(U256([0, 0, 123456, 0])), 123456.0);
+        assert_eq!(
+            u256_to_float_base_x128(U256([0, 0, 0, 123456])),
+            2.2773612363638864e24
         );
     }
 }
