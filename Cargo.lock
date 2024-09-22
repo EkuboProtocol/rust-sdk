@@ -22,7 +22,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "ekubo_sdk"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "num-traits",
  "uint",
