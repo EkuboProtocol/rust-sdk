@@ -7,7 +7,7 @@ use crate::quoting::base_pool::{
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
 use alloc::vec;
 use core::ops::Add;
-use num_traits::ToPrimitive;
+use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy)]
 pub struct OraclePoolState {
@@ -47,6 +47,7 @@ impl OraclePool {
         last_snapshot_time: u64,
     ) -> Self {
         let signed_liquidity: i128 = liquidity.to_i128().expect("Liquidity overflow i128");
+
         OraclePool {
             base_pool: BasePool::new(
                 NodeKey {
@@ -67,16 +68,20 @@ impl OraclePool {
                         None
                     },
                 },
-                vec![
-                    Tick {
-                        index: MIN_TICK_AT_MAX_TICK_SPACING,
-                        liquidity_delta: signed_liquidity,
-                    },
-                    Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
-                        liquidity_delta: -signed_liquidity,
-                    },
-                ],
+                if signed_liquidity.is_zero() {
+                    vec![]
+                } else {
+                    vec![
+                        Tick {
+                            index: MIN_TICK_AT_MAX_TICK_SPACING,
+                            liquidity_delta: signed_liquidity,
+                        },
+                        Tick {
+                            index: MAX_TICK_AT_MAX_TICK_SPACING,
+                            liquidity_delta: -signed_liquidity,
+                        },
+                    ]
+                },
             ),
             last_snapshot_time,
         }

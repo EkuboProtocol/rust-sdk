@@ -10,7 +10,7 @@ use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick, TokenAmount
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Add;
-use num_traits::ToPrimitive;
+use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy)]
 pub struct TwammPoolState {
@@ -50,7 +50,7 @@ pub struct TwammSaleRateDelta {
 
 pub struct TwammPool {
     base_pool: BasePool,
-    liquidity: u128,
+    active_liquidity: u128,
     token0_sale_rate: u128,
     token1_sale_rate: u128,
     last_execution_time: u64,
@@ -82,7 +82,7 @@ impl TwammPool {
         }
 
         TwammPool {
-            liquidity: active_liquidity,
+            active_liquidity: active_liquidity,
             base_pool: BasePool::new(
                 NodeKey {
                     token0,
@@ -101,16 +101,20 @@ impl TwammPool {
                     liquidity: active_liquidity,
                     active_tick_index: Some(0),
                 },
-                vec![
-                    Tick {
-                        index: MIN_TICK_AT_MAX_TICK_SPACING,
-                        liquidity_delta: signed_liquidity,
-                    },
-                    Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
-                        liquidity_delta: -signed_liquidity,
-                    },
-                ],
+                if signed_liquidity.is_zero() {
+                    vec![]
+                } else {
+                    vec![
+                        Tick {
+                            index: MIN_TICK_AT_MAX_TICK_SPACING,
+                            liquidity_delta: signed_liquidity,
+                        },
+                        Tick {
+                            index: MAX_TICK_AT_MAX_TICK_SPACING,
+                            liquidity_delta: -signed_liquidity,
+                        },
+                    ]
+                },
             ),
             virtual_order_deltas,
             last_execution_time,
@@ -220,7 +224,7 @@ impl Pool for TwammPool {
                 next_sqrt_ratio = calculate_next_sqrt_ratio(
                     current_sqrt_ratio,
                     // we explicitly do not use the liquidity state variable, we always calculate this with active liquidity
-                    self.liquidity,
+                    self.active_liquidity,
                     token0_sale_rate,
                     token1_sale_rate,
                     time_elapsed as u32,
