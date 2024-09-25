@@ -43,10 +43,34 @@ impl OraclePool {
         token1: U256,
         extension: U256,
         sqrt_ratio: U256,
-        liquidity: u128,
+        active_liquidity: u128,
         last_snapshot_time: u64,
     ) -> Self {
-        let signed_liquidity: i128 = liquidity.to_i128().expect("Liquidity overflow i128");
+        let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
+
+        let (active_tick_index, sorted_ticks) = if active_liquidity.is_zero() {
+            (None, vec![])
+        } else {
+            (
+                if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING {
+                    None
+                } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
+                    Some(0)
+                } else {
+                    None
+                },
+                vec![
+                    Tick {
+                        index: MIN_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: signed_liquidity,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: -signed_liquidity,
+                    },
+                ],
+            )
+        };
 
         OraclePool {
             base_pool: BasePool::new(
@@ -59,29 +83,10 @@ impl OraclePool {
                 },
                 BasePoolState {
                     sqrt_ratio,
-                    liquidity,
-                    active_tick_index: if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                        None
-                    } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                        Some(0)
-                    } else {
-                        None
-                    },
+                    liquidity: active_liquidity,
+                    active_tick_index,
                 },
-                if signed_liquidity.is_zero() {
-                    vec![]
-                } else {
-                    vec![
-                        Tick {
-                            index: MIN_TICK_AT_MAX_TICK_SPACING,
-                            liquidity_delta: signed_liquidity,
-                        },
-                        Tick {
-                            index: MAX_TICK_AT_MAX_TICK_SPACING,
-                            liquidity_delta: -signed_liquidity,
-                        },
-                    ]
-                },
+                sorted_ticks,
             ),
             last_snapshot_time,
         }

@@ -81,6 +81,24 @@ impl TwammPool {
             last_time = t.time;
         }
 
+        let (active_tick_index, sorted_ticks) = if active_liquidity.is_zero() {
+            (None, vec![])
+        } else {
+            (
+                Some(0usize),
+                vec![
+                    Tick {
+                        index: MIN_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: signed_liquidity,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: -signed_liquidity,
+                    },
+                ],
+            )
+        };
+
         TwammPool {
             active_liquidity: active_liquidity,
             base_pool: BasePool::new(
@@ -99,22 +117,9 @@ impl TwammPool {
                         .min(MAX_SQRT_RATIO_AT_MAX_TICK_SPACING)
                         .max(MIN_SQRT_RATIO_AT_MAX_TICK_SPACING),
                     liquidity: active_liquidity,
-                    active_tick_index: Some(0),
+                    active_tick_index,
                 },
-                if signed_liquidity.is_zero() {
-                    vec![]
-                } else {
-                    vec![
-                        Tick {
-                            index: MIN_TICK_AT_MAX_TICK_SPACING,
-                            liquidity_delta: signed_liquidity,
-                        },
-                        Tick {
-                            index: MAX_TICK_AT_MAX_TICK_SPACING,
-                            liquidity_delta: -signed_liquidity,
-                        },
-                    ]
-                },
+                sorted_ticks,
             ),
             virtual_order_deltas,
             last_execution_time,
@@ -343,7 +348,7 @@ impl Pool for TwammPool {
     }
 
     fn has_liquidity(&self) -> bool {
-        self.base_pool.has_liquidity()
+        !self.active_liquidity.is_zero()
     }
 }
 
