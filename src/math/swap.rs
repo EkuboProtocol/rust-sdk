@@ -52,7 +52,7 @@ fn no_op(sqrt_ratio_next: U256) -> SwapResult {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ComputeStepError {
     WrongDirection,
     AmountBeforeFeeOverflow,

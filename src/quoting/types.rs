@@ -52,7 +52,7 @@ pub type BlockTimestamp = u64;
 pub trait Pool: Send + Sync {
     type Resources: Add<Output = Self::Resources> + Default + Copy;
     type State: Copy;
-    type QuoteError: Debug;
+    type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
     type Meta: Copy;
 

@@ -39,7 +39,7 @@ pub const MAX_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = U256([
     0,
 ]);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BasePoolQuoteError {
     InvalidToken,
     InvalidSqrtRatioLimit,

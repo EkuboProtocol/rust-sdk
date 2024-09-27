@@ -1,7 +1,7 @@
 use crate::math::uint::U256;
 use num_traits::Zero;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum MuldivError {
     Overflow,
     DenominatorZero,
