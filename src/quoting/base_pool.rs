@@ -65,13 +65,35 @@ impl BasePool {
         assert!(key.token0 < key.token1, "token0 must be less than token1");
         assert!(!key.token0.is_zero(), "token0 must be non-zero");
         assert!(
-            key.tick_spacing <= MAX_TICK_SPACING,
-            "tick spacing must be less than max tick spacing"
-        );
-        assert!(
             key.tick_spacing > 0,
             "tick spacing must be greater than zero"
         );
+        assert!(
+            key.tick_spacing <= MAX_TICK_SPACING,
+            "tick spacing must be less than max tick spacing"
+        );
+
+        // check ticks are sorted in linear time
+        let mut last_tick: Option<i32> = None;
+        let mut total_liquidity: u128 = 0;
+        let spacing_i32 = key.tick_spacing as i32;
+        for tick in sorted_ticks.iter() {
+            if let Some(last) = last_tick {
+                assert!(tick.index > last, "ticks must be sorted");
+            };
+            assert!(
+                (tick.index % spacing_i32).is_zero(),
+                "all ticks must be multiple of tick_spacing"
+            );
+            last_tick = Some(tick.index);
+            total_liquidity = if tick.liquidity_delta < 0 {
+                total_liquidity - tick.liquidity_delta.unsigned_abs()
+            } else {
+                total_liquidity + tick.liquidity_delta.unsigned_abs()
+            }
+        }
+        assert!(total_liquidity.is_zero(), "total liquidity must be zero");
+
         if let Some(active) = state.active_tick_index {
             let tick = sorted_ticks
                 .get(active)
@@ -88,21 +110,6 @@ impl BasePool {
                         <= to_sqrt_ratio(first.index).expect("first tick has invalid index"),
                     "current sqrt_ratio must be lower than equal sqrt_ratio of first tick if active_tick_index is none"
                 );
-            }
-        }
-
-        // check ticks are sorted in linear time
-        let mut last_tick: Option<i32> = None;
-        let mut total_liquidity: u128 = 0;
-        for tick in sorted_ticks.iter() {
-            if let Some(last) = last_tick {
-                assert!(tick.index > last, "ticks must be sorted");
-            };
-            last_tick = Some(tick.index);
-            total_liquidity = if tick.liquidity_delta < 0 {
-                total_liquidity - tick.liquidity_delta.unsigned_abs()
-            } else {
-                total_liquidity + tick.liquidity_delta.unsigned_abs()
             }
         }
 
@@ -336,6 +343,228 @@ mod tests {
             tick_spacing,
             fee,
             extension: U256::zero(),
+        }
+    }
+
+    mod constructor_validation {
+        use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
+        use crate::quoting::base_pool::MAX_TICK_AT_MAX_TICK_SPACING;
+        use crate::quoting::types::Tick;
+
+        #[test]
+        #[should_panic(expected = "token0 must be less than token1")]
+        fn test_token0_lt_token1() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::zero(),
+                    token1: U256::zero(),
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: 0,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: None,
+                    liquidity: 0,
+                },
+                vec![],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "token0 must be non-zero")]
+        fn test_token0_non_zero() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::zero(),
+                    token1: U256::one(),
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: 0,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: None,
+                    liquidity: 0,
+                },
+                vec![],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "tick spacing must be greater than zero")]
+        fn test_tick_spacing_non_zero() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: 0,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: None,
+                    liquidity: 0,
+                },
+                vec![],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "tick spacing must be less than max tick spacing")]
+        fn test_tick_spacing_lte_max() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING + 1,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: None,
+                    liquidity: 0,
+                },
+                vec![],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "active tick index is out of bounds")]
+        fn test_active_tick_index_within_range() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: Some(0),
+                    liquidity: 0,
+                },
+                vec![],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "ticks must be sorted")]
+        fn test_ticks_must_be_sorted() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: Some(0),
+                    liquidity: 1,
+                },
+                vec![
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: 0,
+                    },
+                    Tick {
+                        index: 0,
+                        liquidity_delta: 0,
+                    },
+                ],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "all ticks must be multiple of tick_spacing")]
+        fn test_ticks_must_be_multiple_of_tick_spacing() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: Some(0),
+                    liquidity: 1,
+                },
+                vec![
+                    Tick {
+                        index: -1,
+                        liquidity_delta: 1,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING - 1,
+                        liquidity_delta: -1,
+                    },
+                ],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "total liquidity must be zero")]
+        fn test_ticks_must_total_to_zero_liquidity() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: Some(0),
+                    liquidity: 2,
+                },
+                vec![
+                    Tick {
+                        index: 0,
+                        liquidity_delta: 2,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: -1,
+                    },
+                ],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "active tick index is out of bounds")]
+        fn test_active_tick_index_must_be_within_bounds() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
+                    active_tick_index: Some(2),
+                    liquidity: 2,
+                },
+                vec![
+                    Tick {
+                        index: 0,
+                        liquidity_delta: 2,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: -2,
+                    },
+                ],
+            );
         }
     }
 
