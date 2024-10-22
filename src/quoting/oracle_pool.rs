@@ -48,17 +48,19 @@ impl OraclePool {
     ) -> Self {
         let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
 
-        let (active_tick_index, sorted_ticks) = if active_liquidity.is_zero() {
-            (None, vec![])
+        let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
+            (None, vec![], 0)
         } else {
+            let (active_tick_index, liquidity) = if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
+            {
+                (None, 0)
+            } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
+                (Some(0), active_liquidity)
+            } else {
+                (Some(1), 0)
+            };
             (
-                if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                    None
-                } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                    Some(0)
-                } else {
-                    None
-                },
+                active_tick_index,
                 vec![
                     Tick {
                         index: MIN_TICK_AT_MAX_TICK_SPACING,
@@ -69,6 +71,7 @@ impl OraclePool {
                         liquidity_delta: -signed_liquidity,
                     },
                 ],
+                liquidity,
             )
         };
 
@@ -83,7 +86,7 @@ impl OraclePool {
                 },
                 BasePoolState {
                     sqrt_ratio,
-                    liquidity: active_liquidity,
+                    liquidity,
                     active_tick_index,
                 },
                 sorted_ticks,
@@ -168,6 +171,88 @@ mod tests {
             to_sqrt_ratio(MAX_TICK_AT_MAX_TICK_SPACING).unwrap(),
             MAX_SQRT_RATIO_AT_MAX_TICK_SPACING
         );
+    }
+
+    mod constructor_validation {
+        use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+        use crate::math::uint::U256;
+        use crate::quoting::base_pool::{
+            MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+        };
+        use crate::quoting::oracle_pool::OraclePool;
+        use crate::quoting::types::Pool;
+
+        #[test]
+        fn test_max_price_constructor() {
+            assert_eq!(
+                OraclePool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    U256::zero(),
+                    MAX_SQRT_RATIO,
+                    1,
+                    0,
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                0
+            );
+        }
+
+        #[test]
+        fn test_min_price_constructor() {
+            assert_eq!(
+                OraclePool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    U256::zero(),
+                    MIN_SQRT_RATIO,
+                    1,
+                    0,
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                0
+            );
+        }
+
+        #[test]
+        fn test_min_sqrt_ratio_at_max_tick_spacing() {
+            assert_eq!(
+                OraclePool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    U256::zero(),
+                    MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                1
+            );
+        }
+
+        #[test]
+        fn test_max_sqrt_ratio_at_max_tick_spacing() {
+            assert_eq!(
+                OraclePool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    U256::zero(),
+                    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                1
+            );
+        }
     }
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
