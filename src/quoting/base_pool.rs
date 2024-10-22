@@ -566,6 +566,68 @@ mod tests {
                 ],
             );
         }
+
+        #[test]
+        #[should_panic(
+            expected = "sqrt_ratio of active tick is not less than or equal to current sqrt_ratio"
+        )]
+        fn test_active_tick_sqrt_ratio_is_lte_current_sqrt_ratio() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap() - 1,
+                    active_tick_index: Some(0),
+                    liquidity: 2,
+                },
+                vec![
+                    Tick {
+                        index: 0,
+                        liquidity_delta: 2,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: -2,
+                    },
+                ],
+            );
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "current sqrt_ratio must be lower than equal sqrt_ratio of first tick if active_tick_index is none"
+        )]
+        fn test_if_no_active_tick_sqrt_ratio_lte_first() {
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + 1,
+                    extension: U256::zero(),
+                    fee: 0,
+                    tick_spacing: MAX_TICK_SPACING,
+                },
+                BasePoolState {
+                    sqrt_ratio: to_sqrt_ratio(0).unwrap() + 1,
+                    active_tick_index: None,
+                    liquidity: 0,
+                },
+                vec![
+                    Tick {
+                        index: 0,
+                        liquidity_delta: 2,
+                    },
+                    Tick {
+                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        liquidity_delta: -2,
+                    },
+                ],
+            );
+        }
     }
 
     #[test]
