@@ -672,7 +672,11 @@ mod tests {
             0,
             0,
             1 << 32,
-            vec![],
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: 0,
+                sale_rate_delta1: -(1 << 32),
+            }],
         );
 
         let result = pool.quote(QuoteParams {
@@ -707,7 +711,11 @@ mod tests {
             0,
             1 << 32,
             0,
-            vec![],
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(1 << 32),
+                sale_rate_delta1: 0,
+            }],
         );
 
         let result = pool.quote(QuoteParams {
@@ -745,7 +753,11 @@ mod tests {
             0,
             0,
             1 << 32,
-            vec![],
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: 0,
+                sale_rate_delta1: -(1 << 32),
+            }],
         );
 
         let result = pool.quote(QuoteParams {
@@ -782,11 +794,18 @@ mod tests {
             0,
             0,
             1 << 32,
-            vec![TwammSaleRateDelta {
-                sale_rate_delta0: 100_000i128 * (1 << 32),
-                sale_rate_delta1: 0,
-                time: 16u64,
-            }],
+            vec![
+                TwammSaleRateDelta {
+                    sale_rate_delta0: 100_000i128 * (1 << 32),
+                    sale_rate_delta1: 0,
+                    time: 16u64,
+                },
+                TwammSaleRateDelta {
+                    time: u64::MAX,
+                    sale_rate_delta0: -100_000 * (1 << 32),
+                    sale_rate_delta1: -(1 << 32),
+                },
+            ],
         );
 
         let quote = pool
@@ -828,11 +847,18 @@ mod tests {
             0u64,
             1 << 32,
             0u128,
-            vec![TwammSaleRateDelta {
-                sale_rate_delta0: 0i128,
-                sale_rate_delta1: 100_000 * (1 << 32),
-                time: 16u64,
-            }],
+            vec![
+                TwammSaleRateDelta {
+                    sale_rate_delta0: 0i128,
+                    sale_rate_delta1: 100_000 * (1 << 32),
+                    time: 16u64,
+                },
+                TwammSaleRateDelta {
+                    time: u64::MAX,
+                    sale_rate_delta0: -(1 << 32),
+                    sale_rate_delta1: -100_000 * (1 << 32),
+                },
+            ],
         );
 
         let result = pool.quote(QuoteParams {
@@ -874,11 +900,18 @@ mod tests {
             0,
             0,
             1 << 32,
-            vec![TwammSaleRateDelta {
-                sale_rate_delta0: 100_000 * (1 << 32),
-                sale_rate_delta1: 0,
-                time: 16,
-            }],
+            vec![
+                TwammSaleRateDelta {
+                    sale_rate_delta0: 100_000 * (1 << 32),
+                    sale_rate_delta1: 0,
+                    time: 16,
+                },
+                TwammSaleRateDelta {
+                    time: u64::MAX,
+                    sale_rate_delta0: -100_000 * (1 << 32),
+                    sale_rate_delta1: -(1 << 32),
+                },
+            ],
         );
 
         let quote = pool
@@ -920,11 +953,18 @@ mod tests {
             0,
             1 << 32,
             0,
-            vec![TwammSaleRateDelta {
-                sale_rate_delta0: 0i128,
-                sale_rate_delta1: (100_000u128 * (1 << 32)) as i128,
-                time: 16u64,
-            }],
+            vec![
+                TwammSaleRateDelta {
+                    sale_rate_delta0: 0i128,
+                    sale_rate_delta1: (100_000u128 * (1 << 32)) as i128,
+                    time: 16u64,
+                },
+                TwammSaleRateDelta {
+                    time: u64::MAX,
+                    sale_rate_delta0: -(1 << 32),
+                    sale_rate_delta1: -100_000 * (1 << 32),
+                },
+            ],
         );
 
         let result = pool.quote(QuoteParams {
@@ -966,7 +1006,11 @@ mod tests {
             0u64,
             1 << 32u128,
             1 << 32u128,
-            vec![], // No sale rate deltas
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(1 << 32),
+                sale_rate_delta1: -(1 << 32),
+            }], // No sale rate deltas
         );
 
         let result = pool.quote(QuoteParams {
@@ -1008,7 +1052,11 @@ mod tests {
             0u64,
             1 << 32u128,
             1 << 32u128,
-            vec![], // No sale rate deltas
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(1 << 32),
+                sale_rate_delta1: -(1 << 32),
+            }], // No sale rate deltas
         );
 
         let result = pool.quote(QuoteParams {
@@ -1050,7 +1098,11 @@ mod tests {
             0u64,
             10 << 32u128,
             1 << 32u128,
-            vec![], // No sale rate deltas
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(10 << 32),
+                sale_rate_delta1: -(1 << 32),
+            }], // No sale rate deltas
         );
 
         let result = pool.quote(QuoteParams {
@@ -1092,7 +1144,11 @@ mod tests {
             0u64,
             1 << 32u128,
             10 << 32u128,
-            vec![], // No sale rate deltas
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(1 << 32),
+                sale_rate_delta1: -(10 << 32),
+            }], // No sale rate deltas
         );
 
         let result = pool.quote(QuoteParams {
@@ -1134,7 +1190,11 @@ mod tests {
             0u64,
             10 << 32u128,
             1 << 32u128,
-            vec![], // No sale rate deltas
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(10 << 32),
+                sale_rate_delta1: -(1 << 32),
+            }], // No sale rate deltas
         );
 
         let result = pool.quote(QuoteParams {
@@ -1176,7 +1236,11 @@ mod tests {
             0u64,
             1 << 32u128,
             10 << 32u128,
-            vec![], // No sale rate deltas
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -(1 << 32),
+                sale_rate_delta1: -(10 << 32),
+            }], // No sale rate deltas
         );
 
         let result = pool.quote(QuoteParams {
@@ -1264,11 +1328,18 @@ mod tests {
             0u64,
             1 << 32u128,
             1 << 32u128,
-            vec![TwammSaleRateDelta {
-                sale_rate_delta0: 2i128.pow(32),
-                sale_rate_delta1: 2i128.pow(32),
-                time: 16u64,
-            }],
+            vec![
+                TwammSaleRateDelta {
+                    sale_rate_delta0: 2i128.pow(32),
+                    sale_rate_delta1: 2i128.pow(32),
+                    time: 16u64,
+                },
+                TwammSaleRateDelta {
+                    time: u64::MAX,
+                    sale_rate_delta0: -(1 << 33),
+                    sale_rate_delta1: -(1 << 33),
+                },
+            ],
         );
 
         let result = pool.quote(QuoteParams {
@@ -1310,7 +1381,11 @@ mod tests {
             0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
-            vec![],
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
+                sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
+            }],
         );
 
         // First quote: no swap
@@ -1477,7 +1552,11 @@ mod tests {
             0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
-            vec![],
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
+                sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
+            }],
         );
 
         // First swap
@@ -1549,7 +1628,11 @@ mod tests {
             0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
-            vec![],
+            vec![TwammSaleRateDelta {
+                time: u64::MAX,
+                sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
+                sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
+            }],
         );
 
         // First swap
