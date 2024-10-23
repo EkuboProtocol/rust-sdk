@@ -73,19 +73,36 @@ impl TwammPool {
         let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
 
         let mut last_time = last_execution_time;
+        let mut sr0: u128 = token0_sale_rate;
+        let mut sr1: u128 = token1_sale_rate;
         for t in virtual_order_deltas.iter() {
             assert!(
                 t.time > last_time,
                 "Sale rate deltas are not ordered and greater than `last_execution_time`"
             );
             last_time = t.time;
+            if t.sale_rate_delta0 < 0 {
+                sr0 -= t.sale_rate_delta0.unsigned_abs();
+            } else {
+                sr0 += t.sale_rate_delta0.unsigned_abs();
+            }
+            if t.sale_rate_delta1 < 0 {
+                sr1 -= t.sale_rate_delta1.unsigned_abs();
+            } else {
+                sr1 += t.sale_rate_delta1.unsigned_abs();
+            }
         }
+
+        assert!(
+            sr0.is_zero() && sr1.is_zero(),
+            "sum of current sale rate and sale rate deltas must be zero"
+        );
 
         let (active_tick_index, sorted_ticks) = if active_liquidity.is_zero() {
             (None, vec![])
         } else {
             (
-                Some(0usize),
+                Some(0),
                 vec![
                     Tick {
                         index: MIN_TICK_AT_MAX_TICK_SPACING,
@@ -100,7 +117,7 @@ impl TwammPool {
         };
 
         TwammPool {
-            active_liquidity: active_liquidity,
+            active_liquidity,
             base_pool: BasePool::new(
                 NodeKey {
                     token0,
@@ -365,6 +382,213 @@ mod tests {
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
+
+    mod constructor_validation {
+        use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+        use crate::math::uint::U256;
+        use crate::quoting::base_pool::{
+            MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+        };
+        use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
+        use crate::quoting::types::Pool;
+        use alloc::vec;
+
+        #[test]
+        fn test_max_price_constructor() {
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MAX_SQRT_RATIO,
+                    1,
+                    0,
+                    0,
+                    0,
+                    vec![]
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                1
+            );
+        }
+
+        #[test]
+        fn test_min_price_constructor() {
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MIN_SQRT_RATIO,
+                    1,
+                    0,
+                    0,
+                    0,
+                    vec![]
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                1
+            );
+        }
+
+        #[test]
+        fn test_min_sqrt_ratio_at_max_tick_spacing() {
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                    0,
+                    0,
+                    vec![]
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                1
+            );
+        }
+
+        #[test]
+        fn test_max_sqrt_ratio_at_max_tick_spacing() {
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                    0,
+                    0,
+                    vec![]
+                )
+                .get_state()
+                .base_pool_state
+                .liquidity,
+                1
+            );
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "Sale rate deltas are not ordered and greater than `last_execution_time`"
+        )]
+        fn test_sale_rate_deltas_must_be_gt_last_execution_time() {
+            TwammPool::new(
+                U256::one(),
+                U256::one() + 1,
+                0,
+                U256::zero(),
+                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                1,
+                0,
+                0,
+                0,
+                vec![TwammSaleRateDelta {
+                    time: 0,
+                    sale_rate_delta0: 0,
+                    sale_rate_delta1: 0,
+                }],
+            );
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "Sale rate deltas are not ordered and greater than `last_execution_time`"
+        )]
+        fn test_sale_rate_deltas_must_be_ordered() {
+            TwammPool::new(
+                U256::one(),
+                U256::one() + 1,
+                0,
+                U256::zero(),
+                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                1,
+                0,
+                0,
+                0,
+                vec![
+                    TwammSaleRateDelta {
+                        time: 2,
+                        sale_rate_delta0: 0,
+                        sale_rate_delta1: 0,
+                    },
+                    TwammSaleRateDelta {
+                        time: 1,
+                        sale_rate_delta0: 0,
+                        sale_rate_delta1: 0,
+                    },
+                ],
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "sum of current sale rate and sale rate deltas must be zero")]
+        fn test_sale_rate_deltas_must_sum_to_zero() {
+            TwammPool::new(
+                U256::one(),
+                U256::one() + 1,
+                0,
+                U256::zero(),
+                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                1,
+                0,
+                54,
+                2,
+                vec![
+                    TwammSaleRateDelta {
+                        time: 1,
+                        sale_rate_delta0: 0,
+                        sale_rate_delta1: 1,
+                    },
+                    TwammSaleRateDelta {
+                        time: 2,
+                        sale_rate_delta0: 1,
+                        sale_rate_delta1: 0,
+                    },
+                ],
+            );
+        }
+
+        #[test]
+        fn test_sale_rate_deltas_sum_to_zero() {
+            TwammPool::new(
+                U256::one(),
+                U256::one() + 1,
+                0,
+                U256::zero(),
+                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                1,
+                0,
+                23,
+                35,
+                vec![
+                    TwammSaleRateDelta {
+                        time: 1,
+                        sale_rate_delta0: -23,
+                        sale_rate_delta1: 0,
+                    },
+                    TwammSaleRateDelta {
+                        time: 2,
+                        sale_rate_delta0: 0,
+                        sale_rate_delta1: -35,
+                    },
+                ],
+            );
+        }
+    }
 
     #[test]
     fn zero_sale_rates_quote_token0() {
