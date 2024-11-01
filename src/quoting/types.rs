@@ -66,6 +66,11 @@ pub trait Pool: Send + Sync {
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError>;
 
     fn has_liquidity(&self) -> bool;
+
+    // Returns the greatest tick with non-zero liquidity in the pool
+    fn max_tick_with_liquidity(&self) -> Option<i32>;
+    // Returns the smallest tick with non-zero liquidity in the pool
+    fn min_tick_with_liquidity(&self) -> Option<i32>;
 }
 
 #[cfg(test)]

@@ -148,6 +148,14 @@ impl Pool for OraclePool {
     fn has_liquidity(&self) -> bool {
         self.base_pool.has_liquidity()
     }
+
+    fn max_tick_with_liquidity(&self) -> Option<i32> {
+        self.base_pool.max_tick_with_liquidity()
+    }
+
+    fn min_tick_with_liquidity(&self) -> Option<i32> {
+        self.base_pool.min_tick_with_liquidity()
+    }
 }
 
 #[cfg(test)]

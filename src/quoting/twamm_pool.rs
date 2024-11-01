@@ -23,8 +23,12 @@ pub struct TwammPoolState {
 #[derive(Clone, Copy, Default)]
 pub struct TwammPoolResources {
     pub base_pool_resources: BasePoolResources,
+    // The number of seconds that passed since the last virtual order execution
     pub virtual_order_seconds_executed: u32,
+    // The amount of order updates that were applied to the sale rate
     pub virtual_order_delta_times_crossed: u32,
+    // Whether the virtual orders were executed or not (for a single swap, 1 or 0)
+    pub virtual_orders_executed: u32,
 }
 
 impl Add for TwammPoolResources {
@@ -37,6 +41,7 @@ impl Add for TwammPoolResources {
                 + rhs.virtual_order_delta_times_crossed,
             virtual_order_seconds_executed: self.virtual_order_seconds_executed
                 + rhs.virtual_order_seconds_executed,
+            virtual_orders_executed: self.virtual_orders_executed + rhs.virtual_orders_executed,
         }
     }
 }
@@ -354,6 +359,11 @@ impl Pool for TwammPool {
                 virtual_order_seconds_executed: (current_time - initial_state.last_execution_time)
                     as u32,
                 virtual_order_delta_times_crossed,
+                virtual_orders_executed: if current_time > initial_state.last_execution_time {
+                    1
+                } else {
+                    0
+                },
             },
             state_after: TwammPoolState {
                 base_pool_state: final_quote.state_after,
@@ -366,6 +376,14 @@ impl Pool for TwammPool {
 
     fn has_liquidity(&self) -> bool {
         !self.active_liquidity.is_zero()
+    }
+
+    fn max_tick_with_liquidity(&self) -> Option<i32> {
+        self.base_pool.max_tick_with_liquidity()
+    }
+
+    fn min_tick_with_liquidity(&self) -> Option<i32> {
+        self.base_pool.min_tick_with_liquidity()
     }
 }
 

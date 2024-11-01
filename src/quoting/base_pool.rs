@@ -325,6 +325,14 @@ impl Pool for BasePool {
     fn has_liquidity(&self) -> bool {
         self.state.liquidity > 0 || !self.sorted_ticks.is_empty()
     }
+
+    fn max_tick_with_liquidity(&self) -> Option<i32> {
+        self.sorted_ticks.last().map(|t| t.index)
+    }
+
+    fn min_tick_with_liquidity(&self) -> Option<i32> {
+        self.sorted_ticks.first().map(|t| t.index)
+    }
 }
 
 #[cfg(test)]
