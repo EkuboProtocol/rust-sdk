@@ -1,6 +1,8 @@
 use crate::math::uint::U256;
 use crate::quoting::types::Tick;
 
+// == 0x0000000000000000000000000000eeEEee000000
+
 // Function to find the nearest initialized tick index.
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
     let mut l = 0usize;
