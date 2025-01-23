@@ -1,12 +1,12 @@
 [package]
-name = "starknet_ekubo_sdk"
+name = "evm_ekubo_sdk"
 version = "0.1.19"
 authors = ["Mahmoud Salem <moody@ekubo.org>"]
 edition = "2021"
 license = "LGPL-2.1"
-description = "Types for interacting with Ekubo Protocol on Starknet"
+description = "Types for interacting with Ekubo Protocol on EVM chains"
 homepage = "https://ekubo.org"
-repository = "https://github.com/EkuboProtocol/starknet-rust-sdk"
+repository = "https://github.com/EkuboProtocol/evm-rust-sdk"
 readme = "README.md"
 keywords = ["crypto", "math", "ekubo", "protocol", "defi"]
 
