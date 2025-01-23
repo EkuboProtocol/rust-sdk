@@ -21,14 +21,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
-name = "ekubo_sdk"
-version = "0.1.19"
-dependencies = [
- "num-traits",
- "uint",
-]
-
-[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -41,6 +33,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "starknet_ekubo_sdk"
+version = "0.1.19"
+dependencies = [
+ "num-traits",
+ "uint",
 ]
 
 [[package]]
