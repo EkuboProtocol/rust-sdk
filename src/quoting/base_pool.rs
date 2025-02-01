@@ -1,5 +1,5 @@
 use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
@@ -33,16 +33,10 @@ impl Add for BasePoolResources {
 }
 
 pub const MAX_TICK_SPACING: u32 = 698605;
-pub const MIN_TICK_AT_MAX_TICK_SPACING: i32 = -88722835;
-pub const MAX_TICK_AT_MAX_TICK_SPACING: i32 = 88722835;
-pub const MIN_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = U256([447090492618910, 1, 0, 0]);
-// 6276949602062853172742588666638147158083741740262337144812
-pub const MAX_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = U256([
-    17284140499546007532,
-    7567914947700146222,
-    18446296994052723738,
-    0,
-]);
+pub const MIN_TICK_AT_MAX_TICK_SPACING: i32 = MIN_TICK;
+pub const MAX_TICK_AT_MAX_TICK_SPACING: i32 = MAX_TICK;
+pub const MIN_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = MIN_SQRT_RATIO;
+pub const MAX_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = MAX_SQRT_RATIO;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BasePoolQuoteError {

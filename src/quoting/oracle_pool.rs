@@ -204,7 +204,7 @@ mod tests {
                 .get_state()
                 .base_pool_state
                 .liquidity,
-                0
+                1
             );
         }
 
@@ -222,7 +222,7 @@ mod tests {
                 .get_state()
                 .base_pool_state
                 .liquidity,
-                0
+                1
             );
         }
 

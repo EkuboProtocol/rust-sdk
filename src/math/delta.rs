@@ -230,7 +230,7 @@ mod amount1_delta_tests {
 
         assert_eq!(
             result,
-            U256::from_dec_str("340282286429718909724583623827301092853")
+            U256::from_dec_str("340274119756928397675478831271437331477")
                 .unwrap()
                 .as_u128()
         );
