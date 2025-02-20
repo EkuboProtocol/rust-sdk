@@ -17,13 +17,21 @@ pub struct Config {
     pub extension: U256,
 }
 
-impl Into<Config> for U256 {
-    fn into(self) -> Config {
+impl From<U256> for Config {
+    fn from(value: U256) -> Config {
         Config {
-            tick_spacing: (self % U256([4294967296, 0, 0, 0])).as_u32(),
-            fee: ((self >> 32) % U256([0, 1, 0, 0])).as_u64(),
-            extension: (self >> 96),
+            tick_spacing: (value % U256([4294967296, 0, 0, 0])).as_u32(),
+            fee: ((value >> 32) % U256([0, 1, 0, 0])).as_u64(),
+            extension: value >> 96,
         }
+    }
+}
+
+impl From<Config> for U256 {
+    fn from(value: Config) -> U256 {
+        U256::from(value.tick_spacing)
+            + (U256::from(value.fee) << 32)
+            + (U256::from(value.extension) << 96)
     }
 }
 
@@ -91,7 +99,7 @@ pub trait Pool: Send + Sync {
 #[cfg(test)]
 mod tests {
     use crate::math::uint::U256;
-    use crate::quoting::types::TokenAmount;
+    use crate::quoting::types::{Config, TokenAmount};
 
     #[test]
     fn test_ordering_token_amount() {
@@ -140,6 +148,35 @@ mod tests {
                 token: U256::zero(),
                 amount: 1,
             }
+        );
+    }
+
+    #[test]
+    fn test_config_from_u256() {
+        let c: Config = U256::from_str_radix("9784678070511645692802677866596", 10)
+            .unwrap()
+            .into();
+        assert_eq!(
+            c,
+            Config {
+                tick_spacing: 100,
+                fee: 1 << 63,
+                extension: U256::from(123)
+            }
+        );
+    }
+
+    #[test]
+    fn test_u256_from_config() {
+        let c: Config = Config {
+            tick_spacing: 100,
+            fee: 1 << 63,
+            extension: U256::from(123),
+        };
+        let v: U256 = c.into();
+        assert_eq!(
+            v,
+            U256::from_str_radix("9784678070511645692802677866596", 10).unwrap()
         );
     }
 }
