@@ -7,9 +7,24 @@ use core::ops::Add;
 pub struct NodeKey {
     pub token0: U256,
     pub token1: U256,
-    pub fee: u128,
+    pub config: Config,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Config {
+    pub fee: u64,
     pub tick_spacing: u32,
     pub extension: U256,
+}
+
+impl Into<Config> for U256 {
+    fn into(self) -> Config {
+        Config {
+            tick_spacing: (self % U256([4294967296, 0, 0, 0])).as_u32(),
+            fee: ((self >> 32) % U256([0, 1, 0, 0])).as_u64(),
+            extension: (self >> 96),
+        }
+    }
 }
 
 // The aggregate effect of all positions on a pool that are bounded by the specific tick

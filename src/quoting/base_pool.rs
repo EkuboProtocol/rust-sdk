@@ -32,6 +32,7 @@ impl Add for BasePoolResources {
     }
 }
 
+pub const FULL_RANGE_TICK_SPACING: u32 = 0;
 pub const MAX_TICK_SPACING: u32 = 698605;
 pub const MIN_TICK_AT_MAX_TICK_SPACING: i32 = MIN_TICK;
 pub const MAX_TICK_AT_MAX_TICK_SPACING: i32 = MAX_TICK;
@@ -64,11 +65,11 @@ impl BasePool {
         assert!(key.token0 < key.token1, "token0 must be less than token1");
         assert!(!key.token0.is_zero(), "token0 must be non-zero");
         assert!(
-            key.tick_spacing > 0,
+            key.config.tick_spacing > 0,
             "tick spacing must be greater than zero"
         );
         assert!(
-            key.tick_spacing <= MAX_TICK_SPACING,
+            key.config.tick_spacing <= MAX_TICK_SPACING,
             "tick spacing must be less than max tick spacing"
         );
 
@@ -76,7 +77,7 @@ impl BasePool {
         let mut last_tick: Option<i32> = None;
         let mut total_liquidity: u128 = 0;
         let mut active_liquidity: u128 = 0;
-        let spacing_i32 = key.tick_spacing as i32;
+        let spacing_i32 = key.config.tick_spacing as i32;
         for (i, tick) in sorted_ticks.iter().enumerate() {
             if let Some(last) = last_tick {
                 assert!(tick.index > last, "ticks must be sorted");
@@ -271,7 +272,7 @@ impl Pool for BasePool {
                 step_sqrt_ratio_limit,
                 amount_remaining,
                 is_token1,
-                self.key.fee,
+                self.key.config.fee,
             )
             .map_err(BasePoolQuoteError::FailedComputeSwapStep)?;
 
@@ -320,7 +321,7 @@ impl Pool for BasePool {
             tick_spacings_crossed: approximate_number_of_tick_spacings_crossed(
                 starting_sqrt_ratio,
                 sqrt_ratio,
-                self.key.tick_spacing,
+                self.key.config.tick_spacing,
             ),
         };
 
@@ -357,26 +358,28 @@ impl Pool for BasePool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quoting::types::TokenAmount;
+    use crate::quoting::types::{Config, TokenAmount};
     use alloc::vec;
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
 
-    fn node_key(tick_spacing: u32, fee: u128) -> NodeKey {
+    fn node_key(tick_spacing: u32, fee: u64) -> NodeKey {
         NodeKey {
             token0: TOKEN0,
             token1: TOKEN1,
-            tick_spacing,
-            fee,
-            extension: U256::zero(),
+            config: Config {
+                tick_spacing,
+                fee,
+                extension: U256::zero(),
+            },
         }
     }
 
     mod constructor_validation {
         use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
         use crate::quoting::base_pool::MAX_TICK_AT_MAX_TICK_SPACING;
-        use crate::quoting::types::Tick;
+        use crate::quoting::types::{Config, Tick};
 
         #[test]
         #[should_panic(expected = "token0 must be less than token1")]
@@ -385,9 +388,11 @@ mod tests {
                 NodeKey {
                     token0: U256::zero(),
                     token1: U256::zero(),
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: 0,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: 0,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -405,9 +410,11 @@ mod tests {
                 NodeKey {
                     token0: U256::zero(),
                     token1: U256::one(),
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: 0,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: 0,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -425,9 +432,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: 0,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: 0,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -445,9 +454,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING + 1,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING + 1,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -465,9 +476,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -485,9 +498,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -514,9 +529,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -543,9 +560,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -572,9 +591,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -603,9 +624,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap(),
@@ -634,9 +657,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap() - 1,
@@ -665,9 +690,11 @@ mod tests {
                 NodeKey {
                     token0: U256::one(),
                     token1: U256::one() + 1,
-                    extension: U256::zero(),
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
+                    config: Config {
+                        extension: U256::zero(),
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio: to_sqrt_ratio(0).unwrap() + 1,
@@ -825,7 +852,7 @@ mod tests {
     #[test]
     fn test_example_failing_quote() {
         let pool = BasePool::new(
-            node_key(100, 17014118346046923988514818429550592),
+            node_key(100, 922337203685477),
             BasePoolState {
                 sqrt_ratio: U256([16035209758820767612, 757181812420893, 0, 0]),
                 liquidity: 99999,

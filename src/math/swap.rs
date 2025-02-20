@@ -16,11 +16,10 @@ pub fn is_price_increasing(amount: i128, is_token1: bool) -> bool {
     (amount < 0) != is_token1
 }
 
-const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
+const TWO_POW_64: U256 = U256([0, 1, 0, 0]);
 
-pub fn amount_before_fee(after_fee: u128, fee: u128) -> Option<u128> {
-    let (quotient, remainder) =
-        (U256::from(after_fee) << 128).div_mod(TWO_POW_128 - U256::from(fee));
+pub fn amount_before_fee(after_fee: u128, fee: u64) -> Option<u128> {
+    let (quotient, remainder) = (U256::from(after_fee) << 64).div_mod(TWO_POW_64 - U256::from(fee));
 
     if !quotient.0[3].is_zero() || !quotient.0[2].is_zero() {
         None
@@ -33,9 +32,9 @@ pub fn amount_before_fee(after_fee: u128, fee: u128) -> Option<u128> {
     }
 }
 
-pub fn compute_fee(amount: u128, fee: u128) -> u128 {
+pub fn compute_fee(amount: u128, fee: u64) -> u128 {
     let num = U256::from(amount) * U256::from(fee);
-    let (quotient, remainder) = num.div_mod(TWO_POW_128);
+    let (quotient, remainder) = num.div_mod(TWO_POW_64);
     if !remainder.is_zero() {
         quotient.low_u128() + 1
     } else {
@@ -66,7 +65,7 @@ pub fn compute_step(
     sqrt_ratio_limit: U256,
     amount: i128,
     is_token1: bool,
-    fee: u128,
+    fee: u64,
 ) -> Result<SwapResult, ComputeStepError> {
     if amount.is_zero() || sqrt_ratio == sqrt_ratio_limit {
         return Ok(no_op(sqrt_ratio));
@@ -203,7 +202,7 @@ mod tests {
         let sqrt_ratio_limit = U256::zero();
         let amount = 0i128;
         let is_token1 = false;
-        let fee = 0u128;
+        let fee = 0u64;
 
         let result = compute_step(
             sqrt_ratio,
@@ -228,7 +227,7 @@ mod tests {
         let sqrt_ratio_limit = U256::zero();
         let amount = 0i128;
         let is_token1 = true;
-        let fee = 0u128;
+        let fee = 0u64;
 
         let result = compute_step(
             sqrt_ratio,
@@ -253,7 +252,7 @@ mod tests {
         let sqrt_ratio_limit = sqrt_ratio;
         let amount = 10_000i128;
         let is_token1 = true;
-        let fee = 0u128;
+        let fee = 0u64;
 
         let result = compute_step(
             sqrt_ratio,
@@ -278,7 +277,7 @@ mod tests {
         let sqrt_ratio_limit = MIN_SQRT_RATIO;
         let amount = 10_000i128;
         let is_token1 = false;
-        let fee = 1u128 << 127;
+        let fee = 1u64 << 63;
 
         let result = compute_step(
             sqrt_ratio,
@@ -306,7 +305,7 @@ mod tests {
         let sqrt_ratio_limit = MAX_SQRT_RATIO;
         let amount = 10_000i128;
         let is_token1 = true;
-        let fee = 1u128 << 127;
+        let fee = 1u64 << 63;
 
         let result = compute_step(
             sqrt_ratio,
@@ -334,7 +333,7 @@ mod tests {
         let sqrt_ratio_limit = MAX_SQRT_RATIO;
         let amount = -10_000i128;
         let is_token1 = false;
-        let fee = 1u128 << 127;
+        let fee = 1u64 << 63;
 
         let result = compute_step(
             sqrt_ratio,
@@ -362,7 +361,7 @@ mod tests {
         let sqrt_ratio_limit = MIN_SQRT_RATIO;
         let amount = -10_000i128;
         let is_token1 = true;
-        let fee = 1u128 << 127;
+        let fee = 1u64 << 63;
 
         let result = compute_step(
             sqrt_ratio,
@@ -391,7 +390,7 @@ mod tests {
             U256::from_dec_str("359186942860990600322450974511310889870").unwrap();
         let amount = -10_000i128;
         let is_token1 = false;
-        let fee = 1u128 << 127;
+        let fee = 1u64 << 63;
 
         let result = compute_step(
             sqrt_ratio,
@@ -417,7 +416,7 @@ mod tests {
             U256::from_dec_str("323268248574891540290205877060179800883").unwrap();
         let amount = -10_000i128;
         let is_token1 = true;
-        let fee = 1u128 << 127;
+        let fee = 1u64 << 63;
 
         let result = compute_step(
             sqrt_ratio,

@@ -9,6 +9,8 @@ use alloc::vec;
 use core::ops::Add;
 use num_traits::{ToPrimitive, Zero};
 
+use super::types::Config;
+
 #[derive(Clone, Copy)]
 pub struct OraclePoolState {
     pub base_pool_state: BasePoolState,
@@ -80,9 +82,11 @@ impl OraclePool {
                 NodeKey {
                     token0,
                     token1,
-                    fee: 0,
-                    tick_spacing: MAX_TICK_SPACING,
-                    extension,
+                    config: Config {
+                        fee: 0,
+                        tick_spacing: MAX_TICK_SPACING,
+                        extension,
+                    },
                 },
                 BasePoolState {
                     sqrt_ratio,
