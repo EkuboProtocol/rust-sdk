@@ -1,15 +1,12 @@
+use super::types::Config;
+use crate::math::tick::{MAX_TICK, MIN_TICK};
 use crate::math::uint::U256;
-use crate::quoting::base_pool::{
-    BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState,
-    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MAX_TICK_AT_MAX_TICK_SPACING, MAX_TICK_SPACING,
-    MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
-};
+use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
+use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
 use alloc::vec;
 use core::ops::Add;
 use num_traits::{ToPrimitive, Zero};
-
-use super::types::Config;
 
 #[derive(Clone, Copy)]
 pub struct OraclePoolState {
@@ -41,7 +38,6 @@ pub struct OraclePool {
 
 impl OraclePool {
     pub fn new(
-        token0: U256,
         token1: U256,
         extension: U256,
         sqrt_ratio: U256,
@@ -53,23 +49,16 @@ impl OraclePool {
         let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
             (None, vec![], 0)
         } else {
-            let (active_tick_index, liquidity) = if sqrt_ratio < MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
-            {
-                (None, 0)
-            } else if sqrt_ratio <= MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                (Some(0), active_liquidity)
-            } else {
-                (Some(1), 0)
-            };
+            let (active_tick_index, liquidity) = (Some(0), active_liquidity);
             (
                 active_tick_index,
                 vec![
                     Tick {
-                        index: MIN_TICK_AT_MAX_TICK_SPACING,
+                        index: MIN_TICK,
                         liquidity_delta: signed_liquidity,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: -signed_liquidity,
                     },
                 ],
@@ -80,11 +69,11 @@ impl OraclePool {
         OraclePool {
             base_pool: BasePool::new(
                 NodeKey {
-                    token0,
+                    token0: NATIVE_TOKEN_ADDRESS,
                     token1,
                     config: Config {
                         fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
+                        tick_spacing: 0,
                         extension,
                     },
                 },
@@ -166,48 +155,23 @@ impl Pool for OraclePool {
 mod tests {
     use crate::math::tick::to_sqrt_ratio;
     use crate::math::uint::U256;
-    use crate::quoting::base_pool::{
-        MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MAX_TICK_AT_MAX_TICK_SPACING,
-        MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
-    };
+    use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;
     use crate::quoting::oracle_pool::OraclePool;
     use crate::quoting::types::{Pool, QuoteParams, TokenAmount};
-
-    #[test]
-    fn test_max_values() {
-        assert_eq!(
-            to_sqrt_ratio(MIN_TICK_AT_MAX_TICK_SPACING).unwrap(),
-            MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
-        );
-        assert_eq!(
-            to_sqrt_ratio(MAX_TICK_AT_MAX_TICK_SPACING).unwrap(),
-            MAX_SQRT_RATIO_AT_MAX_TICK_SPACING
-        );
-    }
 
     mod constructor_validation {
         use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
         use crate::math::uint::U256;
-        use crate::quoting::base_pool::{
-            MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
-        };
         use crate::quoting::oracle_pool::OraclePool;
         use crate::quoting::types::Pool;
 
         #[test]
         fn test_max_price_constructor() {
             assert_eq!(
-                OraclePool::new(
-                    U256::one(),
-                    U256::one() + 1,
-                    U256::zero(),
-                    MAX_SQRT_RATIO,
-                    1,
-                    0,
-                )
-                .get_state()
-                .base_pool_state
-                .liquidity,
+                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0,)
+                    .get_state()
+                    .base_pool_state
+                    .liquidity,
                 1
             );
         }
@@ -215,67 +179,44 @@ mod tests {
         #[test]
         fn test_min_price_constructor() {
             assert_eq!(
-                OraclePool::new(
-                    U256::one(),
-                    U256::one() + 1,
-                    U256::zero(),
-                    MIN_SQRT_RATIO,
-                    1,
-                    0,
-                )
-                .get_state()
-                .base_pool_state
-                .liquidity,
+                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0,)
+                    .get_state()
+                    .base_pool_state
+                    .liquidity,
                 1
             );
         }
 
         #[test]
-        fn test_min_sqrt_ratio_at_max_tick_spacing() {
+        fn test_min_sqrt_ratio() {
             assert_eq!(
-                OraclePool::new(
-                    U256::one(),
-                    U256::one() + 1,
-                    U256::zero(),
-                    MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                    1,
-                    0,
-                )
-                .get_state()
-                .base_pool_state
-                .liquidity,
+                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0,)
+                    .get_state()
+                    .base_pool_state
+                    .liquidity,
                 1
             );
         }
 
         #[test]
-        fn test_max_sqrt_ratio_at_max_tick_spacing() {
+        fn test_max_sqrt_ratio() {
             assert_eq!(
-                OraclePool::new(
-                    U256::one(),
-                    U256::one() + 1,
-                    U256::zero(),
-                    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                    1,
-                    0,
-                )
-                .get_state()
-                .base_pool_state
-                .liquidity,
+                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0,)
+                    .get_state()
+                    .base_pool_state
+                    .liquidity,
                 1
             );
         }
     }
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+    const TOKEN: U256 = U256([1, 0, 0, 0]);
     const EXTENSION: U256 = U256([3, 0, 0, 0]);
 
     #[test]
     fn test_quote_token1_input_update() {
         let pool = OraclePool::new(
-            TOKEN0,
-            TOKEN1,
+            TOKEN,
             EXTENSION,
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
@@ -285,7 +226,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: TOKEN1,
+                token: TOKEN,
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -310,8 +251,7 @@ mod tests {
     #[test]
     fn test_quote_token0_input() {
         let pool = OraclePool::new(
-            TOKEN0,
-            TOKEN1,
+            TOKEN,
             EXTENSION,
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
@@ -321,7 +261,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: TOKEN0,
+                token: NATIVE_TOKEN_ADDRESS,
             },
             sqrt_ratio_limit: None,
             override_state: None,

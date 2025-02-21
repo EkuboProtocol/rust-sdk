@@ -1,5 +1,5 @@
 use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
+use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
@@ -34,10 +34,6 @@ impl Add for BasePoolResources {
 
 pub const FULL_RANGE_TICK_SPACING: u32 = 0;
 pub const MAX_TICK_SPACING: u32 = 698605;
-pub const MIN_TICK_AT_MAX_TICK_SPACING: i32 = MIN_TICK;
-pub const MAX_TICK_AT_MAX_TICK_SPACING: i32 = MAX_TICK;
-pub const MIN_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = MIN_SQRT_RATIO;
-pub const MAX_SQRT_RATIO_AT_MAX_TICK_SPACING: U256 = MAX_SQRT_RATIO;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BasePoolQuoteError {
@@ -78,7 +74,7 @@ impl BasePool {
                 assert!(tick.index > last, "ticks must be sorted");
             };
             assert!(
-                (tick.index % spacing_i32).is_zero(),
+                spacing_i32.is_zero() || (tick.index % spacing_i32).is_zero(),
                 "all ticks must be multiple of tick_spacing"
             );
             last_tick = Some(tick.index);
@@ -373,7 +369,7 @@ mod tests {
 
     mod constructor_validation {
         use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
-        use crate::quoting::base_pool::MAX_TICK_AT_MAX_TICK_SPACING;
+        use crate::math::tick::MAX_TICK;
         use crate::quoting::types::{Config, Tick};
 
         #[test]
@@ -504,7 +500,7 @@ mod tests {
                 },
                 vec![
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: 0,
                     },
                     Tick {
@@ -539,7 +535,7 @@ mod tests {
                         liquidity_delta: 1,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING - 1,
+                        index: MAX_TICK - 1,
                         liquidity_delta: -1,
                     },
                 ],
@@ -570,7 +566,7 @@ mod tests {
                         liquidity_delta: 2,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: -1,
                     },
                 ],
@@ -601,7 +597,7 @@ mod tests {
                         liquidity_delta: 2,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: -2,
                     },
                 ],
@@ -634,7 +630,7 @@ mod tests {
                         liquidity_delta: 2,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: -2,
                     },
                 ],
@@ -667,7 +663,7 @@ mod tests {
                         liquidity_delta: 2,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: -2,
                     },
                 ],
@@ -700,7 +696,7 @@ mod tests {
                         liquidity_delta: 2,
                     },
                     Tick {
-                        index: MAX_TICK_AT_MAX_TICK_SPACING,
+                        index: MAX_TICK,
                         liquidity_delta: -2,
                     },
                 ],

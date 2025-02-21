@@ -35,6 +35,7 @@ const MASKS: [U256; 27] = [
 pub const MIN_TICK: i32 = -88722835;
 pub const MAX_TICK: i32 = 88722835;
 pub const MAX_TICK_SPACING: u32 = 698605;
+pub const FULL_RANGE_TICK_SPACING: u32 = 0;
 
 pub const MIN_SQRT_RATIO: U256 = U256([447090492618910, 1, 0, 0]);
 pub const MAX_SQRT_RATIO: U256 = U256([
