@@ -399,8 +399,7 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(expected = "token0 must be non-zero")]
-        fn test_token0_non_zero() {
+        fn test_token0_zero() {
             BasePool::new(
                 NodeKey {
                     token0: U256::zero(),
@@ -421,8 +420,7 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(expected = "tick spacing must be greater than zero")]
-        fn test_tick_spacing_non_zero() {
+        fn test_tick_spacing_zero() {
             BasePool::new(
                 NodeKey {
                     token0: U256::one(),

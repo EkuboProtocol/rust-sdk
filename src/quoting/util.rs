@@ -37,6 +37,10 @@ pub fn approximate_number_of_tick_spacings_crossed(
     ending_sqrt_ratio: U256,
     tick_spacing: u32,
 ) -> u32 {
+    if tick_spacing == 0 {
+        return 0;
+    }
+
     let start: f64 = u256_to_float_base_x128(starting_sqrt_ratio);
     let end: f64 = u256_to_float_base_x128(ending_sqrt_ratio);
     let ticks_crossed = ((start.ln() - end.ln()).abs() / LOG_BASE_SQRT_TICK_SIZE) as u32;
@@ -202,6 +206,10 @@ mod tests {
 
     #[test]
     fn test_approximate_number_of_tick_spacings_crossed_for_doubling() {
+        assert_eq!(
+            approximate_number_of_tick_spacings_crossed(MIN_SQRT_RATIO, MIN_SQRT_RATIO * 2, 0),
+            0
+        );
         // 2x sqrt ratio increase ~= 4x price increase
         assert_eq!(
             approximate_number_of_tick_spacings_crossed(U256([0, 0, 1, 0]), U256([0, 0, 2, 0]), 1),
