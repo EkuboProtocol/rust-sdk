@@ -22,7 +22,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "evm_ekubo_sdk"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "num-traits",
  "uint",
