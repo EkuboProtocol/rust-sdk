@@ -63,11 +63,6 @@ pub struct BasePool {
 impl BasePool {
     pub fn new(key: NodeKey, state: BasePoolState, sorted_ticks: Vec<Tick>) -> Self {
         assert!(key.token0 < key.token1, "token0 must be less than token1");
-        assert!(!key.token0.is_zero(), "token0 must be non-zero");
-        assert!(
-            key.config.tick_spacing > 0,
-            "tick spacing must be greater than zero"
-        );
         assert!(
             key.config.tick_spacing <= MAX_TICK_SPACING,
             "tick spacing must be less than max tick spacing"
