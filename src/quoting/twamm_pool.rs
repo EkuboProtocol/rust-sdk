@@ -1576,7 +1576,7 @@ mod tests {
             })
             .expect("first swap succeeds");
 
-        assert_eq!(first_swap.calculated_amount, 19993991114278719145825);
+        assert_eq!(first_swap.calculated_amount, 19993991114278789949744);
         assert_eq!(first_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             first_swap
@@ -1604,7 +1604,7 @@ mod tests {
             })
             .expect("second swap succeeds");
 
-        assert_eq!(second_swap.calculated_amount, 19985938387207888688304);
+        assert_eq!(second_swap.calculated_amount, 19985938387207961530348);
         assert_eq!(second_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             second_swap

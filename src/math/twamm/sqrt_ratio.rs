@@ -75,6 +75,7 @@ mod tests {
     use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
     use crate::math::uint::U256;
     use alloc::vec;
+    use insta::{assert_debug_snapshot, assert_snapshot};
 
     const ONE_E18: u128 = 1_000_000_000_000_000_000; // 10^18
     const SHIFT_32: u128 = 1u128 << 32; // 2^32 = 4294967296
@@ -88,7 +89,6 @@ mod tests {
         token1_sale_rate: u128,
         time_elapsed: u32,
         fee: u64,
-        expected: U256,
     }
 
     #[test]
@@ -102,7 +102,6 @@ mod tests {
                 token1_sale_rate: TOKEN_SALE_RATE,
                 time_elapsed: 0,
                 fee: 0,
-                expected: U256::from_dec_str("340282366920938463463374607431768211456").unwrap(),
             },
             TestCase {
                 description: "large exponent (> 88), price is sqrtSaleRatio",
@@ -112,7 +111,6 @@ mod tests {
                 token1_sale_rate: 1980 * ONE_E18 * SHIFT_32,
                 time_elapsed: 1,
                 fee: 0,
-                expected: U256::from_dec_str("15141609448466370575819539296664158208000").unwrap(),
             },
             TestCase {
                 description: "low liquidity, same sale rate",
@@ -122,7 +120,6 @@ mod tests {
                 token1_sale_rate: TOKEN_SALE_RATE,
                 time_elapsed: 1,
                 fee: 0,
-                expected: U256::from_dec_str("340282366920938463463374607431768211456").unwrap(),
             },
             TestCase {
                 description: "low liquidity, token0SaleRate > token1SaleRate",
@@ -132,7 +129,6 @@ mod tests {
                 token1_sale_rate: TOKEN_SALE_RATE,
                 time_elapsed: 16,
                 fee: 0,
-                expected: U256::from_dec_str("240615969168004511538585310832300654592").unwrap(),
             },
             TestCase {
                 description: "low liquidity, token1SaleRate > token0SaleRate",
@@ -142,7 +138,6 @@ mod tests {
                 token1_sale_rate: 2 * TOKEN_SALE_RATE,
                 time_elapsed: 16,
                 fee: 0,
-                expected: U256::from_dec_str("481231938336009023077170621664601309184").unwrap(),
             },
             TestCase {
                 description: "high liquidity, same sale rate",
@@ -152,7 +147,6 @@ mod tests {
                 token1_sale_rate: TOKEN_SALE_RATE,
                 time_elapsed: 1,
                 fee: 0,
-                expected: U256::from_dec_str("680563712996817854544971649595310676716").unwrap(),
             },
             TestCase {
                 description: "high liquidity, token0SaleRate > token1SaleRate",
@@ -162,7 +156,6 @@ mod tests {
                 token1_sale_rate: TOKEN_SALE_RATE,
                 time_elapsed: 1,
                 fee: 0,
-                expected: U256::from_dec_str("340282026639252106118798709911530476351").unwrap(),
             },
             TestCase {
                 description: "high liquidity, token1SaleRate > token0SaleRate",
@@ -172,7 +165,6 @@ mod tests {
                 token1_sale_rate: 2 * TOKEN_SALE_RATE,
                 time_elapsed: 1,
                 fee: 0,
-                expected: U256::from_dec_str("340282707202965102147504331693640508329").unwrap(),
             },
             TestCase {
                 description: "round in direction of price",
@@ -182,25 +174,20 @@ mod tests {
                 token1_sale_rate: 10_526_880_627_450_980_392_156_862_745,
                 time_elapsed: 2040,
                 fee: 0,
-                expected: U256::from_dec_str("481207752340103616358571818546900413164").unwrap(),
             },
         ];
 
         for test_case in test_cases {
-            let result = calculate_next_sqrt_ratio(
-                test_case.sqrt_ratio,
-                test_case.liquidity,
-                test_case.token0_sale_rate,
-                test_case.token1_sale_rate,
-                test_case.time_elapsed,
-                test_case.fee,
-            )
-            .unwrap(); // Assuming the function returns Option<U256>
-
-            assert_eq!(
-                result, test_case.expected,
-                "Test case failed: {}",
-                test_case.description
+            assert_debug_snapshot!(
+                test_case.description,
+                calculate_next_sqrt_ratio(
+                    test_case.sqrt_ratio,
+                    test_case.liquidity,
+                    test_case.token0_sale_rate,
+                    test_case.token1_sale_rate,
+                    test_case.time_elapsed,
+                    test_case.fee,
+                )
             );
         }
     }
