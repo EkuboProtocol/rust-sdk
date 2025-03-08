@@ -3,7 +3,6 @@ use crate::math::twamm::exp2::exp2;
 use crate::math::uint::U256;
 use num_traits::Zero;
 
-const EXPONENT_LIMIT: U256 = U256([0, 64, 0, 0]);
 const TWO_POW_64: U256 = U256([0, 1, 0, 0]);
 
 pub fn calculate_next_sqrt_ratio(
@@ -75,7 +74,7 @@ mod tests {
     use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
     use crate::math::uint::U256;
     use alloc::vec;
-    use insta::{assert_debug_snapshot, assert_snapshot};
+    use insta::assert_debug_snapshot;
 
     const ONE_E18: u128 = 1_000_000_000_000_000_000; // 10^18
     const SHIFT_32: u128 = 1u128 << 32; // 2^32 = 4294967296

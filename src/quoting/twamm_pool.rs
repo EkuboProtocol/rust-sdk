@@ -442,7 +442,7 @@ mod tests {
         }
 
         #[test]
-        fn test_MIN_SQRT_RATIO() {
+        fn test_min_sqrt_ratio() {
             assert_eq!(
                 TwammPool::new(
                     U256::one(),
@@ -464,7 +464,7 @@ mod tests {
         }
 
         #[test]
-        fn test_MAX_SQRT_RATIO() {
+        fn test_max_sqrt_ratio() {
             assert_eq!(
                 TwammPool::new(
                     U256::one(),
