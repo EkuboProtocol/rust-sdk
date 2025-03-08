@@ -95,7 +95,7 @@ mod tests {
     fn test_calculate_next_sqrt_ratio() {
         let test_cases = vec![
             TestCase {
-                description: "liquidity is zero, price is sqrtSaleRatio",
+                description: "zero_liquidity_price_eq_sale_ratio",
                 sqrt_ratio: U256::zero(),
                 liquidity: 0,
                 token0_sale_rate: TOKEN_SALE_RATE,
@@ -104,7 +104,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "large exponent (> 88), price is sqrtSaleRatio",
+                description: "large_exponent_price_sqrt_ratio",
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1,
                 token0_sale_rate: TOKEN_SALE_RATE,
@@ -113,7 +113,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "low liquidity, same sale rate",
+                description: "low_liquiidty_same_sale_ratio",
                 sqrt_ratio: U256::from(2u128) << 128,
                 liquidity: 1,
                 token0_sale_rate: TOKEN_SALE_RATE,
@@ -122,7 +122,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "low liquidity, token0SaleRate > token1SaleRate",
+                description: "low_liquidity_token0_gt_token1",
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1,
                 token0_sale_rate: 2 * TOKEN_SALE_RATE,
@@ -131,7 +131,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "low liquidity, token1SaleRate > token0SaleRate",
+                description: "low_liquidity_token1_gt_token0",
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1,
                 token0_sale_rate: TOKEN_SALE_RATE,
@@ -140,7 +140,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "high liquidity, same sale rate",
+                description: "high_liquidity_same_sale_rate",
                 sqrt_ratio: U256::from(2u128) << 128,
                 liquidity: 1_000_000 * ONE_E18,
                 token0_sale_rate: TOKEN_SALE_RATE,
@@ -149,7 +149,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "high liquidity, token0SaleRate > token1SaleRate",
+                description: "high_liquidity_token0_gt_token1",
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000 * ONE_E18,
                 token0_sale_rate: 2 * TOKEN_SALE_RATE,
@@ -158,7 +158,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "high liquidity, token1SaleRate > token0SaleRate",
+                description: "high_liquidity_token1_gt_token0",
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000 * ONE_E18,
                 token0_sale_rate: TOKEN_SALE_RATE,
@@ -167,7 +167,7 @@ mod tests {
                 fee: 0,
             },
             TestCase {
-                description: "round in direction of price",
+                description: "round_in_direction_of_price",
                 sqrt_ratio: U256::from_dec_str("481231811499356508086519009265716982182").unwrap(),
                 liquidity: 70_710_696_755_630_728_101_718_334,
                 token0_sale_rate: 10_526_880_627_450_980_392_156_862_745,
