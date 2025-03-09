@@ -163,8 +163,7 @@ pub fn exp2(x: u128) -> u128 {
     mul_shift!(0x1, U256([12786308645202655659, 0, 1, 0]));
 
     // Final adjustment: shift right by 63 - (x >> 64). (x >> 64) is the integer part.
-    let shift = (63 - (x >> 64)) as u32;
-    result >>= shift;
+    result >>= 63 - (x >> 64);
 
     result.as_u128()
 }
@@ -178,5 +177,7 @@ mod tests {
         assert_eq!(exp2(0), 1 << 64);
         assert_eq!(exp2(1 << 64), 2 << 64);
         assert_eq!(exp2(2 << 64), 4 << 64);
+        assert_eq!(exp2(3 << 64), 8 << 64);
+        assert_eq!(exp2(63 << 64), 9223372036854775808 << 64);
     }
 }

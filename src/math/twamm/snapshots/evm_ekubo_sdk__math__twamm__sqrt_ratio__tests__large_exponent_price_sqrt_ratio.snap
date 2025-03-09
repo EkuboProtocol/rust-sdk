@@ -2,6 +2,4 @@
 source: src/math/twamm/sqrt_ratio.rs
 expression: "calculate_next_sqrt_ratio(test_case.sqrt_ratio, test_case.liquidity,\ntest_case.token0_sale_rate, test_case.token1_sale_rate,\ntest_case.time_elapsed, test_case.fee,)"
 ---
-Some(
-    15141609448466370575819539296664158208000,
-)
+15141609448466370575828005229206655991808

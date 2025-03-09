@@ -249,8 +249,7 @@ impl Pool for TwammPool {
                     token1_sale_rate,
                     time_elapsed as u32,
                     config.fee,
-                )
-                .ok_or(TwammPoolQuoteError::FailedCalculateNextSqrtRatio)?;
+                );
 
                 let (token, amount) = if current_sqrt_ratio < next_sqrt_ratio {
                     (token1, amount1)
@@ -983,7 +982,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 2555);
+        assert_eq!(quote.calculated_amount, 2553);
         assert_eq!(
             quote
                 .execution_resources
@@ -1075,7 +1074,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 989);
+        assert_eq!(quote.calculated_amount, 990);
         assert_eq!(
             quote
                 .execution_resources
@@ -1121,7 +1120,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 717);
+        assert_eq!(quote.calculated_amount, 750);
         assert_eq!(
             quote
                 .execution_resources
@@ -1167,7 +1166,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 984);
+        assert_eq!(quote.calculated_amount, 983);
         assert_eq!(
             quote
                 .execution_resources
@@ -1213,7 +1212,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 983);
+        assert_eq!(quote.calculated_amount, 982);
         assert_eq!(
             quote
                 .execution_resources
@@ -1259,7 +1258,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 994);
+        assert_eq!(quote.calculated_amount, 995);
         assert_eq!(
             quote
                 .execution_resources
@@ -1305,7 +1304,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 989);
+        assert_eq!(quote.calculated_amount, 990);
         assert_eq!(
             quote
                 .execution_resources
@@ -1358,7 +1357,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 989);
+        assert_eq!(quote.calculated_amount, 990);
         assert_eq!(
             quote
                 .execution_resources
@@ -1576,7 +1575,7 @@ mod tests {
             })
             .expect("first swap succeeds");
 
-        assert_eq!(first_swap.calculated_amount, 19993991114278789949744);
+        assert_eq!(first_swap.calculated_amount, 19991992064968752441804);
         assert_eq!(first_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             first_swap
@@ -1604,7 +1603,7 @@ mod tests {
             })
             .expect("second swap succeeds");
 
-        assert_eq!(second_swap.calculated_amount, 19985938387207961530348);
+        assert_eq!(second_swap.calculated_amount, 19983881763398581561053);
         assert_eq!(second_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             second_swap
