@@ -1074,7 +1074,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 990);
+        assert_eq!(quote.calculated_amount, 989);
         assert_eq!(
             quote
                 .execution_resources
@@ -1120,7 +1120,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 750);
+        assert_eq!(quote.calculated_amount, 717);
         assert_eq!(
             quote
                 .execution_resources
@@ -1212,7 +1212,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 982);
+        assert_eq!(quote.calculated_amount, 983);
         assert_eq!(
             quote
                 .execution_resources
@@ -1304,7 +1304,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 990);
+        assert_eq!(quote.calculated_amount, 989);
         assert_eq!(
             quote
                 .execution_resources
@@ -1357,7 +1357,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 990);
+        assert_eq!(quote.calculated_amount, 989);
         assert_eq!(
             quote
                 .execution_resources
@@ -1575,7 +1575,7 @@ mod tests {
             })
             .expect("first swap succeeds");
 
-        assert_eq!(first_swap.calculated_amount, 19991992064968752441804);
+        assert_eq!(first_swap.calculated_amount, 19993991114278789950510);
         assert_eq!(first_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             first_swap
@@ -1603,7 +1603,7 @@ mod tests {
             })
             .expect("second swap succeeds");
 
-        assert_eq!(second_swap.calculated_amount, 19983881763398581561053);
+        assert_eq!(second_swap.calculated_amount, 19985938387207961531114);
         assert_eq!(second_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             second_swap

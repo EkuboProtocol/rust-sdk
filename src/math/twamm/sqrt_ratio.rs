@@ -1,7 +1,7 @@
 use crate::math::muldiv::muldiv;
 use crate::math::twamm::exp2::exp2;
 use crate::math::uint::U256;
-use num_traits::{ToPrimitive, Zero};
+use num_traits::Zero;
 
 const TWO_POW_64: U256 = U256([0, 1, 0, 0]);
 
@@ -19,18 +19,29 @@ fn compute_sqrt_sale_ratio(sale_rate_token0: u128, sale_rate_token1: u128) -> U2
     }
 }
 
-fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> i128 {
-    if sqrt_sale_ratio > sqrt_ratio {
-        (((sqrt_sale_ratio - sqrt_ratio) << 64) / (sqrt_sale_ratio + sqrt_ratio))
-            .low_u128()
-            .to_i128()
-            .unwrap()
+fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> (U256, bool) {
+    if sqrt_sale_ratio >= sqrt_ratio {
+        (
+            muldiv(
+                sqrt_sale_ratio - sqrt_ratio,
+                U256([0, 0, 1, 0]),
+                sqrt_sale_ratio + sqrt_ratio,
+                false,
+            )
+            .unwrap(),
+            false,
+        )
     } else {
-        (((sqrt_ratio - sqrt_sale_ratio) << 64) / (sqrt_sale_ratio + sqrt_ratio))
-            .low_u128()
-            .to_i128()
-            .map(|v| -v)
-            .unwrap()
+        (
+            muldiv(
+                sqrt_ratio - sqrt_sale_ratio,
+                U256([0, 0, 1, 0]),
+                sqrt_sale_ratio + sqrt_ratio,
+                false,
+            )
+            .unwrap(),
+            true,
+        )
     }
 }
 
@@ -48,9 +59,9 @@ pub fn calculate_next_sqrt_ratio(
         return sqrt_sale_ratio;
     }
 
-    let c = compute_c(sqrt_sale_ratio, sqrt_ratio);
+    let (c, negative) = compute_c(sqrt_sale_ratio, sqrt_ratio);
 
-    if c == 0 || liquidity == 0 {
+    if c.is_zero() || liquidity == 0 {
         sqrt_sale_ratio
     } else {
         let sale_rate = ((U256::from(sale_rate_token1) * U256::from(sale_rate_token0))
@@ -67,15 +78,25 @@ pub fn calculate_next_sqrt_ratio(
             return sqrt_sale_ratio;
         }
 
-        let e_pow_exponent = exp2(exponent.low_u128()).to_i128().unwrap();
+        let e_pow_exponent = U256::from(exp2(exponent.low_u128())) << 64;
 
-        let mut sqrt_ratio_next = muldiv(
-            sqrt_sale_ratio,
-            U256::from((e_pow_exponent - c).abs()),
-            U256::from((e_pow_exponent + c).abs()),
-            round_up,
-        )
-        .unwrap_or(sqrt_sale_ratio);
+        let mut sqrt_ratio_next = if negative {
+            muldiv(
+                sqrt_sale_ratio,
+                e_pow_exponent + c,
+                e_pow_exponent.abs_diff(c),
+                round_up,
+            )
+            .unwrap_or(sqrt_sale_ratio)
+        } else {
+            muldiv(
+                sqrt_sale_ratio,
+                e_pow_exponent + c,
+                e_pow_exponent.abs_diff(c),
+                round_up,
+            )
+            .unwrap_or(sqrt_sale_ratio)
+        };
 
         // we should never exceed the sale ratio
         if round_up {
@@ -90,7 +111,8 @@ pub fn calculate_next_sqrt_ratio(
 
 #[cfg(test)]
 mod tests {
-    use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
+    use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+    use crate::math::twamm::sqrt_ratio::{calculate_next_sqrt_ratio, compute_c};
     use crate::math::uint::U256;
     use alloc::vec;
     use insta::assert_debug_snapshot;
@@ -107,6 +129,52 @@ mod tests {
         token1_sale_rate: u128,
         time_elapsed: u32,
         fee: u64,
+    }
+
+    #[test]
+    fn test_compute_c() {
+        assert_eq!(
+            compute_c(U256::from(0), U256::from(1)),
+            (U256::from(1) << 128, false)
+        );
+        assert_eq!(
+            compute_c(U256::from(1), U256::from(0)),
+            (U256::from(1) << 128, true)
+        );
+
+        assert_eq!(
+            compute_c(U256([0, 0, 1, 0]), U256([0, 0, 2, 0])),
+            (
+                U256::from_dec_str("113427455640312821154458202477256070485").unwrap(),
+                false
+            )
+        );
+        assert_eq!(
+            compute_c(U256([0, 0, 2, 0]), U256([0, 0, 1, 0])),
+            (
+                U256::from_dec_str("113427455640312821154458202477256070485").unwrap(),
+                true
+            )
+        );
+        assert_eq!(
+            compute_c(U256([0, 0, 1, 0]), U256([0, 0, 1, 0])),
+            (U256::from(0), false)
+        );
+
+        assert_eq!(
+            compute_c(MIN_SQRT_RATIO, MAX_SQRT_RATIO),
+            (
+                U256::from_dec_str("340282366920938463463374607431768211453").unwrap(),
+                false
+            )
+        );
+        assert_eq!(
+            compute_c(MAX_SQRT_RATIO, MIN_SQRT_RATIO),
+            (
+                U256::from_dec_str("340282366920938463463374607431768211453").unwrap(),
+                true
+            )
+        );
     }
 
     #[test]
@@ -191,6 +259,16 @@ mod tests {
                 token0_sale_rate: 10_526_880_627_450_980_392_156_862_745,
                 token1_sale_rate: 10_526_880_627_450_980_392_156_862_745,
                 time_elapsed: 2040,
+                fee: 0,
+            },
+            TestCase {
+                description: "example0_solidity",
+                sqrt_ratio: U256::from_dec_str("3402823669209384634633746074317682114560000")
+                    .unwrap(),
+                liquidity: 10_000,
+                token0_sale_rate: 458864027,
+                token1_sale_rate: 280824784,
+                time_elapsed: 46_800,
                 fee: 0,
             },
         ];
