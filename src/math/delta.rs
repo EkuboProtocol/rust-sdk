@@ -16,7 +16,7 @@ fn sort_ratios(sqrt_ratio_a: U256, sqrt_ratio_b: U256) -> Option<(U256, U256)> {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AmountDeltaError {
     ZeroRatio,
     Overflow,

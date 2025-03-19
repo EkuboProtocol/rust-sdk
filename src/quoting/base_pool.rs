@@ -8,7 +8,7 @@ use core::ops::{Add, AddAssign};
 use num_traits::Zero;
 
 // Resources consumed during any swap execution.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct BasePoolResources {
     pub no_override_price_change: u32,
     pub initialized_ticks_crossed: u32,
@@ -35,7 +35,7 @@ impl Add for BasePoolResources {
 pub const FULL_RANGE_TICK_SPACING: u32 = 0;
 pub const MAX_TICK_SPACING: u32 = 698605;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BasePoolQuoteError {
     InvalidToken,
     InvalidSqrtRatioLimit,
@@ -43,13 +43,14 @@ pub enum BasePoolQuoteError {
     FailedComputeSwapStep(ComputeStepError),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BasePoolState {
     pub sqrt_ratio: U256,
     pub liquidity: u128,
     pub active_tick_index: Option<usize>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BasePool {
     key: NodeKey,
     state: BasePoolState,
