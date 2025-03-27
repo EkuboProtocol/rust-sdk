@@ -3,14 +3,14 @@ use core::fmt::Debug;
 use core::ops::Add;
 
 // Unique key identifying the pool.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct NodeKey {
     pub token0: U256,
     pub token1: U256,
     pub config: Config,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Config {
     pub fee: u64,
     pub tick_spacing: u32,
@@ -36,7 +36,7 @@ impl From<Config> for U256 {
 }
 
 // The aggregate effect of all positions on a pool that are bounded by the specific tick
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Tick {
     pub index: i32,
     pub liquidity_delta: i128,
@@ -50,7 +50,7 @@ pub struct TokenAmount {
 }
 
 // Parameters for a quote operation.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct QuoteParams<S, M> {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
@@ -59,7 +59,7 @@ pub struct QuoteParams<S, M> {
 }
 
 // The result of all pool swaps is some input and output delta
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
@@ -72,7 +72,7 @@ pub struct Quote<R, S> {
 // Commonly used as meta
 pub type BlockTimestamp = u64;
 
-pub trait Pool: Send + Sync {
+pub trait Pool: Send + Sync + Debug + Clone {
     type Resources: Add<Output = Self::Resources> + Default + Copy;
     type State: Copy;
     type QuoteError: Debug + Copy;

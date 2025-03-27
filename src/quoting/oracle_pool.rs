@@ -8,13 +8,13 @@ use alloc::vec;
 use core::ops::Add;
 use num_traits::{ToPrimitive, Zero};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OraclePoolState {
     pub base_pool_state: BasePoolState,
     pub last_snapshot_time: u64,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct OraclePoolResources {
     pub base_pool_resources: BasePoolResources,
     pub snapshots_written: u32,
@@ -31,6 +31,7 @@ impl Add for OraclePoolResources {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct OraclePool {
     base_pool: BasePool,
     last_snapshot_time: u64,
