@@ -806,7 +806,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -859,7 +858,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -912,7 +910,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -965,7 +962,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1011,7 +1007,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1057,7 +1052,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1103,7 +1097,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1149,7 +1142,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1195,7 +1187,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1241,7 +1232,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1287,7 +1277,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
@@ -1340,7 +1329,6 @@ mod tests {
             quote
                 .execution_resources
                 .full_range_pool_resources
-                .initialized_ticks_crossed,
             0
         );
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
