@@ -390,7 +390,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -412,7 +412,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -434,7 +434,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -456,7 +456,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -805,7 +805,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -858,7 +858,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -911,7 +911,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -964,7 +964,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1010,7 +1010,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1056,7 +1056,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1102,7 +1102,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1148,7 +1148,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1194,7 +1194,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1240,7 +1240,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1286,7 +1286,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1339,7 +1339,7 @@ mod tests {
         assert_eq!(
             quote
                 .execution_resources
-                .base_pool_resources
+                .full_range_pool_resources
                 .initialized_ticks_crossed,
             0
         );
@@ -1477,14 +1477,14 @@ mod tests {
 
         assert_eq!(
             quote_token0_with_override.calculated_amount,
-            pool.base_pool
+            pool.full_range_pool
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         token: TOKEN0,
                         amount: 10u128.pow(18) as i128,
                     },
                     meta: (),
-                    override_state: Some(state_after_fully_executed.base_pool_state),
+                    override_state: Some(state_after_fully_executed.full_range_pool_state),
                     sqrt_ratio_limit: None,
                 })
                 .expect("base pool quote")
@@ -1506,14 +1506,14 @@ mod tests {
         // Replace with actual expected value comparison
         assert_eq!(
             quote_token1_with_override.calculated_amount,
-            pool.base_pool
+            pool.full_range_pool
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         token: TOKEN1,
                         amount: 10u128.pow(18) as i128,
                     },
                     meta: (),
-                    override_state: Some(fully_executed_twamm.state_after.base_pool_state),
+                    override_state: Some(fully_executed_twamm.state_after.full_range_pool_state),
                     sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
                 })
                 .unwrap()

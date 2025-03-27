@@ -214,7 +214,6 @@ impl Pool for FullRangePool {
 mod tests {
     use super::*;
     use crate::quoting::types::{Config, TokenAmount};
-    use alloc::vec;
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
