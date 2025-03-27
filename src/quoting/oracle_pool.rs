@@ -1,5 +1,4 @@
 use super::types::Config;
-use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::full_range_pool::{FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState};
 use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;

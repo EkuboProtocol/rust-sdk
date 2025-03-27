@@ -1,10 +1,9 @@
-use crate::math::tick::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
+use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
 use crate::math::uint::U256;
 use crate::quoting::full_range_pool::{FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState};
 use crate::quoting::types::{BlockTimestamp, Config};
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, TokenAmount};
-use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Add;
 use num_traits::{ToPrimitive, Zero};
@@ -261,9 +260,9 @@ impl Pool for TwammPool {
                 };
 
                 let token = if is_token1 {
-                    self.base_pool.get_key().token1
+                    self.full_range_pool.get_key().token1
                 } else {
-                    self.base_pool.get_key().token0
+                    self.full_range_pool.get_key().token0
                 };
 
                 let quote = self
