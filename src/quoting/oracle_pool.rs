@@ -1,22 +1,19 @@
 use super::types::Config;
-use crate::math::tick::{MAX_TICK, MIN_TICK};
 use crate::math::uint::U256;
-use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
+use crate::quoting::full_range_pool::{FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState};
 use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;
-use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
-use alloc::vec;
+use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
 use core::ops::Add;
-use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OraclePoolState {
-    pub base_pool_state: BasePoolState,
+    pub full_range_pool_state: FullRangePoolState,
     pub last_snapshot_time: u64,
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct OraclePoolResources {
-    pub base_pool_resources: BasePoolResources,
+    pub full_range_pool_resources: FullRangePoolResources,
     pub snapshots_written: u32,
 }
 
@@ -25,7 +22,7 @@ impl Add for OraclePoolResources {
 
     fn add(self, rhs: Self) -> Self::Output {
         OraclePoolResources {
-            base_pool_resources: self.base_pool_resources + rhs.base_pool_resources,
+            full_range_pool_resources: self.full_range_pool_resources + rhs.full_range_pool_resources,
             snapshots_written: self.snapshots_written + rhs.snapshots_written,
         }
     }
@@ -33,7 +30,7 @@ impl Add for OraclePoolResources {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct OraclePool {
-    base_pool: BasePool,
+    full_range_pool: FullRangePool,
     last_snapshot_time: u64,
 }
 
@@ -45,30 +42,8 @@ impl OraclePool {
         active_liquidity: u128,
         last_snapshot_time: u64,
     ) -> Self {
-        let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
-
-        let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
-            (None, vec![], 0)
-        } else {
-            let (active_tick_index, liquidity) = (Some(0), active_liquidity);
-            (
-                active_tick_index,
-                vec![
-                    Tick {
-                        index: MIN_TICK,
-                        liquidity_delta: signed_liquidity,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -signed_liquidity,
-                    },
-                ],
-                liquidity,
-            )
-        };
-
         OraclePool {
-            base_pool: BasePool::new(
+            full_range_pool: FullRangePool::new(
                 NodeKey {
                     token0: NATIVE_TOKEN_ADDRESS,
                     token1,
@@ -78,12 +53,10 @@ impl OraclePool {
                         extension,
                     },
                 },
-                BasePoolState {
+                FullRangePoolState {
                     sqrt_ratio,
-                    liquidity,
-                    active_tick_index,
+                    liquidity: active_liquidity,
                 },
-                sorted_ticks,
             ),
             last_snapshot_time,
         }
@@ -93,16 +66,16 @@ impl OraclePool {
 impl Pool for OraclePool {
     type Resources = OraclePoolResources;
     type State = OraclePoolState;
-    type QuoteError = BasePoolQuoteError;
+    type QuoteError = FullRangePoolQuoteError;
     type Meta = BlockTimestamp;
 
     fn get_key(&self) -> &NodeKey {
-        self.base_pool.get_key()
+        self.full_range_pool.get_key()
     }
 
     fn get_state(&self) -> Self::State {
         OraclePoolState {
-            base_pool_state: self.base_pool.get_state(),
+            full_range_pool_state: self.full_range_pool.get_state(),
             last_snapshot_time: self.last_snapshot_time,
         }
     }
@@ -116,9 +89,9 @@ impl Pool for OraclePool {
             .override_state
             .map_or(self.last_snapshot_time, |os| os.last_snapshot_time);
 
-        let result = self.base_pool.quote(QuoteParams {
+        let result = self.full_range_pool.quote(QuoteParams {
             sqrt_ratio_limit: params.sqrt_ratio_limit,
-            override_state: params.override_state.map(|s| s.base_pool_state),
+            override_state: params.override_state.map(|s| s.full_range_pool_state),
             token_amount: params.token_amount,
             meta: (),
         })?;
@@ -128,27 +101,27 @@ impl Pool for OraclePool {
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
                 snapshots_written: if pool_time != block_time { 1 } else { 0 },
-                base_pool_resources: result.execution_resources,
+                full_range_pool_resources: result.execution_resources,
             },
             fees_paid: result.fees_paid,
             is_price_increasing: result.is_price_increasing,
             state_after: OraclePoolState {
-                base_pool_state: result.state_after,
+                full_range_pool_state: result.state_after,
                 last_snapshot_time: block_time,
             },
         })
     }
 
     fn has_liquidity(&self) -> bool {
-        self.base_pool.has_liquidity()
+        self.full_range_pool.has_liquidity()
     }
 
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.max_tick_with_liquidity()
+        self.full_range_pool.max_tick_with_liquidity()
     }
 
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.min_tick_with_liquidity()
+        self.full_range_pool.min_tick_with_liquidity()
     }
 }
 
@@ -171,7 +144,7 @@ mod tests {
             assert_eq!(
                 OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0,)
                     .get_state()
-                    .base_pool_state
+                    .full_range_pool_state
                     .liquidity,
                 1
             );
@@ -182,7 +155,7 @@ mod tests {
             assert_eq!(
                 OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0,)
                     .get_state()
-                    .base_pool_state
+                    .full_range_pool_state
                     .liquidity,
                 1
             );
@@ -193,7 +166,7 @@ mod tests {
             assert_eq!(
                 OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0,)
                     .get_state()
-                    .base_pool_state
+                    .full_range_pool_state
                     .liquidity,
                 1
             );
@@ -204,7 +177,7 @@ mod tests {
             assert_eq!(
                 OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0,)
                     .get_state()
-                    .base_pool_state
+                    .full_range_pool_state
                     .liquidity,
                 1
             );
@@ -238,13 +211,6 @@ mod tests {
 
         assert_eq!(quote.calculated_amount, 999);
         assert_eq!(quote.consumed_amount, 1000);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
         assert_eq!(quote.execution_resources.snapshots_written, 1);
         assert_eq!(quote.state_after.last_snapshot_time, 2);
     }
@@ -273,13 +239,6 @@ mod tests {
 
         assert_eq!(quote.calculated_amount, 999);
         assert_eq!(quote.consumed_amount, 1000);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
         assert_eq!(quote.execution_resources.snapshots_written, 1);
         assert_eq!(quote.state_after.last_snapshot_time, 2);
     }

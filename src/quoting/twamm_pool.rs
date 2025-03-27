@@ -1,17 +1,16 @@
-use crate::math::tick::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
+use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
 use crate::math::uint::U256;
-use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
+use crate::quoting::full_range_pool::{FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState};
 use crate::quoting::types::{BlockTimestamp, Config};
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick, TokenAmount};
-use alloc::vec;
+use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, TokenAmount};
 use alloc::vec::Vec;
 use core::ops::Add;
 use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TwammPoolState {
-    pub base_pool_state: BasePoolState,
+    pub full_range_pool_state: FullRangePoolState,
     pub token0_sale_rate: u128,
     pub token1_sale_rate: u128,
     pub last_execution_time: u64,
@@ -19,7 +18,7 @@ pub struct TwammPoolState {
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct TwammPoolResources {
-    pub base_pool_resources: BasePoolResources,
+    pub full_range_pool_resources: FullRangePoolResources,
     // The number of seconds that passed since the last virtual order execution
     pub virtual_order_seconds_executed: u32,
     // The amount of order updates that were applied to the sale rate
@@ -33,7 +32,7 @@ impl Add for TwammPoolResources {
 
     fn add(self, rhs: Self) -> Self::Output {
         TwammPoolResources {
-            base_pool_resources: self.base_pool_resources + rhs.base_pool_resources,
+            full_range_pool_resources: self.full_range_pool_resources + rhs.full_range_pool_resources,
             virtual_order_delta_times_crossed: self.virtual_order_delta_times_crossed
                 + rhs.virtual_order_delta_times_crossed,
             virtual_order_seconds_executed: self.virtual_order_seconds_executed
@@ -52,7 +51,7 @@ pub struct TwammSaleRateDelta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TwammPool {
-    base_pool: BasePool,
+    full_range_pool: FullRangePool,
     active_liquidity: u128,
     token0_sale_rate: u128,
     token1_sale_rate: u128,
@@ -73,8 +72,6 @@ impl TwammPool {
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
     ) -> Self {
-        let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
-
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
@@ -101,27 +98,9 @@ impl TwammPool {
             "sum of current sale rate and sale rate deltas must be zero"
         );
 
-        let (active_tick_index, sorted_ticks) = if active_liquidity.is_zero() {
-            (None, vec![])
-        } else {
-            (
-                Some(0),
-                vec![
-                    Tick {
-                        index: MIN_TICK,
-                        liquidity_delta: signed_liquidity,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -signed_liquidity,
-                    },
-                ],
-            )
-        };
-
         TwammPool {
             active_liquidity,
-            base_pool: BasePool::new(
+            full_range_pool: FullRangePool::new(
                 NodeKey {
                     token0,
                     token1,
@@ -131,15 +110,13 @@ impl TwammPool {
                         extension,
                     },
                 },
-                BasePoolState {
+                FullRangePoolState {
                     // we just force the pool state to always be within the bounds of min/max to simplify the state
                     // this does not change accuracy of quote results
                     // it just reduces accuracy of resource estimations in extreme cases by a negligible amount.
                     sqrt_ratio: sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO),
                     liquidity: active_liquidity,
-                    active_tick_index,
                 },
-                sorted_ticks,
             ),
             virtual_order_deltas,
             last_execution_time,
@@ -160,7 +137,7 @@ pub enum TwammPoolQuoteError {
     FailedCalculateNextSqrtRatio,
     SaleAmountOverflow,
     TooMuchTimePassedSinceLastExecution,
-    BasePoolQuoteError(BasePoolQuoteError),
+    FullRangePoolQuoteError(FullRangePoolQuoteError),
 }
 
 impl Pool for TwammPool {
@@ -170,12 +147,12 @@ impl Pool for TwammPool {
     type Meta = BlockTimestamp;
 
     fn get_key(&self) -> &NodeKey {
-        self.base_pool.get_key()
+        self.full_range_pool.get_key()
     }
 
     fn get_state(&self) -> Self::State {
         TwammPoolState {
-            base_pool_state: self.base_pool.get_state(),
+            full_range_pool_state: self.full_range_pool.get_state(),
             last_execution_time: self.last_execution_time,
             token0_sale_rate: self.token0_sale_rate,
             token1_sale_rate: self.token1_sale_rate,
@@ -196,7 +173,7 @@ impl Pool for TwammPool {
         let current_time = meta;
         let initial_state = override_state.unwrap_or_else(|| self.get_state());
 
-        let mut next_sqrt_ratio = initial_state.base_pool_state.sqrt_ratio;
+        let mut next_sqrt_ratio = initial_state.full_range_pool_state.sqrt_ratio;
         let mut token0_sale_rate = initial_state.token0_sale_rate;
         let mut token1_sale_rate = initial_state.token1_sale_rate;
         let mut last_execution_time = initial_state.last_execution_time;
@@ -212,14 +189,14 @@ impl Pool for TwammPool {
             .position(|srd| srd.time > last_execution_time)
             .unwrap_or(self.virtual_order_deltas.len());
 
-        let mut base_pool_state_override = override_state.map(|s| s.base_pool_state);
-        let mut base_pool_execution_resources: BasePoolResources = Default::default();
+        let mut full_range_pool_state_override = override_state.map(|s| s.full_range_pool_state);
+        let mut full_range_pool_execution_resources: FullRangePoolResources = Default::default();
 
         let NodeKey {
             token0,
             token1,
             config,
-        } = self.base_pool.get_key();
+        } = self.full_range_pool.get_key();
 
         while last_execution_time != current_time {
             let sale_rate_delta = self.virtual_order_deltas.get(next_sale_rate_delta_index);
@@ -259,7 +236,7 @@ impl Pool for TwammPool {
                 };
 
                 let quote = self
-                    .base_pool
+                    .full_range_pool
                     .quote(QuoteParams {
                         token_amount: TokenAmount {
                             amount: amount
@@ -268,13 +245,13 @@ impl Pool for TwammPool {
                             token: *token,
                         },
                         sqrt_ratio_limit: Some(next_sqrt_ratio),
-                        override_state: base_pool_state_override,
+                        override_state: full_range_pool_state_override,
                         meta: (),
                     })
-                    .map_err(TwammPoolQuoteError::BasePoolQuoteError)?;
+                    .map_err(TwammPoolQuoteError::FullRangePoolQuoteError)?;
 
-                base_pool_state_override = Some(quote.state_after);
-                base_pool_execution_resources += quote.execution_resources;
+                full_range_pool_state_override = Some(quote.state_after);
+                full_range_pool_execution_resources += quote.execution_resources;
             } else if amount0 > 0 || amount1 > 0 {
                 let (amount, is_token1, sqrt_ratio_limit) = if amount0 != 0 {
                     (amount0, false, MIN_SQRT_RATIO)
@@ -283,13 +260,13 @@ impl Pool for TwammPool {
                 };
 
                 let token = if is_token1 {
-                    self.base_pool.get_key().token1
+                    self.full_range_pool.get_key().token1
                 } else {
-                    self.base_pool.get_key().token0
+                    self.full_range_pool.get_key().token0
                 };
 
                 let quote = self
-                    .base_pool
+                    .full_range_pool
                     .quote(QuoteParams {
                         token_amount: TokenAmount {
                             amount: amount
@@ -298,14 +275,14 @@ impl Pool for TwammPool {
                             token,
                         },
                         sqrt_ratio_limit: Some(sqrt_ratio_limit),
-                        override_state: base_pool_state_override,
+                        override_state: full_range_pool_state_override,
                         meta: (),
                     })
-                    .map_err(TwammPoolQuoteError::BasePoolQuoteError)?;
+                    .map_err(TwammPoolQuoteError::FullRangePoolQuoteError)?;
 
-                base_pool_state_override = Some(quote.state_after);
-                base_pool_execution_resources =
-                    base_pool_execution_resources + quote.execution_resources;
+                full_range_pool_state_override = Some(quote.state_after);
+                full_range_pool_execution_resources =
+                    full_range_pool_execution_resources + quote.execution_resources;
 
                 next_sqrt_ratio = quote.state_after.sqrt_ratio;
             }
@@ -331,14 +308,14 @@ impl Pool for TwammPool {
         }
 
         let final_quote = self
-            .base_pool
+            .full_range_pool
             .quote(QuoteParams {
                 token_amount,
                 sqrt_ratio_limit,
                 meta: (),
-                override_state: base_pool_state_override,
+                override_state: full_range_pool_state_override,
             })
-            .map_err(TwammPoolQuoteError::BasePoolQuoteError)?;
+            .map_err(TwammPoolQuoteError::FullRangePoolQuoteError)?;
 
         Ok(Quote {
             is_price_increasing: final_quote.is_price_increasing,
@@ -346,7 +323,7 @@ impl Pool for TwammPool {
             calculated_amount: final_quote.calculated_amount,
             fees_paid: final_quote.fees_paid,
             execution_resources: TwammPoolResources {
-                base_pool_resources: base_pool_execution_resources
+                full_range_pool_resources: full_range_pool_execution_resources
                     + final_quote.execution_resources,
                 virtual_order_seconds_executed: (current_time - initial_state.last_execution_time)
                     as u32,
@@ -358,7 +335,7 @@ impl Pool for TwammPool {
                 },
             },
             state_after: TwammPoolState {
-                base_pool_state: final_quote.state_after,
+                full_range_pool_state: final_quote.state_after,
                 token0_sale_rate,
                 token1_sale_rate,
                 last_execution_time: current_time,
@@ -371,11 +348,11 @@ impl Pool for TwammPool {
     }
 
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.max_tick_with_liquidity()
+        self.full_range_pool.max_tick_with_liquidity()
     }
 
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.min_tick_with_liquidity()
+        self.full_range_pool.min_tick_with_liquidity()
     }
 }
 
@@ -413,7 +390,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -435,7 +412,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -457,7 +434,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -479,7 +456,7 @@ mod tests {
                     vec![]
                 )
                 .get_state()
-                .base_pool_state
+                .full_range_pool_state
                 .liquidity,
                 1
             );
@@ -825,13 +802,7 @@ mod tests {
             .expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 2555);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -878,13 +849,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 390);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -931,13 +896,7 @@ mod tests {
             .expect("swap succeeds");
 
         assert_eq!(quote.calculated_amount, 390);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -984,13 +943,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 2553);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1030,13 +983,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 990);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1076,13 +1023,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 989);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1122,13 +1063,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 717);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1168,13 +1103,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 983);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1214,13 +1143,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 983);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1260,13 +1183,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 995);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1306,13 +1223,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 989);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1359,13 +1270,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 989);
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            0
-        );
+        
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1500,14 +1405,14 @@ mod tests {
 
         assert_eq!(
             quote_token0_with_override.calculated_amount,
-            pool.base_pool
+            pool.full_range_pool
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         token: TOKEN0,
                         amount: 10u128.pow(18) as i128,
                     },
                     meta: (),
-                    override_state: Some(state_after_fully_executed.base_pool_state),
+                    override_state: Some(state_after_fully_executed.full_range_pool_state),
                     sqrt_ratio_limit: None,
                 })
                 .expect("base pool quote")
@@ -1529,14 +1434,14 @@ mod tests {
         // Replace with actual expected value comparison
         assert_eq!(
             quote_token1_with_override.calculated_amount,
-            pool.base_pool
+            pool.full_range_pool
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         token: TOKEN1,
                         amount: 10u128.pow(18) as i128,
                     },
                     meta: (),
-                    override_state: Some(fully_executed_twamm.state_after.base_pool_state),
+                    override_state: Some(fully_executed_twamm.state_after.full_range_pool_state),
                     sqrt_ratio_limit: Some(to_sqrt_ratio(693147).unwrap()),
                 })
                 .unwrap()
