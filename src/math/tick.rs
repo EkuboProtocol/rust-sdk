@@ -37,13 +37,12 @@ pub const MAX_TICK: i32 = 88722835;
 pub const MAX_TICK_SPACING: u32 = 698605;
 pub const FULL_RANGE_TICK_SPACING: u32 = 0;
 
-pub const MIN_SQRT_RATIO: U256 = U256([447090492618910, 1, 0, 0]);
-pub const MAX_SQRT_RATIO: U256 = U256([
-    17284140499546007532,
-    7567914947700146222,
-    18446296994052723738,
-    0,
-]);
+pub const MIN_SQRT_RATIO: U256 = U256([447090492618908, 1, 0, 0]);
+pub const MAX_SQRT_RATIO: U256 = U256([0, 7567914946021818368, 18446296994052723738, 0]);
+
+const TWO_POW_160: U256 = U256([0, 0, 0x100000000, 0]);
+const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
+const TWO_POW_96: U256 = U256([0, 0x0100000000, 0, 0]);
 
 pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
     if tick < MIN_TICK || tick > MAX_TICK {
@@ -64,6 +63,16 @@ pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
         ratio = U256::MAX / ratio;
     }
 
+    ratio = if ratio >= TWO_POW_160 {
+        (ratio >> 98) << 98
+    } else if ratio >= TWO_POW_128 {
+        (ratio >> 66) << 66
+    } else if ratio >= TWO_POW_96 {
+        (ratio >> 34) << 34
+    } else {
+        (ratio >> 2) << 2
+    };
+
     Some(ratio)
 }
 
@@ -76,19 +85,19 @@ mod tests {
     fn test_tick_examples() {
         assert_eq!(
             to_sqrt_ratio(1000000).unwrap(),
-            U256::from_str_radix("561030636129153856592777659729523183729", 10).unwrap(),
+            U256::from_str_radix("561030636129153856579134353873645338624", 10).unwrap(),
         );
         assert_eq!(
             to_sqrt_ratio(10000000).unwrap(),
-            U256::from_str_radix("50502254805927926084427918474025309948677", 10).unwrap(),
+            U256::from_str_radix("50502254805927926084423855178401471004672", 10).unwrap(),
         );
         assert_eq!(
             to_sqrt_ratio(-1000000).unwrap(),
-            U256::from_str_radix("206391740095027370700312310531588921767", 10).unwrap(),
+            U256::from_str_radix("206391740095027370700312310528859963392", 10).unwrap(),
         );
         assert_eq!(
             to_sqrt_ratio(-10000000).unwrap(),
-            U256::from_str_radix("2292810285051363400276741638672651165", 10).unwrap(),
+            U256::from_str_radix("2292810285051363400276741630355046400", 10).unwrap(),
         );
     }
 

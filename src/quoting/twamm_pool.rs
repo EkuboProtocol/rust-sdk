@@ -1,7 +1,9 @@
 use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
 use crate::math::uint::U256;
-use crate::quoting::full_range_pool::{FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState};
+use crate::quoting::full_range_pool::{
+    FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState,
+};
 use crate::quoting::types::{BlockTimestamp, Config};
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, TokenAmount};
 use alloc::vec::Vec;
@@ -32,7 +34,8 @@ impl Add for TwammPoolResources {
 
     fn add(self, rhs: Self) -> Self::Output {
         TwammPoolResources {
-            full_range_pool_resources: self.full_range_pool_resources + rhs.full_range_pool_resources,
+            full_range_pool_resources: self.full_range_pool_resources
+                + rhs.full_range_pool_resources,
             virtual_order_delta_times_crossed: self.virtual_order_delta_times_crossed
                 + rhs.virtual_order_delta_times_crossed,
             virtual_order_seconds_executed: self.virtual_order_seconds_executed
@@ -802,7 +805,7 @@ mod tests {
             .expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 2555);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -849,7 +852,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 390);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -896,7 +899,7 @@ mod tests {
             .expect("swap succeeds");
 
         assert_eq!(quote.calculated_amount, 390);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -943,7 +946,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 2553);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -983,7 +986,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 990);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1023,7 +1026,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 989);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1063,7 +1066,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 717);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1103,7 +1106,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 983);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1143,7 +1146,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 983);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1183,7 +1186,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 995);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1223,7 +1226,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 989);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1270,7 +1273,7 @@ mod tests {
         let quote = result.expect("Quote should succeed");
 
         assert_eq!(quote.calculated_amount, 989);
-        
+
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
             quote.execution_resources.virtual_order_delta_times_crossed,
@@ -1481,7 +1484,7 @@ mod tests {
             })
             .expect("first swap succeeds");
 
-        assert_eq!(first_swap.calculated_amount, 19993991114278789950510);
+        assert_eq!(first_swap.calculated_amount, 19993991114278789946056);
         assert_eq!(first_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             first_swap
@@ -1509,7 +1512,7 @@ mod tests {
             })
             .expect("second swap succeeds");
 
-        assert_eq!(second_swap.calculated_amount, 19985938387207961531114);
+        assert_eq!(second_swap.calculated_amount, 19985938387207961526664);
         assert_eq!(second_swap.consumed_amount, 10000000000000000000000);
         assert_eq!(
             second_swap
