@@ -1,7 +1,9 @@
 use super::types::Config;
 use crate::math::uint::U256;
-use crate::quoting::full_range_pool::{FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState};
 use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;
+use crate::quoting::full_range_pool::{
+    FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState,
+};
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
 use core::ops::Add;
 
@@ -11,7 +13,7 @@ pub struct OraclePoolState {
     pub last_snapshot_time: u64,
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OraclePoolResources {
     pub full_range_pool_resources: FullRangePoolResources,
     pub snapshots_written: u32,
@@ -22,7 +24,8 @@ impl Add for OraclePoolResources {
 
     fn add(self, rhs: Self) -> Self::Output {
         OraclePoolResources {
-            full_range_pool_resources: self.full_range_pool_resources + rhs.full_range_pool_resources,
+            full_range_pool_resources: self.full_range_pool_resources
+                + rhs.full_range_pool_resources,
             snapshots_written: self.snapshots_written + rhs.snapshots_written,
         }
     }
@@ -65,7 +68,8 @@ impl OraclePool {
                 sqrt_ratio,
                 liquidity: active_liquidity,
             },
-        ).map_err(OraclePoolError::FullRangePoolError)?;
+        )
+        .map_err(OraclePoolError::FullRangePoolError)?;
 
         Ok(OraclePool {
             full_range_pool,
@@ -210,7 +214,8 @@ mod tests {
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
             1,
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -238,7 +243,8 @@ mod tests {
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
             1,
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {

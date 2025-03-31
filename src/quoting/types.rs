@@ -73,11 +73,11 @@ pub struct Quote<R, S> {
 pub type BlockTimestamp = u64;
 
 pub trait Pool: Send + Sync + Debug + Clone {
-    type Resources: Add<Output = Self::Resources> + Default + Copy;
-    type State: Copy;
+    type Resources: Add<Output = Self::Resources> + Debug + Default + Copy;
+    type State: Debug + Copy;
     type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
-    type Meta: Copy;
+    type Meta: Debug + Copy;
 
     fn get_key(&self) -> &NodeKey;
 
