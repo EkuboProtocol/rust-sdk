@@ -62,6 +62,19 @@ pub struct TwammPool {
     virtual_order_deltas: Vec<TwammSaleRateDelta>,
 }
 
+/// Errors that can occur when constructing a TwammPool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum TwammPoolError {
+    /// Errors from the underlying FullRangePool constructor.
+    FullRangePoolError(FullRangePoolError),
+    /// Sale rate deltas are not ordered or not greater than last_execution_time.
+    SaleRateDeltasInvalid,
+    /// Sum of current sale rate and sale rate deltas must be zero.
+    SaleRateDeltaSumNonZero,
+}
+
+use crate::quoting::full_range_pool::FullRangePoolError;
+
 impl TwammPool {
     pub fn new(
         token0: U256,
@@ -74,58 +87,66 @@ impl TwammPool {
         token0_sale_rate: u128,
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
-    ) -> Self {
+    ) -> Result<Self, TwammPoolError> {
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
+        
         for t in virtual_order_deltas.iter() {
-            assert!(
-                t.time > last_time,
-                "Sale rate deltas are not ordered and greater than `last_execution_time`"
-            );
-            last_time = t.time;
-            if t.sale_rate_delta0 < 0 {
-                sr0 -= t.sale_rate_delta0.unsigned_abs();
-            } else {
-                sr0 += t.sale_rate_delta0.unsigned_abs();
+            if !(t.time > last_time) {
+                return Err(TwammPoolError::SaleRateDeltasInvalid);
             }
-            if t.sale_rate_delta1 < 0 {
-                sr1 -= t.sale_rate_delta1.unsigned_abs();
+            
+            last_time = t.time;
+            
+            if t.sale_rate_delta0 < 0 {
+                sr0 = sr0.checked_sub(t.sale_rate_delta0.unsigned_abs())
+                    .unwrap_or(sr0);
             } else {
-                sr1 += t.sale_rate_delta1.unsigned_abs();
+                sr0 = sr0.checked_add(t.sale_rate_delta0.unsigned_abs())
+                    .unwrap_or(sr0);
+            }
+            
+            if t.sale_rate_delta1 < 0 {
+                sr1 = sr1.checked_sub(t.sale_rate_delta1.unsigned_abs())
+                    .unwrap_or(sr1);
+            } else {
+                sr1 = sr1.checked_add(t.sale_rate_delta1.unsigned_abs())
+                    .unwrap_or(sr1);
             }
         }
 
-        assert!(
-            sr0.is_zero() && sr1.is_zero(),
-            "sum of current sale rate and sale rate deltas must be zero"
-        );
+        if !(sr0.is_zero() && sr1.is_zero()) {
+            return Err(TwammPoolError::SaleRateDeltaSumNonZero);
+        }
 
-        TwammPool {
+        let full_range_pool = FullRangePool::new(
+            NodeKey {
+                token0,
+                token1,
+                config: Config {
+                    fee,
+                    tick_spacing: 0,
+                    extension,
+                },
+            },
+            FullRangePoolState {
+                // we just force the pool state to always be within the bounds of min/max to simplify the state
+                // this does not change accuracy of quote results
+                // it just reduces accuracy of resource estimations in extreme cases by a negligible amount.
+                sqrt_ratio: sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO),
+                liquidity: active_liquidity,
+            },
+        ).map_err(TwammPoolError::FullRangePoolError)?;
+
+        Ok(TwammPool {
             active_liquidity,
-            full_range_pool: FullRangePool::new(
-                NodeKey {
-                    token0,
-                    token1,
-                    config: Config {
-                        fee,
-                        tick_spacing: 0,
-                        extension,
-                    },
-                },
-                FullRangePoolState {
-                    // we just force the pool state to always be within the bounds of min/max to simplify the state
-                    // this does not change accuracy of quote results
-                    // it just reduces accuracy of resource estimations in extreme cases by a negligible amount.
-                    sqrt_ratio: sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO),
-                    liquidity: active_liquidity,
-                },
-            ),
+            full_range_pool,
             virtual_order_deltas,
             last_execution_time,
             token0_sale_rate,
             token1_sale_rate,
-        }
+        })
     }
 
     // Returns the list of sale rate deltas
@@ -371,6 +392,7 @@ mod tests {
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
 
     mod constructor_validation {
+        use crate::quoting::twamm_pool::TwammPoolError;
         use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
         use crate::math::uint::U256;
         use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
@@ -392,6 +414,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .expect("Pool creation should succeed")
                 .get_state()
                 .full_range_pool_state
                 .liquidity,
@@ -414,6 +437,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .expect("Pool creation should succeed")
                 .get_state()
                 .full_range_pool_state
                 .liquidity,
@@ -436,6 +460,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .expect("Pool creation should succeed")
                 .get_state()
                 .full_range_pool_state
                 .liquidity,
@@ -458,6 +483,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .expect("Pool creation should succeed")
                 .get_state()
                 .full_range_pool_state
                 .liquidity,
@@ -466,11 +492,8 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(
-            expected = "Sale rate deltas are not ordered and greater than `last_execution_time`"
-        )]
         fn test_sale_rate_deltas_must_be_gt_last_execution_time() {
-            TwammPool::new(
+            let result = TwammPool::new(
                 U256::one(),
                 U256::one() + 1,
                 0,
@@ -486,14 +509,12 @@ mod tests {
                     sale_rate_delta1: 0,
                 }],
             );
+            assert_eq!(result.unwrap_err(), TwammPoolError::SaleRateDeltasInvalid);
         }
 
         #[test]
-        #[should_panic(
-            expected = "Sale rate deltas are not ordered and greater than `last_execution_time`"
-        )]
         fn test_sale_rate_deltas_must_be_ordered() {
-            TwammPool::new(
+            let result = TwammPool::new(
                 U256::one(),
                 U256::one() + 1,
                 0,
@@ -516,12 +537,12 @@ mod tests {
                     },
                 ],
             );
+            assert_eq!(result.unwrap_err(), TwammPoolError::SaleRateDeltasInvalid);
         }
 
         #[test]
-        #[should_panic(expected = "sum of current sale rate and sale rate deltas must be zero")]
         fn test_sale_rate_deltas_must_sum_to_zero() {
-            TwammPool::new(
+            let result = TwammPool::new(
                 U256::one(),
                 U256::one() + 1,
                 0,
@@ -544,11 +565,12 @@ mod tests {
                     },
                 ],
             );
+            assert_eq!(result.unwrap_err(), TwammPoolError::SaleRateDeltaSumNonZero);
         }
 
         #[test]
         fn test_sale_rate_deltas_sum_to_zero() {
-            TwammPool::new(
+            let result = TwammPool::new(
                 U256::one(),
                 U256::one() + 1,
                 0,
@@ -571,6 +593,7 @@ mod tests {
                     },
                 ],
             );
+            assert!(result.is_ok());
         }
     }
 
@@ -587,7 +610,7 @@ mod tests {
             0,
             0,
             vec![],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -622,7 +645,7 @@ mod tests {
             0,
             0,
             vec![],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -661,7 +684,7 @@ mod tests {
                 sale_rate_delta0: 0,
                 sale_rate_delta1: -(1 << 32),
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -700,7 +723,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: 0,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -742,7 +765,7 @@ mod tests {
                 sale_rate_delta0: 0,
                 sale_rate_delta1: -(1 << 32),
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -790,7 +813,7 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let quote = pool
             .quote(QuoteParams {
@@ -837,7 +860,7 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -884,7 +907,7 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let quote = pool
             .quote(QuoteParams {
@@ -931,7 +954,7 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -971,7 +994,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1011,7 +1034,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1051,7 +1074,7 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1091,7 +1114,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1131,7 +1154,7 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1171,7 +1194,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1211,7 +1234,7 @@ mod tests {
                 sale_rate_delta1: -(2u128.pow(32) as i128),
                 time: 16u64,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1258,7 +1281,7 @@ mod tests {
                     sale_rate_delta1: -(1 << 33),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1298,7 +1321,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First quote: no swap
         let first = pool
@@ -1355,7 +1378,7 @@ mod tests {
                 sale_rate_delta1: -((10u128.pow(18) << 32) as i128),
                 time: 120u64,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // Quote at time 60 (0 seconds pass)
         pool.quote(QuoteParams {
@@ -1469,7 +1492,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
@@ -1545,7 +1568,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool

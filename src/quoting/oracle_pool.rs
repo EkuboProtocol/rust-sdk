@@ -34,6 +34,15 @@ pub struct OraclePool {
     last_snapshot_time: u64,
 }
 
+/// Errors that can occur when constructing an OraclePool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum OraclePoolError {
+    /// Errors from the underlying FullRangePool constructor.
+    FullRangePoolError(FullRangePoolError),
+}
+
+use crate::quoting::full_range_pool::FullRangePoolError;
+
 impl OraclePool {
     pub fn new(
         token1: U256,
@@ -41,25 +50,27 @@ impl OraclePool {
         sqrt_ratio: U256,
         active_liquidity: u128,
         last_snapshot_time: u64,
-    ) -> Self {
-        OraclePool {
-            full_range_pool: FullRangePool::new(
-                NodeKey {
-                    token0: NATIVE_TOKEN_ADDRESS,
-                    token1,
-                    config: Config {
-                        fee: 0,
-                        tick_spacing: 0,
-                        extension,
-                    },
+    ) -> Result<Self, OraclePoolError> {
+        let full_range_pool = FullRangePool::new(
+            NodeKey {
+                token0: NATIVE_TOKEN_ADDRESS,
+                token1,
+                config: Config {
+                    fee: 0,
+                    tick_spacing: 0,
+                    extension,
                 },
-                FullRangePoolState {
-                    sqrt_ratio,
-                    liquidity: active_liquidity,
-                },
-            ),
+            },
+            FullRangePoolState {
+                sqrt_ratio,
+                liquidity: active_liquidity,
+            },
+        ).map_err(OraclePoolError::FullRangePoolError)?;
+
+        Ok(OraclePool {
+            full_range_pool,
             last_snapshot_time,
-        }
+        })
     }
 }
 
@@ -142,7 +153,8 @@ mod tests {
         #[test]
         fn test_max_price_constructor() {
             assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0,)
+                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0)
+                    .expect("Pool creation should succeed")
                     .get_state()
                     .full_range_pool_state
                     .liquidity,
@@ -153,7 +165,8 @@ mod tests {
         #[test]
         fn test_min_price_constructor() {
             assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0,)
+                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0)
+                    .expect("Pool creation should succeed")
                     .get_state()
                     .full_range_pool_state
                     .liquidity,
@@ -164,7 +177,8 @@ mod tests {
         #[test]
         fn test_min_sqrt_ratio() {
             assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0,)
+                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0)
+                    .expect("Pool creation should succeed")
                     .get_state()
                     .full_range_pool_state
                     .liquidity,
@@ -175,7 +189,8 @@ mod tests {
         #[test]
         fn test_max_sqrt_ratio() {
             assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0,)
+                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0)
+                    .expect("Pool creation should succeed")
                     .get_state()
                     .full_range_pool_state
                     .liquidity,
@@ -195,7 +210,7 @@ mod tests {
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
             1,
-        );
+        ).expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -223,7 +238,7 @@ mod tests {
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
             1,
-        );
+        ).expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {

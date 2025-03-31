@@ -45,20 +45,29 @@ pub struct FullRangePool {
     state: FullRangePoolState,
 }
 
+/// Errors that can occur when constructing a FullRangePool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum FullRangePoolError {
+    /// Token0 must be less than token1.
+    TokenOrderInvalid,
+}
+
 impl FullRangePool {
-    pub fn new(key: NodeKey, state: FullRangePoolState) -> Self {
-        assert!(key.token0 < key.token1, "token0 must be less than token1");
+    pub fn new(key: NodeKey, state: FullRangePoolState) -> Result<Self, FullRangePoolError> {
+        if !(key.token0 < key.token1) {
+            return Err(FullRangePoolError::TokenOrderInvalid);
+        }
         
         // Ensure sqrt_ratio is within valid bounds
         let sqrt_ratio = state.sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO);
         
-        Self {
+        Ok(Self {
             key,
             state: FullRangePoolState {
                 sqrt_ratio,
                 liquidity: state.liquidity,
             },
-        }
+        })
     }
 }
 
@@ -230,10 +239,11 @@ mod tests {
         }
     }
 
+    use super::FullRangePoolError;
+
     #[test]
-    #[should_panic(expected = "token0 must be less than token1")]
     fn test_token0_lt_token1() {
-        FullRangePool::new(
+        let result = FullRangePool::new(
             NodeKey {
                 token0: U256::zero(),
                 token1: U256::zero(),
@@ -248,6 +258,7 @@ mod tests {
                 liquidity: 0,
             },
         );
+        assert_eq!(result.unwrap_err(), FullRangePoolError::TokenOrderInvalid);
     }
 
     #[test]
@@ -258,7 +269,7 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 0,
             },
-        );
+        ).expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -285,7 +296,7 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
             },
-        );
+        ).expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -312,7 +323,7 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
             },
-        );
+        ).expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -339,7 +350,7 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
             },
-        );
+        ).expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
