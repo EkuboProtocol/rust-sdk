@@ -1485,7 +1485,7 @@ mod tests {
         ).expect("Pool creation should succeed");
 
         // First swap
-        let first_swap = pool
+        let first_swap = pool.expect("Pool exists")
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
@@ -1561,7 +1561,7 @@ mod tests {
         ).expect("Pool creation should succeed");
 
         // First swap
-        let first_swap = pool
+        let first_swap = pool.expect("Pool exists")
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
@@ -1574,7 +1574,7 @@ mod tests {
             .expect("first swap succeeds");
 
         // Second swap in opposite direction using override_state from first swap
-        pool.quote(QuoteParams {
+        pool.expect("Pool exists").quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: (10_000u128 * 10u128.pow(18)) as i128,
                 token: TOKEN1,
