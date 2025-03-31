@@ -1482,7 +1482,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
@@ -1558,7 +1558,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
