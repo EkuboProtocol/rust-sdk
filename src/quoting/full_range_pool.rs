@@ -45,7 +45,12 @@ pub struct FullRangePool {
     state: FullRangePoolState,
 }
 
-use crate::errors::FullRangePoolError;
+/// Errors that can occur when constructing a FullRangePool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum FullRangePoolError {
+    /// Token0 must be less than token1.
+    TokenOrderInvalid,
+}
 
 impl FullRangePool {
     pub fn new(key: NodeKey, state: FullRangePoolState) -> Result<Self, FullRangePoolError> {

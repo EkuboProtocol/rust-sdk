@@ -34,7 +34,14 @@ pub struct OraclePool {
     last_snapshot_time: u64,
 }
 
-use crate::errors::{OraclePoolError, FullRangePoolError};
+/// Errors that can occur when constructing an OraclePool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum OraclePoolError {
+    /// Errors from the underlying FullRangePool constructor.
+    FullRangePoolError(FullRangePoolError),
+}
+
+use crate::quoting::full_range_pool::FullRangePoolError;
 
 impl OraclePool {
     pub fn new(

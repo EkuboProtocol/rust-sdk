@@ -62,7 +62,18 @@ pub struct TwammPool {
     virtual_order_deltas: Vec<TwammSaleRateDelta>,
 }
 
-use crate::errors::{TwammPoolError, FullRangePoolError};
+/// Errors that can occur when constructing a TwammPool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum TwammPoolError {
+    /// Errors from the underlying FullRangePool constructor.
+    FullRangePoolError(FullRangePoolError),
+    /// Sale rate deltas are not ordered or not greater than last_execution_time.
+    SaleRateDeltasInvalid,
+    /// Sum of current sale rate and sale rate deltas must be zero.
+    SaleRateDeltaSumNonZero,
+}
+
+use crate::quoting::full_range_pool::FullRangePoolError;
 
 impl TwammPool {
     pub fn new(
@@ -983,7 +994,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1023,7 +1034,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1063,7 +1074,7 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1103,7 +1114,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1143,7 +1154,7 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1183,7 +1194,7 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1223,7 +1234,7 @@ mod tests {
                 sale_rate_delta1: -(2u128.pow(32) as i128),
                 time: 16u64,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1270,7 +1281,7 @@ mod tests {
                     sale_rate_delta1: -(1 << 33),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1310,7 +1321,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First quote: no swap
         let first = pool
@@ -1367,7 +1378,7 @@ mod tests {
                 sale_rate_delta1: -((10u128.pow(18) << 32) as i128),
                 time: 120u64,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // Quote at time 60 (0 seconds pass)
         pool.quote(QuoteParams {
@@ -1481,7 +1492,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
@@ -1557,7 +1568,7 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        ).expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
