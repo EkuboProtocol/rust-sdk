@@ -981,7 +981,10 @@ mod tests {
             ],
         );
 
-        let quote = pool.expect("Pool creation should succeed")
+        // Unwrap the pool once and store it
+        let unwrapped_pool = pool.expect("Pool creation should succeed");
+        
+        let quote = unwrapped_pool
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000000,
@@ -996,7 +999,7 @@ mod tests {
         assert_eq!(quote.calculated_amount, 0);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
 
-        let quote = pool.expect("Pool creation should succeed")
+        let quote = unwrapped_pool
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000000,

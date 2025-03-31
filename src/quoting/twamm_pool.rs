@@ -392,7 +392,7 @@ mod tests {
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
 
     mod constructor_validation {
-        use super::TwammPoolError;
+        use crate::quoting::twamm_pool::TwammPoolError;
         use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
         use crate::math::uint::U256;
         use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
