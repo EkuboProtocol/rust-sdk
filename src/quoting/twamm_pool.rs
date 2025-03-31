@@ -813,7 +813,7 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let quote = pool
             .quote(QuoteParams {
@@ -860,7 +860,7 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -907,7 +907,7 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let quote = pool
             .quote(QuoteParams {
@@ -954,7 +954,7 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        );
+        ).expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
