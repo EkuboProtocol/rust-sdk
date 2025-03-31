@@ -422,7 +422,7 @@ mod tests {
 
     mod constructor_validation {
         use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
-        use crate::errors::BasePoolError;
+        use super::BasePoolError;
         use crate::math::tick::MAX_TICK;
         use crate::quoting::types::{Config, Tick};
 
@@ -843,7 +843,7 @@ mod tests {
             meta: (),
         };
 
-        let quote = pool.quote(params).expect("Failed to get quote");
+        let quote = pool.expect("Pool creation should succeed").quote(params).expect("Failed to get quote");
 
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 1);
@@ -882,7 +882,7 @@ mod tests {
             meta: (),
         };
 
-        let quote = pool.quote(params).expect("Failed to get quote");
+        let quote = pool.expect("Pool creation should succeed").quote(params).expect("Failed to get quote");
 
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
@@ -981,7 +981,7 @@ mod tests {
             ],
         );
 
-        let quote = pool
+        let quote = pool.expect("Pool creation should succeed")
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000000,
@@ -996,7 +996,7 @@ mod tests {
         assert_eq!(quote.calculated_amount, 0);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
 
-        let quote = pool
+        let quote = pool.expect("Pool creation should succeed")
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000000,

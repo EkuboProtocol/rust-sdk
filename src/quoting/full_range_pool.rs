@@ -239,7 +239,7 @@ mod tests {
         }
     }
 
-    use crate::errors::FullRangePoolError;
+    use super::FullRangePoolError;
 
     #[test]
     fn test_token0_lt_token1() {
