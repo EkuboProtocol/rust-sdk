@@ -83,7 +83,11 @@ pub enum BasePoolError {
 }
 
 impl BasePool {
-    pub fn new(key: NodeKey, state: BasePoolState, sorted_ticks: Vec<Tick>) -> Result<Self, BasePoolError> {
+    pub fn new(
+        key: NodeKey,
+        state: BasePoolState,
+        sorted_ticks: Vec<Tick>,
+    ) -> Result<Self, BasePoolError> {
         // Validate token ordering
         if !(key.token0 < key.token1) {
             return Err(BasePoolError::TokenOrderInvalid);
@@ -99,7 +103,7 @@ impl BasePool {
         let mut total_liquidity: u128 = 0;
         let mut active_liquidity: u128 = 0;
         let spacing_i32 = key.config.tick_spacing as i32;
-        
+
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
             if let Some(last) = last_tick {
@@ -107,42 +111,46 @@ impl BasePool {
                     return Err(BasePoolError::TicksNotSorted);
                 }
             };
-            
+
             // Verify ticks are multiples of tick_spacing
             if !(spacing_i32.is_zero() || (tick.index % spacing_i32).is_zero()) {
                 return Err(BasePoolError::TickNotMultipleOfSpacing);
             }
-            
+
             last_tick = Some(tick.index);
-            
+
             // Calculate total liquidity
             total_liquidity = if tick.liquidity_delta < 0 {
-                total_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
-                    .unwrap_or(total_liquidity)
+                total_liquidity
+                    .checked_sub(tick.liquidity_delta.unsigned_abs())
+                    .unwrap()
             } else {
-                total_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
-                    .unwrap_or(total_liquidity)
+                total_liquidity
+                    .checked_add(tick.liquidity_delta.unsigned_abs())
+                    .unwrap()
             };
 
             // Calculate active liquidity
             if let Some(active_index) = state.active_tick_index {
                 if i <= active_index {
                     if tick.liquidity_delta > 0 {
-                        active_liquidity = active_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
-                            .unwrap_or(active_liquidity);
+                        active_liquidity = active_liquidity
+                            .checked_add(tick.liquidity_delta.unsigned_abs())
+                            .unwrap();
                     } else {
-                        active_liquidity = active_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
-                            .unwrap_or(active_liquidity);
+                        active_liquidity = active_liquidity
+                            .checked_sub(tick.liquidity_delta.unsigned_abs())
+                            .unwrap();
                     }
                 }
             }
         }
-        
+
         // Verify total liquidity is zero
         if !total_liquidity.is_zero() {
             return Err(BasePoolError::TotalLiquidityNotZero);
         }
-        
+
         // Verify active liquidity matches state liquidity
         if active_liquidity != state.liquidity {
             return Err(BasePoolError::ActiveLiquidityMismatch);
@@ -150,11 +158,13 @@ impl BasePool {
 
         // Validate sqrt ratio against active or first tick
         if let Some(active) = state.active_tick_index {
-            let tick = sorted_ticks.get(active).ok_or(BasePoolError::ActiveTickIndexOutOfBounds)?;
+            let tick = sorted_ticks
+                .get(active)
+                .ok_or(BasePoolError::ActiveTickIndexOutOfBounds)?;
 
-            let active_tick_sqrt_ratio = to_sqrt_ratio(tick.index)
-                .ok_or(BasePoolError::InvalidTickIndex(tick.index))?;
-                
+            let active_tick_sqrt_ratio =
+                to_sqrt_ratio(tick.index).ok_or(BasePoolError::InvalidTickIndex(tick.index))?;
+
             if !(active_tick_sqrt_ratio <= state.sqrt_ratio) {
                 return Err(BasePoolError::ActiveTickSqrtRatioInvalid);
             }
@@ -162,7 +172,7 @@ impl BasePool {
             if let Some(first) = sorted_ticks.first() {
                 let first_tick_sqrt_ratio = to_sqrt_ratio(first.index)
                     .ok_or(BasePoolError::InvalidTickIndex(first.index))?;
-                    
+
                 if !(state.sqrt_ratio <= first_tick_sqrt_ratio) {
                     return Err(BasePoolError::SqrtRatioTooHighWithNoActiveTick);
                 }
@@ -421,8 +431,8 @@ mod tests {
     }
 
     mod constructor_validation {
-        use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
         use super::BasePoolError;
+        use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
         use crate::math::tick::MAX_TICK;
         use crate::quoting::types::{Config, Tick};
 
@@ -533,7 +543,10 @@ mod tests {
                 },
                 vec![],
             );
-            assert_eq!(result.unwrap_err(), BasePoolError::ActiveTickIndexOutOfBounds);
+            assert_eq!(
+                result.unwrap_err(),
+                BasePoolError::ActiveTickIndexOutOfBounds
+            );
         }
 
         #[test]
@@ -657,7 +670,10 @@ mod tests {
                     },
                 ],
             );
-            assert_eq!(result.unwrap_err(), BasePoolError::ActiveTickIndexOutOfBounds);
+            assert_eq!(
+                result.unwrap_err(),
+                BasePoolError::ActiveTickIndexOutOfBounds
+            );
         }
 
         #[test]
@@ -719,7 +735,10 @@ mod tests {
                     },
                 ],
             );
-            assert_eq!(result.unwrap_err(), BasePoolError::ActiveTickSqrtRatioInvalid);
+            assert_eq!(
+                result.unwrap_err(),
+                BasePoolError::ActiveTickSqrtRatioInvalid
+            );
         }
 
         #[test]
@@ -750,7 +769,10 @@ mod tests {
                     },
                 ],
             );
-            assert_eq!(result.unwrap_err(), BasePoolError::SqrtRatioTooHighWithNoActiveTick);
+            assert_eq!(
+                result.unwrap_err(),
+                BasePoolError::SqrtRatioTooHighWithNoActiveTick
+            );
         }
     }
 
@@ -764,7 +786,8 @@ mod tests {
                 active_tick_index: None,
             },
             vec![],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -792,7 +815,8 @@ mod tests {
                 active_tick_index: None,
             },
             vec![],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -843,7 +867,10 @@ mod tests {
             meta: (),
         };
 
-        let quote = pool.expect("Pool creation should succeed").quote(params).expect("Failed to get quote");
+        let quote = pool
+            .expect("Pool creation should succeed")
+            .quote(params)
+            .expect("Failed to get quote");
 
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 1);
@@ -882,7 +909,10 @@ mod tests {
             meta: (),
         };
 
-        let quote = pool.expect("Pool creation should succeed").quote(params).expect("Failed to get quote");
+        let quote = pool
+            .expect("Pool creation should succeed")
+            .quote(params)
+            .expect("Failed to get quote");
 
         assert_eq!(quote.calculated_amount, 499);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
@@ -983,7 +1013,7 @@ mod tests {
 
         // Unwrap the pool once and store it
         let unwrapped_pool = pool.expect("Pool creation should succeed");
-        
+
         let quote = unwrapped_pool
             .quote(QuoteParams {
                 token_amount: TokenAmount {

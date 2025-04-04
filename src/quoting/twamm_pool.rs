@@ -69,6 +69,8 @@ pub enum TwammPoolError {
     FullRangePoolError(FullRangePoolError),
     /// Sale rate deltas are not ordered or not greater than last_execution_time.
     SaleRateDeltasInvalid,
+    /// Sale rate deltas overflow or underflow at some point
+    SaleRateDeltasOverflowOrUnderflow,
     /// Sum of current sale rate and sale rate deltas must be zero.
     SaleRateDeltaSumNonZero,
 }
@@ -91,28 +93,32 @@ impl TwammPool {
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
-        
+
         for t in virtual_order_deltas.iter() {
             if !(t.time > last_time) {
                 return Err(TwammPoolError::SaleRateDeltasInvalid);
             }
-            
+
             last_time = t.time;
-            
+
             if t.sale_rate_delta0 < 0 {
-                sr0 = sr0.checked_sub(t.sale_rate_delta0.unsigned_abs())
-                    .unwrap_or(sr0);
+                sr0 = sr0
+                    .checked_sub(t.sale_rate_delta0.unsigned_abs())
+                    .ok_or(TwammPoolError::SaleRateDeltasOverflowOrUnderflow)?;
             } else {
-                sr0 = sr0.checked_add(t.sale_rate_delta0.unsigned_abs())
-                    .unwrap_or(sr0);
+                sr0 = sr0
+                    .checked_add(t.sale_rate_delta0.unsigned_abs())
+                    .ok_or(TwammPoolError::SaleRateDeltasOverflowOrUnderflow)?;
             }
-            
+
             if t.sale_rate_delta1 < 0 {
-                sr1 = sr1.checked_sub(t.sale_rate_delta1.unsigned_abs())
-                    .unwrap_or(sr1);
+                sr1 = sr1
+                    .checked_sub(t.sale_rate_delta1.unsigned_abs())
+                    .ok_or(TwammPoolError::SaleRateDeltasOverflowOrUnderflow)?;
             } else {
-                sr1 = sr1.checked_add(t.sale_rate_delta1.unsigned_abs())
-                    .unwrap_or(sr1);
+                sr1 = sr1
+                    .checked_add(t.sale_rate_delta1.unsigned_abs())
+                    .ok_or(TwammPoolError::SaleRateDeltasOverflowOrUnderflow)?;
             }
         }
 
@@ -137,7 +143,8 @@ impl TwammPool {
                 sqrt_ratio: sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO),
                 liquidity: active_liquidity,
             },
-        ).map_err(TwammPoolError::FullRangePoolError)?;
+        )
+        .map_err(TwammPoolError::FullRangePoolError)?;
 
         Ok(TwammPool {
             active_liquidity,
@@ -392,9 +399,9 @@ mod tests {
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
 
     mod constructor_validation {
-        use crate::quoting::twamm_pool::TwammPoolError;
         use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
         use crate::math::uint::U256;
+        use crate::quoting::twamm_pool::TwammPoolError;
         use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
         use crate::quoting::types::Pool;
         use alloc::vec;
@@ -610,7 +617,8 @@ mod tests {
             0,
             0,
             vec![],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -645,7 +653,8 @@ mod tests {
             0,
             0,
             vec![],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -684,7 +693,8 @@ mod tests {
                 sale_rate_delta0: 0,
                 sale_rate_delta1: -(1 << 32),
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -723,7 +733,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: 0,
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -765,7 +776,8 @@ mod tests {
                 sale_rate_delta0: 0,
                 sale_rate_delta1: -(1 << 32),
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -813,7 +825,8 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let quote = pool
             .quote(QuoteParams {
@@ -860,7 +873,8 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -907,7 +921,8 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let quote = pool
             .quote(QuoteParams {
@@ -954,7 +969,8 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -968,7 +984,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 2553);
+        assert_eq!(quote.calculated_amount, 2555);
 
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -994,7 +1010,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1034,7 +1051,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1074,7 +1092,8 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1114,7 +1133,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1128,7 +1148,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 983);
+        assert_eq!(quote.calculated_amount, 984);
 
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -1154,7 +1174,8 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1194,7 +1215,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1208,7 +1230,7 @@ mod tests {
 
         let quote = result.expect("Quote should succeed");
 
-        assert_eq!(quote.calculated_amount, 995);
+        assert_eq!(quote.calculated_amount, 994);
 
         assert_eq!(quote.execution_resources.virtual_order_seconds_executed, 32);
         assert_eq!(
@@ -1234,7 +1256,8 @@ mod tests {
                 sale_rate_delta1: -(2u128.pow(32) as i128),
                 time: 16u64,
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1281,7 +1304,8 @@ mod tests {
                     sale_rate_delta1: -(1 << 33),
                 },
             ],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1321,7 +1345,8 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         // First quote: no swap
         let first = pool
@@ -1378,7 +1403,8 @@ mod tests {
                 sale_rate_delta1: -((10u128.pow(18) << 32) as i128),
                 time: 120u64,
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         // Quote at time 60 (0 seconds pass)
         pool.quote(QuoteParams {
@@ -1492,7 +1518,8 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
@@ -1568,7 +1595,8 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         // First swap
         let first_swap = pool
@@ -1594,5 +1622,58 @@ mod tests {
             override_state: Some(first_swap.state_after),
         })
         .expect("second swap succeeds");
+    }
+
+    #[test]
+    fn example_from_production_sepolia() {
+        let pool = TwammPool::new(
+            TOKEN0,
+            TOKEN1,
+            9223372036854775u64,
+            U256::from(1u8),
+            U256([4182607738901102592, 148436996701757, 0, 0]),
+            4472135213867,
+            1743726720,
+            U256([2017952925546981353, 202, 0, 0]).low_u128(),
+            U256([1597830095238095, 0, 0, 0]).low_u128(),
+            vec![
+                TwammSaleRateDelta {
+                    time: 1743729408,
+                    sale_rate_delta0: 0,
+                    sale_rate_delta1: -1597830095238095,
+                },
+                TwammSaleRateDelta {
+                    time: 1743847424,
+                    sale_rate_delta0: -3545574640073966450931,
+                    sale_rate_delta1: 0,
+                },
+                TwammSaleRateDelta {
+                    time: 1744240640,
+                    sale_rate_delta0: -155475198893155900840,
+                    sale_rate_delta1: 0,
+                },
+                TwammSaleRateDelta {
+                    time: 1759510528,
+                    sale_rate_delta0: -27210416847754056014,
+                    sale_rate_delta1: 0,
+                },
+            ],
+        )
+        .expect("Pool creation should succeed");
+
+        let result = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    token: TOKEN0,
+                    amount: 50000000000000000,
+                },
+                meta: 1743783660,
+                override_state: None,
+                sqrt_ratio_limit: None,
+            })
+            .unwrap();
+
+        assert_eq!(result.consumed_amount, 50000000000000000);
+        assert_eq!(result.calculated_amount, 126983565);
     }
 }

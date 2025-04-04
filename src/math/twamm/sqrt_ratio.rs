@@ -5,44 +5,31 @@ use num_traits::Zero;
 
 const TWO_POW_64: U256 = U256([0, 1, 0, 0]);
 
-fn compute_sqrt_sale_ratio(sale_rate_token0: u128, sale_rate_token1: u128) -> U256 {
+fn compute_sqrt_sale_ratio_x128(sale_rate_token0: u128, sale_rate_token1: u128) -> U256 {
     let sale_ratio: U256 = (U256::from(sale_rate_token1) << 128) / sale_rate_token0;
 
-    if sale_ratio >= U256([0, 0, 0, 1]) {
-        (sale_ratio << 16).integer_sqrt() << 56
-    } else if sale_ratio >= U256([0, 0, 1, 0]) {
+    if sale_ratio < U256([0, 0, 1, 0]) {
+        // full precision
+        (sale_ratio << 128).integer_sqrt()
+    } else if sale_ratio < U256([0, 0, 0, 1]) {
         // we know it only has 192 bits, so we can shift it 64 before rooting to get more precision
         (sale_ratio << 64).integer_sqrt() << 32
     } else {
-        // full precision
-        (sale_ratio << 128).integer_sqrt()
+        (sale_ratio << 16).integer_sqrt() << 56
     }
 }
 
 fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> (U256, bool) {
-    if sqrt_sale_ratio >= sqrt_ratio {
-        (
-            muldiv(
-                sqrt_sale_ratio - sqrt_ratio,
-                U256([0, 0, 1, 0]),
-                sqrt_sale_ratio + sqrt_ratio,
-                false,
-            )
-            .unwrap(),
+    (
+        muldiv(
+            sqrt_sale_ratio.abs_diff(sqrt_ratio),
+            U256([0, 0, 1, 0]),
+            sqrt_sale_ratio + sqrt_ratio,
             false,
         )
-    } else {
-        (
-            muldiv(
-                sqrt_ratio - sqrt_sale_ratio,
-                U256([0, 0, 1, 0]),
-                sqrt_sale_ratio + sqrt_ratio,
-                false,
-            )
-            .unwrap(),
-            true,
-        )
-    }
+        .unwrap(),
+        sqrt_sale_ratio < sqrt_ratio,
+    )
 }
 
 pub fn calculate_next_sqrt_ratio(
@@ -53,13 +40,13 @@ pub fn calculate_next_sqrt_ratio(
     time_elapsed: u32,
     fee: u64,
 ) -> U256 {
-    let sqrt_sale_ratio = compute_sqrt_sale_ratio(sale_rate_token0, sale_rate_token1);
+    let sqrt_sale_ratio = compute_sqrt_sale_ratio_x128(sale_rate_token0, sale_rate_token1);
 
     if liquidity.is_zero() {
         return sqrt_sale_ratio;
     }
 
-    let (c, negative) = compute_c(sqrt_sale_ratio, sqrt_ratio);
+    let (c, c_sign_negative) = compute_c(sqrt_ratio, sqrt_sale_ratio);
 
     if c.is_zero() || liquidity == 0 {
         sqrt_sale_ratio
@@ -78,22 +65,22 @@ pub fn calculate_next_sqrt_ratio(
             return sqrt_sale_ratio;
         }
 
-        let e_pow_exponent = U256::from(exp2(exponent.low_u128())) << 64;
+        let e_pow_exponent_x128 = U256::from(exp2(exponent.low_u128())) << 64;
 
-        let mut sqrt_ratio_next = if negative {
+        let mut sqrt_ratio_next = if c_sign_negative {
             muldiv(
                 sqrt_sale_ratio,
-                e_pow_exponent + c,
-                e_pow_exponent.abs_diff(c),
-                round_up,
+                e_pow_exponent_x128.checked_add(c).unwrap(),
+                e_pow_exponent_x128.checked_sub(c).unwrap(),
+                false,
             )
             .unwrap_or(sqrt_sale_ratio)
         } else {
             muldiv(
                 sqrt_sale_ratio,
-                e_pow_exponent + c,
-                e_pow_exponent.abs_diff(c),
-                round_up,
+                e_pow_exponent_x128.checked_sub(c).unwrap(),
+                e_pow_exponent_x128.checked_add(c).unwrap(),
+                false,
             )
             .unwrap_or(sqrt_sale_ratio)
         };
@@ -261,16 +248,6 @@ mod tests {
                 time_elapsed: 2040,
                 fee: 0,
             },
-            TestCase {
-                description: "example0_solidity",
-                sqrt_ratio: U256::from_dec_str("3402823669209384634633746074317682114560000")
-                    .unwrap(),
-                liquidity: 10_000,
-                token0_sale_rate: 458864027,
-                token1_sale_rate: 280824784,
-                time_elapsed: 46_800,
-                fee: 0,
-            },
         ];
 
         for test_case in test_cases {
@@ -286,5 +263,40 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[test]
+    fn test_example_solidity_lower() {
+        assert_eq!(
+            calculate_next_sqrt_ratio(
+                // price is 10k**2
+                U256::from_dec_str("3402823669209384634633746074317682114560000").unwrap(),
+                // low liquidity
+                10_000,
+                // 0.1 per second
+                458864027,
+                // 0.065384615212679 per second
+                280824784,
+                46_800,
+                0
+            ),
+            // expect 2.100594408164651 ** 2
+            U256::from_dec_str("714795237151155238093993646993154300599").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_example_solidity_upper() {
+        assert_eq!(
+            calculate_next_sqrt_ratio(
+                U256::from_dec_str("2738179289227384381927918250491904").unwrap(),
+                4472135213867,
+                3728260255814876407785,
+                1597830095238095,
+                2688,
+                9223372036854775
+            ),
+            U256::from_dec_str("75660834358443397537995256863811143").unwrap()
+        );
     }
 }
