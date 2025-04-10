@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use core::ops::Add;
 use num_traits::{ToPrimitive, Zero};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TwammPoolState {
     pub full_range_pool_state: FullRangePoolState,
     pub token0_sale_rate: u128,
@@ -18,7 +18,7 @@ pub struct TwammPoolState {
     pub last_execution_time: u64,
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct TwammPoolResources {
     pub full_range_pool_resources: FullRangePoolResources,
     // The number of seconds that passed since the last virtual order execution
