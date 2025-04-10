@@ -72,9 +72,9 @@ pub struct Quote<R, S> {
 // Commonly used as meta
 pub type BlockTimestamp = u64;
 
-pub trait Pool: Send + Sync + Debug + Clone {
-    type Resources: Add<Output = Self::Resources> + Debug + Default + Copy;
-    type State: Debug + Copy;
+pub trait Pool: Send + Sync + Debug + Clone + PartialEq + Eq {
+    type Resources: Add + Debug + Default + Copy + PartialEq + Eq;
+    type State: Debug + Copy + PartialEq + Eq;
     type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
     type Meta: Debug + Copy;
