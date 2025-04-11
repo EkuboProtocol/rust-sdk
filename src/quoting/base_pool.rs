@@ -81,7 +81,7 @@ pub enum BasePoolError {
     /// Invalid tick index.
     InvalidTickIndex(i32),
     /// The application of all tick liquidity deltas must result in a valid intermediate active liqudity.
-    ActiveLiqudityOverflow,
+    ActiveLiquidityOverflow,
 }
 
 impl BasePool {
@@ -127,7 +127,7 @@ impl BasePool {
             } else {
                 total_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
             }
-            .ok_or(BasePoolError::ActiveLiqudityOverflow)?;
+            .ok_or(BasePoolError::ActiveLiquidityOverflow)?;
 
             // Calculate active liquidity
             if let Some(active_index) = state.active_tick_index {
@@ -137,7 +137,7 @@ impl BasePool {
                     } else {
                         active_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
                     }
-                    .ok_or(BasePoolError::ActiveLiqudityOverflow)?;
+                    .ok_or(BasePoolError::ActiveLiquidityOverflow)?;
                 }
             }
         }
