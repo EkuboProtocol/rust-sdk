@@ -57,10 +57,10 @@ impl FullRangePool {
         if !(key.token0 < key.token1) {
             return Err(FullRangePoolError::TokenOrderInvalid);
         }
-        
+
         // Ensure sqrt_ratio is within valid bounds
-        let sqrt_ratio = state.sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO);
-        
+        let sqrt_ratio = state.sqrt_ratio.clamp(MIN_SQRT_RATIO, MAX_SQRT_RATIO);
+
         Ok(Self {
             key,
             state: FullRangePoolState {
@@ -172,7 +172,7 @@ impl Pool for FullRangePool {
         let resources = FullRangePoolResources {
             // Track if the price changed, but only if not overridden
             no_override_price_change: if starting_sqrt_ratio == self.state.sqrt_ratio
-                && starting_sqrt_ratio != sqrt_ratio 
+                && starting_sqrt_ratio != sqrt_ratio
             {
                 1
             } else {
@@ -269,7 +269,8 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 0,
             },
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -296,7 +297,8 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
             },
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -323,7 +325,8 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
             },
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -350,7 +353,8 @@ mod tests {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
             },
-        ).expect("Pool creation should succeed");
+        )
+        .expect("Pool creation should succeed");
 
         let params = QuoteParams {
             token_amount: TokenAmount {
