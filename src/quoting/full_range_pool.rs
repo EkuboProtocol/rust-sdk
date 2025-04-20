@@ -34,12 +34,15 @@ pub enum FullRangePoolQuoteError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FullRangePoolState {
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub sqrt_ratio: U256,
     pub liquidity: u128,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FullRangePool {
     key: NodeKey,
     state: FullRangePoolState,
