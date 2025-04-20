@@ -32,6 +32,7 @@ impl Add for OraclePoolResources {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePool {
     full_range_pool: FullRangePool,
     last_snapshot_time: u64,

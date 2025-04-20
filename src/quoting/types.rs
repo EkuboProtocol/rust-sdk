@@ -4,17 +4,44 @@ use core::ops::Add;
 
 // Unique key identifying the pool.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NodeKey {
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token0: U256,
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token1: U256,
     pub config: Config,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Config {
     pub fee: u64,
     pub tick_spacing: u32,
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub extension: U256,
+}
+
+#[cfg(feature = "serde")]
+pub mod serde_u256 {
+    use super::*;
+    use serde::Serializer;
+
+    pub fn serialize<S>(value: &U256, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex_str = alloc::format!("{:x}", value);
+        serializer.serialize_str(&hex_str)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let hex_str: alloc::borrow::Cow<'static, str> = serde::Deserialize::deserialize(deserializer)?;
+        U256::from_str_radix(&hex_str, 16).map_err(serde::de::Error::custom)
+    }
 }
 
 impl From<U256> for Config {
@@ -37,6 +64,7 @@ impl From<Config> for U256 {
 
 // The aggregate effect of all positions on a pool that are bounded by the specific tick
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tick {
     pub index: i32,
     pub liquidity_delta: i128,
@@ -178,5 +206,34 @@ mod tests {
             v,
             U256::from_str_radix("9784678070511645692802677866596", 10).unwrap()
         );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_node_key() {
+        use crate::quoting::types::NodeKey;
+
+        let key = NodeKey {
+            token0: U256::from(1),
+            token1: U256::from(2),
+            config: Config {
+                tick_spacing: 100,
+                fee: 1 << 63,
+                extension: U256::from(123),
+            },
+        };
+
+        let serialized = serde_json::to_string(&key).unwrap();
+        let expected = serde_json::json!({
+            "token0": "1",
+            "token1": "2",
+            "config": {
+                "tick_spacing": 100,
+                "fee": "9223372036854775808",
+                "extension": "123"
+            }
+        });
+
+        assert_eq!(serde_json::from_str::<NodeKey>(&serialized).unwrap(), key);
     }
 }

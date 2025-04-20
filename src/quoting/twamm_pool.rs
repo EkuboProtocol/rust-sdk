@@ -46,6 +46,7 @@ impl Add for TwammPoolResources {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammSaleRateDelta {
     pub time: u64,
     pub sale_rate_delta0: i128,
@@ -53,6 +54,7 @@ pub struct TwammSaleRateDelta {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPool {
     full_range_pool: FullRangePool,
     active_liquidity: u128,

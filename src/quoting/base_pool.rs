@@ -44,13 +44,16 @@ pub enum BasePoolQuoteError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePoolState {
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub sqrt_ratio: U256,
     pub liquidity: u128,
     pub active_tick_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePool {
     key: NodeKey,
     state: BasePoolState,
@@ -59,6 +62,7 @@ pub struct BasePool {
 
 /// Errors that can occur when constructing a BasePool.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BasePoolError {
     /// Token0 must be less than token1.
     TokenOrderInvalid,
