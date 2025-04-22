@@ -440,6 +440,7 @@ mod tests {
         use super::BasePoolError;
         use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
         use crate::math::tick::MAX_TICK;
+        use crate::quoting::base_pool::BasePoolError::TickSpacingCannotBeZero;
         use crate::quoting::types::{Config, Tick};
 
         #[test]
@@ -473,7 +474,7 @@ mod tests {
                     config: Config {
                         extension: U256::zero(),
                         fee: 0,
-                        tick_spacing: 0,
+                        tick_spacing: 1,
                     },
                 },
                 BasePoolState {
@@ -487,7 +488,7 @@ mod tests {
         }
 
         #[test]
-        fn test_tick_spacing_zero() {
+        fn test_tick_spacing_zero_reverts() {
             let result = BasePool::new(
                 NodeKey {
                     token0: U256::one(),
@@ -505,7 +506,7 @@ mod tests {
                 },
                 vec![],
             );
-            assert!(result.is_ok());
+            assert_eq!(result.unwrap_err(), TickSpacingCannotBeZero);
         }
 
         #[test]
