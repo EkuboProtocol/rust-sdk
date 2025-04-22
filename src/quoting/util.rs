@@ -178,9 +178,12 @@ pub fn construct_sorted_ticks(
         }
     }
     
-    // Always ensure we have proper boundary ticks for min_tick_searched and max_tick_searched
-    // First check if min tick needs to be added
-    if !result.iter().any(|t| t.index == valid_min_tick) {
+    // Special case: preserve MIN_TICK/MAX_TICK if they exist in the input
+    let has_min_tick = result.iter().any(|t| t.index == MIN_TICK);
+    let has_max_tick = result.iter().any(|t| t.index == MAX_TICK);
+    
+    // First check if min tick needs to be added (but don't override MIN_TICK if it exists)
+    if !has_min_tick && !result.iter().any(|t| t.index == valid_min_tick) {
         let min_liquidity_delta = calculate_min_liquidity_delta(
             liquidity, 
             active_liquidity, 
@@ -192,32 +195,34 @@ pub fn construct_sorted_ticks(
             index: valid_min_tick,
             liquidity_delta: min_liquidity_delta,
         });
-        
-        // Recalculate the liquidity sum after adding min tick
-        liquidity_delta_sum = 0;
-        for tick in &result {
-            liquidity_delta_sum = liquidity_delta_sum.saturating_add(tick.liquidity_delta);
-        }
     }
     
-    // Then always ensure max tick is added
-    let max_liquidity_delta = -liquidity_delta_sum;
+    // Recalculate the liquidity sum for max tick calculation
+    liquidity_delta_sum = 0;
+    for tick in &result {
+        liquidity_delta_sum += tick.liquidity_delta; // No saturating_add to preserve negative values
+    }
     
-    // Check if max tick exists, update it or add it
-    let max_tick_exists = result.iter().any(|t| t.index == valid_max_tick);
-    
-    if max_tick_exists {
-        for tick in result.iter_mut() {
-            if tick.index == valid_max_tick {
-                tick.liquidity_delta = max_liquidity_delta;
-                break;
+    // Then ensure max tick is added (but don't override MAX_TICK if it exists)
+    if !has_max_tick {
+        let max_liquidity_delta = -liquidity_delta_sum;
+        
+        // Check if valid max tick exists, update it or add it
+        let valid_max_tick_exists = result.iter().any(|t| t.index == valid_max_tick);
+        
+        if valid_max_tick_exists {
+            for tick in result.iter_mut() {
+                if tick.index == valid_max_tick {
+                    tick.liquidity_delta = max_liquidity_delta;
+                    break;
+                }
             }
+        } else {
+            result.push(Tick {
+                index: valid_max_tick,
+                liquidity_delta: max_liquidity_delta,
+            });
         }
-    } else {
-        result.push(Tick {
-            index: valid_max_tick,
-            liquidity_delta: max_liquidity_delta,
-        });
     }
     
     // Ensure that the current liquidity matches the active liquidity
