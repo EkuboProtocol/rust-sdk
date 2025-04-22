@@ -68,6 +68,8 @@ pub enum BasePoolError {
     TokenOrderInvalid,
     /// Tick spacing must be less than or equal to max tick spacing.
     TickSpacingTooLarge,
+    /// Tick spacing must be greater than zero. Use the `FullRangePool` instead if you encounter this error.
+    TickSpacingCannotBeZero,
     /// Ticks must be sorted in ascending order.
     TicksNotSorted,
     /// All ticks must be a multiple of tick_spacing.
@@ -104,6 +106,10 @@ impl BasePool {
             return Err(BasePoolError::TickSpacingTooLarge);
         }
 
+        if key.config.tick_spacing.is_zero() {
+            return Err(BasePoolError::TickSpacingCannotBeZero);
+        }
+
         // Check ticks are sorted in linear time
         let mut last_tick: Option<i32> = None;
         let mut total_liquidity: u128 = 0;
@@ -119,7 +125,7 @@ impl BasePool {
             };
 
             // Verify ticks are multiples of tick_spacing
-            if !(spacing_i32.is_zero() || (tick.index % spacing_i32).is_zero()) {
+            if !(tick.index % spacing_i32).is_zero() {
                 return Err(BasePoolError::TickNotMultipleOfSpacing);
             }
 
