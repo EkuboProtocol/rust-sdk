@@ -2,7 +2,6 @@ use crate::math::uint::U256;
 use crate::quoting::types::Tick;
 use crate::math::tick::{MIN_TICK, MAX_TICK};
 use alloc::vec::Vec;
-use num_traits::Zero;
 
 // Function to find the nearest initialized tick index.
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
@@ -73,7 +72,7 @@ pub fn construct_sorted_ticks(
     partial_ticks: Vec<Tick>,
     min_tick_searched: i32,
     max_tick_searched: i32,
-    tick_spacing: u32,
+    _tick_spacing: u32,  // Renamed to indicate intentionally unused
     liquidity: u128,
     current_tick: i32,
 ) -> Vec<Tick> {
@@ -101,7 +100,7 @@ pub fn construct_sorted_ticks(
     result.sort_by_key(|tick| tick.index);
     
     // Following the TypeScript implementation reference:
-    let mut active_tick_index = None;
+    let mut _active_tick_index = None;
     let mut current_liquidity: i128 = 0;
 
     // This will be the liquidity we add to the min tick (liquidity_delta_min)
@@ -110,9 +109,9 @@ pub fn construct_sorted_ticks(
     // Find the active tick and compute liquidity delta for min tick
     for (i, tick) in result.iter().enumerate() {
         // If we haven't found the active tick yet and this tick is greater than current tick
-        if active_tick_index.is_none() && tick.index > current_tick {
+        if _active_tick_index.is_none() && tick.index > current_tick {
             // The active tick is the previous tick (if there was one)
-            active_tick_index = if i == 0 { None } else { Some(i - 1) };
+            _active_tick_index = if i == 0 { None } else { Some(i - 1) };
             
             // The difference between the expected liquidity and the current sum is what 
             // needs to be added at the min tick
@@ -127,8 +126,8 @@ pub fn construct_sorted_ticks(
     }
     
     // If we didn't find an active tick (all ticks were <= current_tick)
-    if active_tick_index.is_none() {
-        active_tick_index = if !result.is_empty() { Some(result.len() - 1) } else { None };
+    if _active_tick_index.is_none() {
+        _active_tick_index = if !result.is_empty() { Some(result.len() - 1) } else { None };
         min_tick_liquidity_delta = (liquidity as i128) - current_liquidity;
         current_liquidity = liquidity as i128;
     }
@@ -410,6 +409,7 @@ mod tests {
     
     mod construct_sorted_ticks_tests {
         use super::*;
+        use alloc::vec::Vec;
 
         #[test]
         fn test_empty_ticks() {
