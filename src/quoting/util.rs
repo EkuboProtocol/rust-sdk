@@ -1,5 +1,7 @@
 use crate::math::uint::U256;
 use crate::quoting::types::Tick;
+use crate::math::tick::{MIN_TICK, MAX_TICK};
+use num_traits::Zero;
 
 // Function to find the nearest initialized tick index.
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
@@ -45,6 +47,225 @@ pub fn approximate_number_of_tick_spacings_crossed(
     let end: f64 = u256_to_float_base_x128(ending_sqrt_ratio);
     let ticks_crossed = ((start.ln() - end.ln()).abs() / LOG_BASE_SQRT_TICK_SIZE) as u32;
     ticks_crossed / tick_spacing
+}
+
+/// Converts a partial view of sorted tick data into valid sorted tick data for a pool.
+///
+/// This function takes partial tick data retrieved from a quote data fetcher lens contract
+/// along with min/max tick range, and constructs a valid set of sorted ticks that ensures:
+/// 1. All liquidity deltas add up to zero
+/// 2. The current liquidity matches the sum of liquidity deltas from MIN_TICK to current active tick
+///
+/// # Arguments
+///
+/// * `partial_ticks` - A vector of ticks retrieved from the lens contract
+/// * `min_tick_searched` - The minimum tick that was searched (not necessarily a multiple of tick spacing)
+/// * `max_tick_searched` - The maximum tick that was searched (not necessarily a multiple of tick spacing)
+/// * `tick_spacing` - The tick spacing of the pool
+/// * `liquidity` - The current liquidity of the pool
+/// * `current_tick` - The current tick of the pool
+///
+/// # Returns
+///
+/// * `Vec<Tick>` - A new vector with valid sorted ticks
+pub fn construct_sorted_ticks(
+    partial_ticks: Vec<Tick>,
+    min_tick_searched: i32,
+    max_tick_searched: i32,
+    tick_spacing: u32,
+    liquidity: u128,
+    current_tick: i32,
+) -> Vec<Tick> {
+    if partial_ticks.is_empty() {
+        return Vec::new();
+    }
+
+    let spacing_i32 = tick_spacing as i32;
+    
+    // Round min/max ticks to valid ticks (min down, max up)
+    let valid_min_tick = if min_tick_searched == MIN_TICK {
+        MIN_TICK
+    } else {
+        // Round down to nearest multiple of tick spacing
+        let remainder = min_tick_searched % spacing_i32;
+        if remainder < 0 {
+            min_tick_searched - (spacing_i32 + remainder)
+        } else {
+            min_tick_searched - remainder
+        }
+    };
+    
+    let valid_max_tick = if max_tick_searched == MAX_TICK {
+        MAX_TICK
+    } else {
+        // Round up to nearest multiple of tick spacing
+        let remainder = max_tick_searched % spacing_i32;
+        if remainder == 0 {
+            max_tick_searched
+        } else if remainder < 0 {
+            max_tick_searched - remainder
+        } else {
+            max_tick_searched + (spacing_i32 - remainder)
+        }
+    };
+
+    // Create result vector and add all partial ticks
+    let mut result = partial_ticks.clone();
+    
+    // Calculate current sum of all liquidity deltas
+    let liquidity_delta_sum: i128 = result.iter().map(|tick| tick.liquidity_delta).sum();
+    
+    // Calculate current active liquidity from ticks before or at current tick
+    let mut current_tick_index = None;
+    let mut active_liquidity: u128 = 0;
+    
+    for (i, tick) in result.iter().enumerate() {
+        if tick.index <= current_tick {
+            current_tick_index = Some(i);
+            if tick.liquidity_delta > 0 {
+                active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
+            } else {
+                // Skip subtraction if it would underflow
+                if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
+                    active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    
+    // Add min bound tick if needed
+    if !result.is_empty() && result[0].index > valid_min_tick {
+        let min_liquidity_delta = calculate_min_liquidity_delta(
+            liquidity, 
+            active_liquidity, 
+            liquidity_delta_sum,
+            current_tick <= valid_min_tick,
+        );
+        
+        result.insert(0, Tick {
+            index: valid_min_tick,
+            liquidity_delta: min_liquidity_delta,
+        });
+        
+        // Update current tick index if min tick is less than or equal to current tick
+        if current_tick <= valid_min_tick && current_tick_index.is_none() {
+            current_tick_index = Some(0);
+            if min_liquidity_delta > 0 {
+                active_liquidity = active_liquidity.saturating_add(min_liquidity_delta.unsigned_abs());
+            } else {
+                active_liquidity = active_liquidity.saturating_sub(min_liquidity_delta.unsigned_abs());
+            }
+        } else if current_tick_index.is_some() {
+            current_tick_index = Some(current_tick_index.unwrap() + 1);
+        }
+    }
+    
+    // Add max bound tick if needed
+    if !result.is_empty() && result.last().unwrap().index < valid_max_tick {
+        // If we have a min tick, we need to balance it out
+        // Otherwise, we need to make sure all liquidity deltas sum to zero
+        let max_liquidity_delta = -result.iter().map(|tick| tick.liquidity_delta).sum::<i128>();
+        
+        // Ensure the tick doesn't already exist
+        if !result.iter().any(|t| t.index == valid_max_tick) {
+            result.push(Tick {
+                index: valid_max_tick,
+                liquidity_delta: max_liquidity_delta,
+            });
+        } else {
+            // If it exists, update its liquidity delta
+            for tick in result.iter_mut() {
+                if tick.index == valid_max_tick {
+                    tick.liquidity_delta = max_liquidity_delta;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Ensure that the current liquidity matches the active liquidity
+    if active_liquidity != liquidity {
+        let liquidity_difference = if active_liquidity > liquidity {
+            // Convert to i128 first, then negate to avoid the unary negation on u128
+            -((active_liquidity - liquidity) as i128)
+        } else {
+            (liquidity - active_liquidity) as i128
+        };
+        
+        if let Some(index) = current_tick_index {
+            // Adjust the tick at or before current_tick
+            if index < result.len() {
+                result[index].liquidity_delta += liquidity_difference;
+                
+                // We need to balance this change at the max tick
+                if let Some(last_tick) = result.last_mut() {
+                    last_tick.liquidity_delta -= liquidity_difference;
+                }
+            }
+        } else if !result.is_empty() {
+            // Need to add a new tick at current_tick
+            let mut insert_pos = 0;
+            while insert_pos < result.len() && result[insert_pos].index < current_tick {
+                insert_pos += 1;
+            }
+            
+            let new_tick = Tick {
+                index: current_tick - (current_tick % spacing_i32),
+                liquidity_delta: liquidity_difference,
+            };
+            
+            result.insert(insert_pos, new_tick);
+            
+            // Balance this change at the max tick
+            if let Some(last_tick) = result.last_mut() {
+                last_tick.liquidity_delta -= liquidity_difference;
+            }
+        }
+    }
+    
+    // Ensure ticks are sorted
+    result.sort_by_key(|tick| tick.index);
+    
+    // Remove any duplicate ticks by combining their liquidity deltas
+    let mut i = 0;
+    while i + 1 < result.len() {
+        if result[i].index == result[i + 1].index {
+            result[i].liquidity_delta += result[i + 1].liquidity_delta;
+            result.remove(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+    
+    // Remove any ticks with zero liquidity delta
+    result.retain(|tick| tick.liquidity_delta != 0);
+    
+    result
+}
+
+/// Calculates the appropriate liquidity delta for the min tick
+fn calculate_min_liquidity_delta(
+    liquidity: u128,
+    active_liquidity: u128,
+    liquidity_delta_sum: i128,
+    min_tick_is_active: bool,
+) -> i128 {
+    // If min tick is active, handle liquidity adjustment
+    if min_tick_is_active {
+        let required_delta = liquidity as i128 - active_liquidity as i128;
+        // If all ticks sum to zero, we just need to balance active liquidity
+        if liquidity_delta_sum == 0 {
+            return required_delta;
+        } else {
+            // Otherwise we need to ensure the min tick balances both requirements
+            return required_delta - liquidity_delta_sum;
+        }
+    } else {
+        // If min tick is not active, it just needs to balance the sum
+        -liquidity_delta_sum
+    }
 }
 
 #[cfg(test)]
