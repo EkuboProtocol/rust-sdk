@@ -1,7 +1,7 @@
 use crate::math::uint::U256;
 use crate::quoting::types::Tick;
 use crate::math::tick::{MIN_TICK, MAX_TICK};
-use num_traits::Zero;
+use alloc::vec::Vec;
 
 // Function to find the nearest initialized tick index.
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
@@ -113,7 +113,10 @@ pub fn construct_sorted_ticks(
     let mut result = partial_ticks.clone();
     
     // Calculate current sum of all liquidity deltas
-    let liquidity_delta_sum: i128 = result.iter().map(|tick| tick.liquidity_delta).sum();
+    let mut liquidity_delta_sum: i128 = 0;
+    for tick in &result {
+        liquidity_delta_sum = liquidity_delta_sum.saturating_add(tick.liquidity_delta);
+    }
     
     // Calculate current active liquidity from ticks before or at current tick
     let mut current_tick_index = None;
@@ -166,7 +169,11 @@ pub fn construct_sorted_ticks(
     if !result.is_empty() && result.last().unwrap().index < valid_max_tick {
         // If we have a min tick, we need to balance it out
         // Otherwise, we need to make sure all liquidity deltas sum to zero
-        let max_liquidity_delta = -result.iter().map(|tick| tick.liquidity_delta).sum::<i128>();
+        let mut sum: i128 = 0;
+        for tick in &result {
+            sum = sum.saturating_add(tick.liquidity_delta);
+        }
+        let max_liquidity_delta = -sum;
         
         // Ensure the tick doesn't already exist
         if !result.iter().any(|t| t.index == valid_max_tick) {
