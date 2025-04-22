@@ -573,6 +573,14 @@ mod tests {
             // Verify sum is zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
+            
+            // Debug the tick values to understand what's happening
+            for tick in &result {
+                if tick.index == 150 {
+                    // Specifically check the value of the tick at 150
+                    assert_eq!(tick.liquidity_delta, 0, "Tick at 150 should have liquidity_delta of 0");
+                }
+            }
         
             // Verify current active liquidity
             let mut active_liquidity = 0_u128;
