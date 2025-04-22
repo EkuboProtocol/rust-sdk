@@ -69,7 +69,6 @@ pub fn approximate_number_of_tick_spacings_crossed(
 /// # Returns
 ///
 /// * `Vec<Tick>` - A new vector with valid sorted ticks
-#[allow(unused_mut)] // for debug purposes
 pub fn construct_sorted_ticks(
     partial_ticks: Vec<Tick>,
     min_tick_searched: i32,
@@ -78,29 +77,8 @@ pub fn construct_sorted_ticks(
     liquidity: u128,
     current_tick: i32,
 ) -> Vec<Tick> {
-    // Special case for `test_partial_view_with_existing_liquidity` test
-    if min_tick_searched == -50 && max_tick_searched == 150 && current_tick == 50 && liquidity == 500 {
-        let mut special_case_ticks = partial_ticks.clone();
-        
-        // Add -50 and 150 ticks directly to pass the assertion
-        // These exact values are expected by the test
-        special_case_ticks.push(Tick { index: -50, liquidity_delta: -300 });
-        special_case_ticks.push(Tick { index: 150, liquidity_delta: 0 });
-        
-        // Make sure sum is zero
-        let sum: i128 = special_case_ticks.iter().map(|t| t.liquidity_delta).sum();
-        if sum != 0 {
-            // Add balancing tick if needed
-            special_case_ticks.push(Tick { index: 0, liquidity_delta: -sum });
-        }
-        
-        // Sort by tick index for consistency
-        special_case_ticks.sort_by_key(|t| t.index);
-        
-        return special_case_ticks;
-    }
+    // Handle empty ticks case
     if partial_ticks.is_empty() {
-        // For empty input, create a full range of ticks if there's liquidity
         if liquidity > 0 {
             return alloc::vec![
                 Tick {
@@ -116,226 +94,87 @@ pub fn construct_sorted_ticks(
         return Vec::new();
     }
 
-    let spacing_i32 = tick_spacing as i32;
-    
-    // Round min/max ticks to valid ticks (min down, max up)
-    let valid_min_tick = if min_tick_searched == MIN_TICK {
-        MIN_TICK
-    } else {
-        // Round down to nearest multiple of tick spacing
-        let remainder = min_tick_searched % spacing_i32;
-        if remainder < 0 {
-            min_tick_searched - (spacing_i32 + remainder)
-        } else {
-            min_tick_searched - remainder
-        }
-    };
-    
-    let valid_max_tick = if max_tick_searched == MAX_TICK {
-        MAX_TICK
-    } else {
-        // Round up to nearest multiple of tick spacing
-        let remainder = max_tick_searched % spacing_i32;
-        if remainder == 0 {
-            max_tick_searched
-        } else if remainder < 0 {
-            max_tick_searched - remainder
-        } else {
-            max_tick_searched + (spacing_i32 - remainder)
-        }
-    };
-
-    // Create result vector and add all partial ticks
+    // Create result vector with the input ticks
     let mut result = partial_ticks.clone();
-    
-    // Calculate current sum of all liquidity deltas
-    let mut liquidity_delta_sum: i128 = 0;
-    for tick in &result {
-        liquidity_delta_sum = liquidity_delta_sum.saturating_add(tick.liquidity_delta);
-    }
-    
-    // Calculate current active liquidity from ticks before or at current tick
-    let mut current_tick_index = None;
-    let mut active_liquidity: u128 = 0;
-    
-    for (i, tick) in result.iter().enumerate() {
-        if tick.index <= current_tick {
-            current_tick_index = Some(i);
-            if tick.liquidity_delta > 0 {
-                active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
-            } else {
-                // Skip subtraction if it would underflow
-                if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
-                    active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
-                }
-            }
-        } else {
-            break;
-        }
-    }
-    
-    // Add min bound tick if needed
-    if !result.is_empty() && result[0].index > valid_min_tick {
-        let min_liquidity_delta = calculate_min_liquidity_delta(
-            liquidity, 
-            active_liquidity, 
-            liquidity_delta_sum,
-            current_tick <= valid_min_tick,
-        );
-        
-        result.insert(0, Tick {
-            index: valid_min_tick,
-            liquidity_delta: min_liquidity_delta,
-        });
-        
-        // Update current tick index if min tick is less than or equal to current tick
-        if current_tick <= valid_min_tick && current_tick_index.is_none() {
-            current_tick_index = Some(0);
-            if min_liquidity_delta > 0 {
-                active_liquidity = active_liquidity.saturating_add(min_liquidity_delta.unsigned_abs());
-            } else {
-                active_liquidity = active_liquidity.saturating_sub(min_liquidity_delta.unsigned_abs());
-            }
-        } else if current_tick_index.is_some() {
-            current_tick_index = Some(current_tick_index.unwrap() + 1);
-        }
-    }
-    
-    // Special case: preserve MIN_TICK/MAX_TICK if they exist in the input
-    let has_min_tick = result.iter().any(|t| t.index == MIN_TICK);
-    let has_max_tick = result.iter().any(|t| t.index == MAX_TICK);
-    
-    // First check if min tick needs to be added (but don't override MIN_TICK if it exists)
-    if !has_min_tick && !result.iter().any(|t| t.index == valid_min_tick) {
-        let min_liquidity_delta = calculate_min_liquidity_delta(
-            liquidity, 
-            active_liquidity, 
-            liquidity_delta_sum,
-            current_tick <= valid_min_tick,
-        );
-        
-        result.push(Tick {
-            index: valid_min_tick,
-            liquidity_delta: min_liquidity_delta,
-        });
-    }
-    
-    // Recalculate the liquidity sum for max tick calculation
-    liquidity_delta_sum = 0;
-    for tick in &result {
-        liquidity_delta_sum += tick.liquidity_delta; // No saturating_add to preserve negative values
-    }
-    
-    // Handle valid_max_tick and MAX_TICK separately to ensure both are handled correctly
-    
-    // CRITICAL: For all test cases, always directly add both min_searched and max_searched ticks
-    // to ensure the test assertions pass, regardless of rounding or other calculations
-    
-    // First add min_tick_searched if it's not present
-    if !result.iter().any(|t| t.index == min_tick_searched) {
-        result.push(Tick {
-            index: min_tick_searched,
-            liquidity_delta: if min_tick_searched == -50 { -300 } else { 0 },
-        });
-    }
-    
-    // Always add max_tick_searched to match test expectations
-    if !result.iter().any(|t| t.index == max_tick_searched) {
-        result.push(Tick {
-            index: max_tick_searched,
-            liquidity_delta: 0, // Required for test_partial_view_with_existing_liquidity
-        });
-    }
-    
-    // Calculate liquidity_delta_sum after adding min/max ticks
-    liquidity_delta_sum = 0;
-    for tick in &result {
-        liquidity_delta_sum += tick.liquidity_delta;
-    }
-    
-    // Add a balancing tick at valid_max_tick if not already present
-    if valid_max_tick != max_tick_searched && !result.iter().any(|t| t.index == valid_max_tick) {
-        let max_liquidity_delta = -liquidity_delta_sum;
-        
-        if !max_liquidity_delta.is_zero() {
-            result.push(Tick {
-                index: valid_max_tick,
-                liquidity_delta: max_liquidity_delta,
-            });
-        }
-    }
-    
-    // Only if max_tick_searched is not the same as valid_max_tick, we add it too
-    if valid_max_tick != max_tick_searched && !result.iter().any(|t| t.index == valid_max_tick) {
-        let max_liquidity_delta = -liquidity_delta_sum;
-        
-        result.push(Tick {
-            index: valid_max_tick,
-            liquidity_delta: max_liquidity_delta,
-        });
-        
-        // Recalculate liquidity sum after adding valid_max_tick
-        liquidity_delta_sum = 0;
-    }
-    
-    // Then ensure MAX_TICK is handled if it's in the input or needed for balance
-    if !has_max_tick && valid_max_tick != MAX_TICK {
-        // Recalculate max delta for MAX_TICK if needed
-        let max_tick_delta = -liquidity_delta_sum;
-        
-        if max_tick_delta != 0 {
-            // If we need a non-zero MAX_TICK, add it
-            result.push(Tick {
-                index: MAX_TICK,
-                liquidity_delta: max_tick_delta,
-            });
-        }
-    }
-    
-    // Ensure that the current liquidity matches the active liquidity
-    if active_liquidity != liquidity {
-        let liquidity_difference = if active_liquidity > liquidity {
-            // Convert to i128 first, then negate to avoid the unary negation on u128
-            -((active_liquidity - liquidity) as i128)
-        } else {
-            (liquidity - active_liquidity) as i128
-        };
-        
-        if let Some(index) = current_tick_index {
-            // Adjust the tick at or before current_tick
-            if index < result.len() {
-                result[index].liquidity_delta += liquidity_difference;
-                
-                // We need to balance this change at the max tick
-                if let Some(last_tick) = result.last_mut() {
-                    last_tick.liquidity_delta -= liquidity_difference;
-                }
-            }
-        } else if !result.is_empty() {
-            // Need to add a new tick at current_tick
-            let mut insert_pos = 0;
-            while insert_pos < result.len() && result[insert_pos].index < current_tick {
-                insert_pos += 1;
-            }
-            
-            let new_tick = Tick {
-                index: current_tick - (current_tick % spacing_i32),
-                liquidity_delta: liquidity_difference,
-            };
-            
-            result.insert(insert_pos, new_tick);
-            
-            // Balance this change at the max tick
-            if let Some(last_tick) = result.last_mut() {
-                last_tick.liquidity_delta -= liquidity_difference;
-            }
-        }
-    }
     
     // Ensure ticks are sorted
     result.sort_by_key(|tick| tick.index);
     
-    // Remove any duplicate ticks by combining their liquidity deltas
+    // Following the TypeScript implementation reference:
+    let mut active_tick_index = None;
+    let mut current_liquidity: i128 = 0;
+
+    // This will be the liquidity we add to the min tick (liquidity_delta_min)
+    let mut min_tick_liquidity_delta = 0i128;
+    
+    // Find the active tick and compute liquidity delta for min tick
+    for (i, tick) in result.iter().enumerate() {
+        // If we haven't found the active tick yet and this tick is greater than current tick
+        if active_tick_index.is_none() && tick.index > current_tick {
+            // The active tick is the previous tick (if there was one)
+            active_tick_index = if i == 0 { None } else { Some(i - 1) };
+            
+            // The difference between the expected liquidity and the current sum is what 
+            // needs to be added at the min tick
+            min_tick_liquidity_delta = (liquidity as i128) - current_liquidity;
+            
+            // Reset to the actual liquidity to track what needs to be added at max tick
+            current_liquidity = liquidity as i128;
+        }
+        
+        // Add this tick's delta to our running total
+        current_liquidity += tick.liquidity_delta;
+    }
+    
+    // If we didn't find an active tick (all ticks were <= current_tick)
+    if active_tick_index.is_none() {
+        active_tick_index = if !result.is_empty() { Some(result.len() - 1) } else { None };
+        min_tick_liquidity_delta = (liquidity as i128) - current_liquidity;
+        current_liquidity = liquidity as i128;
+    }
+    
+    // Add the min tick if it's not already in the result
+    let min_tick = min_tick_searched;
+    if !result.iter().any(|t| t.index == min_tick) {
+        result.push(Tick {
+            index: min_tick,
+            liquidity_delta: min_tick_liquidity_delta,
+        });
+    } else {
+        // Update the existing min tick
+        for tick in result.iter_mut() {
+            if tick.index == min_tick {
+                tick.liquidity_delta = min_tick_liquidity_delta;
+                break;
+            }
+        }
+    }
+    
+    // Add the max tick if it's not already in the result
+    let max_tick = max_tick_searched;
+    
+    // Max tick gets the negative of the current liquidity to balance everything
+    let max_tick_liquidity_delta = -current_liquidity;
+    
+    if !result.iter().any(|t| t.index == max_tick) {
+        result.push(Tick {
+            index: max_tick,
+            liquidity_delta: max_tick_liquidity_delta,
+        });
+    } else {
+        // Update the existing max tick
+        for tick in result.iter_mut() {
+            if tick.index == max_tick {
+                tick.liquidity_delta = max_tick_liquidity_delta;
+                break;
+            }
+        }
+    }
+    
+    // Sort again after adding/updating min and max ticks
+    result.sort_by_key(|tick| tick.index);
+    
+    // Merge duplicate ticks
     let mut i = 0;
     while i + 1 < result.len() {
         if result[i].index == result[i + 1].index {
@@ -346,43 +185,21 @@ pub fn construct_sorted_ticks(
         }
     }
     
-    // Remove any ticks with zero liquidity delta
+    // Remove ticks with zero liquidity delta
     result.retain(|tick| tick.liquidity_delta != 0);
     
     result
 }
 
-/// Calculates the appropriate liquidity delta for the min tick
-fn calculate_min_liquidity_delta(
-    liquidity: u128,
-    active_liquidity: u128,
-    liquidity_delta_sum: i128,
-    min_tick_is_active: bool,
-) -> i128 {
-    // If min tick is active, handle liquidity adjustment
-    if min_tick_is_active {
-        let required_delta = liquidity as i128 - active_liquidity as i128;
-        // If all ticks sum to zero, we just need to balance active liquidity
-        if liquidity_delta_sum == 0 {
-            return required_delta;
-        } else {
-            // Otherwise we need to ensure the min tick balances both requirements
-            return required_delta - liquidity_delta_sum;
-        }
-    } else {
-        // If min tick is not active, it just needs to balance the sum
-        -liquidity_delta_sum
-    }
-}
 
 #[cfg(test)]
 mod tests {
-    use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+    use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO, MIN_TICK, MAX_TICK};
     use crate::math::uint::U256;
     use crate::quoting::types::Tick;
     use crate::quoting::util::find_nearest_initialized_tick_index;
     use crate::quoting::util::{
-        approximate_number_of_tick_spacings_crossed, u256_to_float_base_x128,
+        approximate_number_of_tick_spacings_crossed, u256_to_float_base_x128, construct_sorted_ticks,
     };
     use alloc::vec;
 
@@ -589,5 +406,273 @@ mod tests {
             u256_to_float_base_x128(U256([0, 0, 0, 123456])),
             2.2773612363638864e24
         );
+    }
+    
+    mod construct_sorted_ticks_tests {
+        use super::*;
+
+        #[test]
+        fn test_empty_ticks() {
+            let result = construct_sorted_ticks(
+                vec![],
+                MIN_TICK,
+                MAX_TICK,
+                1,
+                1000,
+                0,
+            );
+            
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].index, MIN_TICK);
+            assert_eq!(result[0].liquidity_delta, 1000);
+            assert_eq!(result[1].index, MAX_TICK);
+            assert_eq!(result[1].liquidity_delta, -1000);
+        }
+        
+        #[test]
+        fn test_empty_ticks_zero_liquidity() {
+            let result = construct_sorted_ticks(
+                vec![],
+                MIN_TICK,
+                MAX_TICK,
+                1,
+                0,
+                0,
+            );
+            
+            assert_eq!(result.len(), 0);
+        }
+        
+        #[test]
+        fn test_min_max_tick_rounding() {
+            let tick_spacing = 10;
+            let min_searched = -15; // Should round down to -20
+            let max_searched = 25;  // Should round up to 30
+            
+            let ticks = vec![
+                Tick { index: 0, liquidity_delta: 100 },
+            ];
+            
+            let result = construct_sorted_ticks(
+                ticks,
+                min_searched,
+                max_searched,
+                tick_spacing,
+                100,
+                -5,
+            );
+            
+            // We should have added ticks at -20 and 30
+            assert!(result.iter().any(|t| t.index == -20));
+            assert!(result.iter().any(|t| t.index == 30));
+            
+            // The sum of all liquidity deltas should be zero
+            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+            assert_eq!(sum, 0);
+        }
+        
+        #[test]
+        fn test_current_tick_active_liquidity() {
+            let tick_spacing = 10;
+            let current_tick = 15;
+            let liquidity = 200;
+            
+            let ticks = vec![
+                Tick { index: 0, liquidity_delta: 100 },
+                Tick { index: 20, liquidity_delta: -50 },
+            ];
+            
+            let result = construct_sorted_ticks(
+                ticks,
+                -10,
+                30,
+                tick_spacing,
+                liquidity,
+                current_tick,
+            );
+            
+            // Verify that the liquidity at the current tick is correct
+            let mut active_liquidity = 0_u128;
+            for tick in &result {
+                if tick.index <= current_tick {
+                    if tick.liquidity_delta > 0 {
+                        active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
+                    } else if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
+                        active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
+                    }
+                }
+            }
+            
+            assert_eq!(active_liquidity, liquidity);
+            
+            // The sum of all liquidity deltas should be zero
+            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+            assert_eq!(sum, 0);
+        }
+        
+        #[test]
+        fn test_partial_view_with_existing_liquidity() {
+            let tick_spacing = 10;
+        
+            // Create partial ticks that don't include the whole range
+            let partial_ticks = vec![
+                Tick { index: 0, liquidity_delta: 500 },
+                Tick { index: 100, liquidity_delta: -200 },
+            ];
+        
+            let min_searched = -50;
+            let max_searched = 150;
+            let current_tick = 50;
+            let liquidity = 500; // Current liquidity at tick 50
+        
+            let result = construct_sorted_ticks(
+                partial_ticks,
+                min_searched,
+                max_searched,
+                tick_spacing,
+                liquidity,
+                current_tick,
+            );
+        
+            // Check that we have ticks at the min and max rounded boundaries
+            assert!(result.iter().any(|t| t.index == -50));
+            assert!(result.iter().any(|t| t.index == 150));
+        
+            // Verify sum is zero
+            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+            assert_eq!(sum, 0);
+            
+            // Specifically check the value of the tick at 150
+            for tick in &result {
+                if tick.index == 150 {
+                    assert_eq!(tick.liquidity_delta, 0, "Tick at 150 should have liquidity_delta of 0");
+                }
+            }
+        
+            // Verify current active liquidity
+            let mut active_liquidity = 0_u128;
+            for tick in &result {
+                if tick.index <= current_tick {
+                    if tick.liquidity_delta > 0 {
+                        active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
+                    } else if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
+                        active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
+                    }
+                }
+            }
+        
+            assert_eq!(active_liquidity, liquidity);
+        }
+        
+        #[test]
+        fn test_current_tick_below_min_tick() {
+            let tick_spacing = 10;
+            let min_searched = 0;
+            let max_searched = 100;
+            let current_tick = -20; // Current tick is below the min searched tick
+            let liquidity = 100;
+        
+            let partial_ticks = vec![
+                Tick { index: 0, liquidity_delta: 200 },
+                Tick { index: 50, liquidity_delta: -100 },
+            ];
+        
+            let result = construct_sorted_ticks(
+                partial_ticks,
+                min_searched,
+                max_searched,
+                tick_spacing,
+                liquidity,
+                current_tick,
+            );
+        
+            // Since current tick is below min, we need to ensure the min tick has appropriate liquidity
+            // to make the active liquidity match
+            if let Some(min_tick) = result.iter().find(|t| t.index == 0) {
+                assert_eq!(min_tick.liquidity_delta, 200);
+            } else {
+                panic!("Expected to find min tick in result");
+            }
+        
+            // Sum should be zero
+            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+            assert_eq!(sum, 0);
+        }
+        
+        #[test]
+        fn test_ticks_with_duplicates() {
+            let tick_spacing = 10;
+            
+            // Create partial ticks with duplicate indices
+            let partial_ticks = vec![
+                Tick { index: 0, liquidity_delta: 100 },
+                Tick { index: 0, liquidity_delta: 200 }, // Duplicate
+                Tick { index: 50, liquidity_delta: -150 },
+            ];
+            
+            let result = construct_sorted_ticks(
+                partial_ticks,
+                -10,
+                60,
+                tick_spacing,
+                300,
+                30,
+            );
+            
+            // Check that duplicates were merged
+            let zero_ticks: Vec<_> = result.iter().filter(|t| t.index == 0).collect();
+            assert_eq!(zero_ticks.len(), 1);
+            
+            // Check the merged liquidity delta
+            if let Some(merged_tick) = zero_ticks.first() {
+                assert_eq!(merged_tick.liquidity_delta, 300);
+            }
+            
+            // Sum should be zero
+            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+            assert_eq!(sum, 0);
+        }
+        
+        #[test]
+        fn test_with_min_max_tick_boundary() {
+            let tick_spacing = 10;
+            
+            let partial_ticks = vec![
+                Tick { index: MIN_TICK, liquidity_delta: 1000 },
+                Tick { index: 0, liquidity_delta: 500 },
+                Tick { index: MAX_TICK, liquidity_delta: -1500 },
+            ];
+            
+            let result = construct_sorted_ticks(
+                partial_ticks,
+                MIN_TICK,
+                MAX_TICK,
+                tick_spacing,
+                1000,
+                -10,
+            );
+            
+            // Check boundaries are preserved
+            assert!(result.iter().any(|t| t.index == MIN_TICK));
+            assert!(result.iter().any(|t| t.index == MAX_TICK));
+            
+            // Sum should be zero
+            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+            assert_eq!(sum, 0);
+            
+            // Active liquidity should match
+            let mut active_liquidity = 0_u128;
+            for tick in &result {
+                if tick.index <= -10 {
+                    if tick.liquidity_delta > 0 {
+                        active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
+                    } else if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
+                        active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
+                    }
+                }
+            }
+            
+            assert_eq!(active_liquidity, 1000);
+        }
     }
 }
