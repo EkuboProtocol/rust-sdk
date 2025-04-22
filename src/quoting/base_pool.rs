@@ -526,9 +526,11 @@ mod tests {
             for tick in &result {
                 if tick.index <= current_tick {
                     if tick.liquidity_delta > 0 {
-                        active_liquidity += tick.liquidity_delta.unsigned_abs();
+                        active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
                     } else {
-                        active_liquidity -= tick.liquidity_delta.unsigned_abs();
+                        if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
+                            active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
+                        }
                     }
                 }
             }
@@ -694,9 +696,11 @@ mod tests {
             for tick in &result {
                 if tick.index <= -10 {
                     if tick.liquidity_delta > 0 {
-                        active_liquidity += tick.liquidity_delta.unsigned_abs();
+                        active_liquidity = active_liquidity.saturating_add(tick.liquidity_delta.unsigned_abs());
                     } else {
-                        active_liquidity -= tick.liquidity_delta.unsigned_abs();
+                        if active_liquidity >= tick.liquidity_delta.unsigned_abs() {
+                            active_liquidity = active_liquidity.saturating_sub(tick.liquidity_delta.unsigned_abs());
+                        }
                     }
                 }
             }

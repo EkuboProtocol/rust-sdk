@@ -77,6 +77,19 @@ pub fn construct_sorted_ticks(
     current_tick: i32,
 ) -> Vec<Tick> {
     if partial_ticks.is_empty() {
+        // For empty input, create a full range of ticks if there's liquidity
+        if liquidity > 0 {
+            return alloc::vec![
+                Tick {
+                    index: MIN_TICK,
+                    liquidity_delta: liquidity as i128,
+                },
+                Tick {
+                    index: MAX_TICK,
+                    liquidity_delta: -(liquidity as i128),
+                },
+            ];
+        }
         return Vec::new();
     }
 
@@ -165,31 +178,46 @@ pub fn construct_sorted_ticks(
         }
     }
     
-    // Add max bound tick if needed
-    if !result.is_empty() && result.last().unwrap().index < valid_max_tick {
-        // If we have a min tick, we need to balance it out
-        // Otherwise, we need to make sure all liquidity deltas sum to zero
-        let mut sum: i128 = 0;
-        for tick in &result {
-            sum = sum.saturating_add(tick.liquidity_delta);
-        }
-        let max_liquidity_delta = -sum;
+    // Always ensure we have proper boundary ticks for min_tick_searched and max_tick_searched
+    // First check if min tick needs to be added
+    if !result.iter().any(|t| t.index == valid_min_tick) {
+        let min_liquidity_delta = calculate_min_liquidity_delta(
+            liquidity, 
+            active_liquidity, 
+            liquidity_delta_sum,
+            current_tick <= valid_min_tick,
+        );
         
-        // Ensure the tick doesn't already exist
-        if !result.iter().any(|t| t.index == valid_max_tick) {
-            result.push(Tick {
-                index: valid_max_tick,
-                liquidity_delta: max_liquidity_delta,
-            });
-        } else {
-            // If it exists, update its liquidity delta
-            for tick in result.iter_mut() {
-                if tick.index == valid_max_tick {
-                    tick.liquidity_delta = max_liquidity_delta;
-                    break;
-                }
+        result.push(Tick {
+            index: valid_min_tick,
+            liquidity_delta: min_liquidity_delta,
+        });
+        
+        // Recalculate the liquidity sum after adding min tick
+        liquidity_delta_sum = 0;
+        for tick in &result {
+            liquidity_delta_sum = liquidity_delta_sum.saturating_add(tick.liquidity_delta);
+        }
+    }
+    
+    // Then always ensure max tick is added
+    let max_liquidity_delta = -liquidity_delta_sum;
+    
+    // Check if max tick exists, update it or add it
+    let max_tick_exists = result.iter().any(|t| t.index == valid_max_tick);
+    
+    if max_tick_exists {
+        for tick in result.iter_mut() {
+            if tick.index == valid_max_tick {
+                tick.liquidity_delta = max_liquidity_delta;
+                break;
             }
         }
+    } else {
+        result.push(Tick {
+            index: valid_max_tick,
+            liquidity_delta: max_liquidity_delta,
+        });
     }
     
     // Ensure that the current liquidity matches the active liquidity
