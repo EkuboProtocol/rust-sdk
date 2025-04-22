@@ -203,24 +203,32 @@ pub fn construct_sorted_ticks(
         liquidity_delta_sum += tick.liquidity_delta; // No saturating_add to preserve negative values
     }
     
-    // Then ensure max tick is added (but don't override MAX_TICK if it exists)
-    if !has_max_tick {
+    // Handle valid_max_tick and MAX_TICK separately to ensure both are handled correctly
+    
+    // First, ensure original max_tick_searched becomes a valid boundary tick if specified
+    // but different from MAX_TICK
+    if valid_max_tick != MAX_TICK && !result.iter().any(|t| t.index == valid_max_tick) {
         let max_liquidity_delta = -liquidity_delta_sum;
         
-        // Check if valid max tick exists, update it or add it
-        let valid_max_tick_exists = result.iter().any(|t| t.index == valid_max_tick);
+        result.push(Tick {
+            index: valid_max_tick,
+            liquidity_delta: max_liquidity_delta,
+        });
         
-        if valid_max_tick_exists {
-            for tick in result.iter_mut() {
-                if tick.index == valid_max_tick {
-                    tick.liquidity_delta = max_liquidity_delta;
-                    break;
-                }
-            }
-        } else {
+        // Recalculate liquidity sum after adding valid_max_tick
+        liquidity_delta_sum += max_liquidity_delta;
+    }
+    
+    // Then ensure MAX_TICK is handled if it's in the input or needed for balance
+    if !has_max_tick && valid_max_tick != MAX_TICK {
+        // Recalculate max delta for MAX_TICK if needed
+        let max_tick_delta = -liquidity_delta_sum;
+        
+        if max_tick_delta != 0 {
+            // If we need a non-zero MAX_TICK, add it
             result.push(Tick {
-                index: valid_max_tick,
-                liquidity_delta: max_liquidity_delta,
+                index: MAX_TICK,
+                liquidity_delta: max_tick_delta,
             });
         }
     }
