@@ -322,7 +322,8 @@ impl BasePool {
         // Ensure that the current liquidity matches the active liquidity
         if active_liquidity != liquidity {
             let liquidity_difference = if active_liquidity > liquidity {
-                -(active_liquidity - liquidity) as i128
+                // Convert to i128 first, then negate to avoid the unary negation on u128
+                -((active_liquidity - liquidity) as i128)
             } else {
                 (liquidity - active_liquidity) as i128
             };
@@ -384,7 +385,7 @@ impl BasePool {
             return Vec::new();
         }
         
-        vec![
+        alloc::vec![
             Tick {
                 index: crate::math::tick::MIN_TICK,
                 liquidity_delta: liquidity as i128,
@@ -398,7 +399,7 @@ impl BasePool {
     
     /// Calculates the appropriate liquidity delta for the min tick
     fn calculate_min_liquidity_delta(
-        ticks: &[Tick],
+        _ticks: &[Tick],
         liquidity: u128,
         active_liquidity: u128,
         liquidity_delta_sum: i128,
