@@ -248,27 +248,22 @@ impl BasePool {
             current_tick,
         );
         
-        // Ensure all ticks are multiples of tick spacing (except MIN_TICK and MAX_TICK)
+        // Ensure all ticks are multiples of tick spacing
         for tick in &sorted_ticks {
-            if tick.index % spacing_i32 != 0 && tick.index != MIN_TICK && tick.index != MAX_TICK {
+            if tick.index % spacing_i32 != 0 {
                 return Err(BasePoolError::TickNotMultipleOfSpacing);
             }
         }
         
         // Find the active tick index (closest initialized tick at or below current_tick)
-        let active_tick_index = if sorted_ticks.is_empty() {
-            None
-        } else {
-            let mut index = None;
-            for (i, tick) in sorted_ticks.iter().enumerate() {
-                if tick.index <= current_tick {
-                    index = Some(i);
-                } else {
-                    break;
-                }
+        let mut active_tick_index = None;
+        for (i, tick) in sorted_ticks.iter().enumerate() {
+            if tick.index <= current_tick {
+                active_tick_index = Some(i);
+            } else {
+                break;
             }
-            index
-        };
+        }
         
         // Create the BasePoolState with the provided sqrt_ratio, liquidity, and computed active_tick_index
         let state = BasePoolState {

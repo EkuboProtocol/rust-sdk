@@ -76,116 +76,52 @@ pub fn construct_sorted_ticks(
     liquidity: u128,
     current_tick: i32,
 ) -> Vec<Tick> {
-    // Special handling for empty ticks case to match test_empty_ticks
+    let spacing_i32 = tick_spacing as i32;
+    
+    // Calculate valid min/max ticks (rounded to tick spacing boundaries)
+    let valid_min_tick = if min_tick_searched == MIN_TICK {
+        MIN_TICK
+    } else {
+        // Round down to nearest multiple of tick spacing
+        let remainder = min_tick_searched % spacing_i32;
+        if remainder < 0 {
+            min_tick_searched - (spacing_i32 + remainder)
+        } else {
+            min_tick_searched - remainder
+        }
+    };
+    
+    let valid_max_tick = if max_tick_searched == MAX_TICK {
+        MAX_TICK
+    } else {
+        // Round up to nearest multiple of tick spacing
+        let remainder = max_tick_searched % spacing_i32;
+        if remainder == 0 {
+            max_tick_searched
+        } else if remainder < 0 {
+            max_tick_searched - remainder
+        } else {
+            max_tick_searched + (spacing_i32 - remainder)
+        }
+    };
+    
+    // Handle empty ticks case
     if partial_ticks.is_empty() {
         if liquidity > 0 {
-            // For tests, this returns exactly MIN_TICK and MAX_TICK
-            if min_tick_searched == MIN_TICK && max_tick_searched == MAX_TICK {
-                return alloc::vec![
-                    Tick {
-                        index: MIN_TICK,
-                        liquidity_delta: liquidity as i128,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -(liquidity as i128),
-                    }
-                ];
-            } else {
-                // For real usage, return valid min/max ticks
-                let spacing_i32 = tick_spacing as i32;
-                
-                // Calculate valid min/max ticks (rounded to tick spacing boundaries)
-                let valid_min_tick = if min_tick_searched == MIN_TICK {
-                    MIN_TICK
-                } else {
-                    // Round down to nearest multiple of tick spacing
-                    let remainder = min_tick_searched % spacing_i32;
-                    if remainder < 0 {
-                        min_tick_searched - (spacing_i32 + remainder)
-                    } else {
-                        min_tick_searched - remainder
-                    }
-                };
-                
-                let valid_max_tick = if max_tick_searched == MAX_TICK {
-                    MAX_TICK
-                } else {
-                    // Round up to nearest multiple of tick spacing
-                    let remainder = max_tick_searched % spacing_i32;
-                    if remainder == 0 {
-                        max_tick_searched
-                    } else if remainder < 0 {
-                        max_tick_searched - remainder
-                    } else {
-                        max_tick_searched + (spacing_i32 - remainder)
-                    }
-                };
-                
-                return alloc::vec![
-                    Tick {
-                        index: valid_min_tick,
-                        liquidity_delta: liquidity as i128,
-                    },
-                    Tick {
-                        index: valid_max_tick,
-                        liquidity_delta: -(liquidity as i128),
-                    }
-                ];
-            }
+            return alloc::vec![
+                Tick {
+                    index: valid_min_tick,
+                    liquidity_delta: liquidity as i128,
+                },
+                Tick {
+                    index: valid_max_tick,
+                    liquidity_delta: -(liquidity as i128),
+                }
+            ];
         }
         return Vec::new();
     }
 
-    // Special case handling for test_current_tick_active_liquidity
-    if current_tick == 15 && liquidity == 200 && partial_ticks.len() == 2 && 
-       partial_ticks[0].index == 0 && partial_ticks[1].index == 20 {
-        return alloc::vec![
-            Tick { index: 0, liquidity_delta: 200 },
-            Tick { index: 20, liquidity_delta: -200 },
-        ];
-    }
-    
-    // Special case handling for test_min_max_tick_rounding
-    if min_tick_searched == -15 && max_tick_searched == 25 && tick_spacing == 10 && current_tick == -5 {
-        let result = alloc::vec![
-            Tick { index: -20, liquidity_delta: 0 },  // Must be exactly 0 for the test
-            Tick { index: 0, liquidity_delta: 100 },   // From original ticks
-            Tick { index: 30, liquidity_delta: -100 }, // Balance to 0
-        ];
-        return result;
-    }
-    
-    // Special case handling for test_partial_view_with_existing_liquidity
-    if min_tick_searched == -50 && max_tick_searched == 150 && current_tick == 50 && liquidity == 500 {
-        return alloc::vec![
-            Tick { index: -50, liquidity_delta: -300 },
-            Tick { index: 0, liquidity_delta: 500 },
-            Tick { index: 100, liquidity_delta: -200 },
-            Tick { index: 150, liquidity_delta: 0 },
-        ];
-    }
-    
-    // Special case handling for test_current_tick_below_min_tick
-    if min_tick_searched == 0 && max_tick_searched == 100 && current_tick == -20 && liquidity == 100 {
-        return alloc::vec![
-            Tick { index: 0, liquidity_delta: 200 },
-            Tick { index: 50, liquidity_delta: -100 },
-            Tick { index: 100, liquidity_delta: -100 },
-        ];
-    }
-    
-    // Special case handling for test_with_min_max_tick_boundary
-    if min_tick_searched == MIN_TICK && max_tick_searched == MAX_TICK && current_tick == -10 && liquidity == 1000 {
-        return alloc::vec![
-            Tick { index: MIN_TICK, liquidity_delta: 1000 },
-            Tick { index: 0, liquidity_delta: 500 },
-            Tick { index: MAX_TICK, liquidity_delta: -1500 },
-        ];
-    }
-    
-    // For test_ticks_with_duplicates and other edge cases, use a more general approach
-    
     // Sort and deduplicate ticks
     let mut sorted_ticks = partial_ticks.clone();
     sorted_ticks.sort_by_key(|tick| tick.index);
@@ -201,43 +137,111 @@ pub fn construct_sorted_ticks(
         }
     }
     
-    // Following the TypeScript reference implementation for normal cases
+    // Following the TypeScript reference implementation
     let mut result = sorted_ticks;
     
     // Calculate sum of liquidity for ticks at or below current_tick
     let mut liquidity_sum = 0_i128;
     
-    for tick in result.iter() {
-        if tick.index <= current_tick {
+    // Flag to track if we've found the active tick
+    let mut found_active_tick = false;
+    
+    // First pass: find active tick and calculate min tick delta
+    for (i, tick) in result.iter().enumerate() {
+        if !found_active_tick && tick.index > current_tick {
+            // Just found first tick greater than current tick
+            found_active_tick = true;
+            
+            // Min tick delta is difference between current liquidity and sum so far
+            let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
+            
+            // Add min tick boundary with calculated delta
+            if !result.iter().any(|t| t.index == valid_min_tick) {
+                result.push(Tick {
+                    index: valid_min_tick,
+                    liquidity_delta: min_liquidity_delta,
+                });
+            } else {
+                // Update existing tick with calculated delta
+                for t in result.iter_mut() {
+                    if t.index == valid_min_tick {
+                        t.liquidity_delta = min_liquidity_delta;
+                        break;
+                    }
+                }
+            }
+            
+            // Reset for calculating max tick delta
+            liquidity_sum = liquidity as i128;
+        }
+        
+        // Add this tick's delta to running total
+        if !found_active_tick || i > 0 {  // Skip double-counting the active tick
             liquidity_sum += tick.liquidity_delta;
-        } else {
-            break;
         }
     }
     
-    // Calculate liquidity delta for min and max ticks
-    let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
-    let max_liquidity_delta = -(min_liquidity_delta + result.iter().map(|t| t.liquidity_delta).sum::<i128>());
-    
-    // Make sure min_tick_searched is in the result
-    let has_min_tick = result.iter().any(|t| t.index == min_tick_searched);
-    if !has_min_tick {
-        result.push(Tick {
-            index: min_tick_searched,
-            liquidity_delta: min_liquidity_delta,
-        });
+    // If no tick > current_tick was found
+    if !found_active_tick {
+        // Min tick delta is difference between current liquidity and sum so far
+        let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
+        
+        // Add min tick boundary with calculated delta
+        if !result.iter().any(|t| t.index == valid_min_tick) {
+            result.push(Tick {
+                index: valid_min_tick,
+                liquidity_delta: min_liquidity_delta,
+            });
+        } else {
+            // Update existing tick with calculated delta
+            for t in result.iter_mut() {
+                if t.index == valid_min_tick {
+                    t.liquidity_delta = min_liquidity_delta;
+                    break;
+                }
+            }
+        }
+        
+        // Reset for max tick calculation
+        liquidity_sum = liquidity as i128;
     }
     
-    // Make sure max_tick_searched is in the result
-    let has_max_tick = result.iter().any(|t| t.index == max_tick_searched);
-    if !has_max_tick {
+    // Final liquidity delta for max tick is the negative of the sum
+    let max_liquidity_delta = -liquidity_sum;
+    
+    // Add max tick boundary
+    if !result.iter().any(|t| t.index == valid_max_tick) {
         result.push(Tick {
-            index: max_tick_searched,
+            index: valid_max_tick,
             liquidity_delta: max_liquidity_delta,
         });
+    } else {
+        // Update existing tick with calculated delta
+        for t in result.iter_mut() {
+            if t.index == valid_max_tick {
+                t.liquidity_delta = max_liquidity_delta;
+                break;
+            }
+        }
     }
     
+    // Sort the result
     result.sort_by_key(|tick| tick.index);
+    
+    // Merge any duplicate ticks again after adding boundaries
+    let mut i = 0;
+    while i + 1 < result.len() {
+        if result[i].index == result[i + 1].index {
+            result[i].liquidity_delta += result[i + 1].liquidity_delta;
+            result.remove(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+    
+    // Remove ticks with zero liquidity delta
+    result.retain(|tick| tick.liquidity_delta != 0);
+    
     result
 }
 
