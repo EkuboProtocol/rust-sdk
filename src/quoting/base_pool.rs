@@ -266,6 +266,8 @@ impl BasePool {
 mod from_partial_data_tests {
     use super::*;
     use crate::math::tick::{MIN_TICK, MAX_TICK};
+    use crate::quoting::types::Config;
+    use alloc::vec;
     
     // Constants for testing
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
