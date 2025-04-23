@@ -2,7 +2,9 @@ use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
 use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
-use crate::quoting::util::approximate_number_of_tick_spacings_crossed;
+use crate::quoting::util::{
+    approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
+};
 use alloc::vec::Vec;
 use core::ops::{Add, AddAssign};
 use num_traits::Zero;
@@ -64,6 +66,7 @@ pub struct BasePool {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BasePoolError {
+    ConstructSortedTicksFromPartialDataError(ConstructSortedTicksError),
     /// Token0 must be less than token1.
     TokenOrderInvalid,
     /// Tick spacing must be less than or equal to max tick spacing.
@@ -91,6 +94,76 @@ pub enum BasePoolError {
 }
 
 impl BasePool {
+    /// Creates a BasePool from partial tick data retrieved from a quote data fetcher lens contract.
+    ///
+    /// This helper constructor takes partial tick data along with min/max tick boundaries and constructs
+    /// a valid BasePool instance with properly balanced liquidity deltas.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The NodeKey containing token information and configuration
+    /// * `sqrt_ratio` - The square root price ratio of the pool
+    /// * `partial_ticks` - A vector of ticks retrieved from the lens contract
+    /// * `min_tick_searched` - The minimum tick that was searched (not necessarily a multiple of tick spacing)
+    /// * `max_tick_searched` - The maximum tick that was searched (not necessarily a multiple of tick spacing)
+    /// * `liquidity` - The current liquidity of the pool
+    /// * `current_tick` - The current tick of the pool
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Self, BasePoolError>` - A new BasePool instance or an error
+    pub fn from_partial_data(
+        key: NodeKey,
+        sqrt_ratio: U256,
+        partial_ticks: Vec<Tick>,
+        min_tick_searched: i32,
+        max_tick_searched: i32,
+        liquidity: u128,
+        current_tick: i32,
+    ) -> Result<Self, BasePoolError> {
+        // Use the construct_sorted_ticks function to get valid sorted ticks
+        let tick_spacing = key.config.tick_spacing;
+        let spacing_i32 = tick_spacing as i32;
+
+        // Get sorted ticks using the utility function
+        let sorted_ticks = construct_sorted_ticks(
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            tick_spacing,
+            liquidity,
+            current_tick,
+        )
+        .map_err(BasePoolError::ConstructSortedTicksFromPartialDataError)?;
+
+        // Ensure all ticks are multiples of tick spacing
+        for tick in &sorted_ticks {
+            if tick.index % spacing_i32 != 0 {
+                return Err(BasePoolError::TickNotMultipleOfSpacing);
+            }
+        }
+
+        // Find the active tick index (closest initialized tick at or below current_tick)
+        let mut active_tick_index = None;
+        for (i, tick) in sorted_ticks.iter().enumerate() {
+            if tick.index <= current_tick {
+                active_tick_index = Some(i);
+            } else {
+                break;
+            }
+        }
+
+        // Create the BasePoolState with the provided sqrt_ratio, liquidity, and computed active_tick_index
+        let state = BasePoolState {
+            sqrt_ratio,
+            liquidity,
+            active_tick_index,
+        };
+
+        // Call the existing constructor with the prepared parameters
+        Self::new(key, state, sorted_ticks)
+    }
+
     pub fn new(
         key: NodeKey,
         state: BasePoolState,
@@ -194,6 +267,171 @@ impl BasePool {
 
     pub fn get_sorted_ticks(&self) -> &Vec<Tick> {
         &self.sorted_ticks
+    }
+}
+
+// Tests for the from_partial_data constructor
+#[cfg(test)]
+mod from_partial_data_tests {
+    use super::*;
+    use crate::math::tick::{MAX_TICK, MIN_TICK};
+    use crate::quoting::types::Config;
+    use alloc::vec;
+
+    // Constants for testing
+    const TOKEN0: U256 = U256([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+
+    // Helper function to create a test config
+    fn create_test_config(tick_spacing: u32) -> Config {
+        Config {
+            tick_spacing,
+            fee: 0,
+            extension: U256::zero(),
+        }
+    }
+
+    #[test]
+    fn test_from_partial_data_empty_ticks() {
+        // Test creating a pool with empty tick data
+        let key = NodeKey {
+            token0: TOKEN0,
+            token1: TOKEN1,
+            config: create_test_config(10),
+        };
+
+        let sqrt_ratio = to_sqrt_ratio(0).unwrap();
+        let partial_ticks = Vec::new();
+        let min_tick_searched = -5005;
+        let max_tick_searched = 5005;
+        let liquidity = 1000;
+        let current_tick = 0;
+
+        let result = BasePool::from_partial_data(
+            key,
+            sqrt_ratio,
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            liquidity,
+            current_tick,
+        );
+
+        assert!(result.is_ok());
+        let pool = result.unwrap();
+
+        // Verify the pool has MIN_TICK and MAX_TICK ticks
+        let ticks = pool.get_sorted_ticks();
+        assert_eq!(ticks.len(), 2);
+        assert_eq!(ticks[0].index, -5010);
+        assert_eq!(ticks[0].liquidity_delta, liquidity as i128);
+        assert_eq!(ticks[1].index, 5010);
+        assert_eq!(ticks[1].liquidity_delta, -(liquidity as i128));
+    }
+
+    #[test]
+    fn test_from_partial_data_with_partial_ticks() {
+        // Test creating a pool with partial ticks
+        let key = NodeKey {
+            token0: TOKEN0,
+            token1: TOKEN1,
+            config: create_test_config(10),
+        };
+
+        let sqrt_ratio = to_sqrt_ratio(50).unwrap();
+        let partial_ticks = vec![
+            Tick {
+                index: 0,
+                liquidity_delta: 500,
+            },
+            Tick {
+                index: 100,
+                liquidity_delta: -200,
+            },
+        ];
+
+        let min_tick_searched = -45;
+        let max_tick_searched = 145;
+        let liquidity = 750;
+        let current_tick = 52;
+
+        let result = BasePool::from_partial_data(
+            key,
+            sqrt_ratio,
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            liquidity,
+            current_tick,
+        );
+
+        assert!(result.is_ok());
+        let pool = result.unwrap();
+
+        // Verify the constructed pool has the correct properties
+        let ticks = pool.get_sorted_ticks();
+
+        // Check that we have ticks at the min and max boundaries
+        assert_eq!(
+            pool.sorted_ticks.first().unwrap(),
+            &Tick {
+                index: -50,
+                liquidity_delta: 250
+            }
+        );
+        assert_eq!(
+            pool.sorted_ticks.last().unwrap(),
+            &Tick {
+                index: 150,
+                liquidity_delta: -550
+            }
+        );
+
+        // Verify active_tick_index points to tick at or before current_tick
+        let active_index = pool.state.active_tick_index;
+        assert_eq!(active_index.unwrap(), 1);
+
+        // Verify all liquidity deltas sum to zero
+        let sum: i128 = ticks.iter().map(|t| t.liquidity_delta).sum();
+        assert_eq!(sum, 0);
+
+        // Verify active liquidity matches
+        assert_eq!(pool.state.liquidity, liquidity);
+    }
+
+    #[test]
+    fn test_from_partial_data_tick_spacing_validation() {
+        // Test that the tick spacing validation works
+        let key = NodeKey {
+            token0: TOKEN0,
+            token1: TOKEN1,
+            config: create_test_config(0), // Invalid tick spacing
+        };
+
+        let sqrt_ratio = to_sqrt_ratio(0).unwrap();
+        let partial_ticks = Vec::new();
+        let min_tick_searched = MIN_TICK;
+        let max_tick_searched = MAX_TICK;
+        let liquidity = 1000;
+        let current_tick = 0;
+
+        let result = BasePool::from_partial_data(
+            key,
+            sqrt_ratio,
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            liquidity,
+            current_tick,
+        );
+
+        // Should fail with TickSpacingCannotBeZero
+        assert_eq!(
+            result.unwrap_err(),
+            BasePoolError::ConstructSortedTicksFromPartialDataError(
+                ConstructSortedTicksError::InvalidTickSpacing
+            )
+        );
     }
 }
 
