@@ -137,98 +137,84 @@ pub fn construct_sorted_ticks(
         }
     }
     
-    // Following the TypeScript reference implementation
-    let mut result = sorted_ticks;
+    // Following the TypeScript reference implementation, but avoiding borrow issues
+    let mut sorted_result = sorted_ticks.clone();
     
     // Calculate sum of liquidity for ticks at or below current_tick
     let mut liquidity_sum = 0_i128;
+    let mut active_tick_index = None;
     
-    // Flag to track if we've found the active tick
-    let mut found_active_tick = false;
+    // First pass: find active tick index and calculate running sum
+    for (i, tick) in sorted_ticks.iter().enumerate() {
+        if tick.index <= current_tick {
+            active_tick_index = Some(i);
+            liquidity_sum += tick.liquidity_delta;
+        } else {
+            break;
+        }
+    }
     
-    // First pass: find active tick and calculate min tick delta
-    for (i, tick) in result.iter().enumerate() {
-        if !found_active_tick && tick.index > current_tick {
-            // Just found first tick greater than current tick
-            found_active_tick = true;
-            
-            // Min tick delta is difference between current liquidity and sum so far
-            let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
-            
-            // Add min tick boundary with calculated delta
-            if !result.iter().any(|t| t.index == valid_min_tick) {
+    // Calculate min tick delta (difference between expected and actual liquidity)
+    let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
+    
+    // Calculate max tick delta (ensure all deltas sum to zero)
+    // For this, we need to sum all tick deltas and negate the result plus min_delta
+    let all_delta_sum: i128 = sorted_ticks.iter().map(|t| t.liquidity_delta).sum();
+    let max_liquidity_delta = -(min_liquidity_delta + all_delta_sum);
+    
+    // Check if we already have min/max boundary ticks
+    let has_min_tick = sorted_ticks.iter().any(|t| t.index == valid_min_tick);
+    let has_max_tick = sorted_ticks.iter().any(|t| t.index == valid_max_tick);
+    
+    // Create a new result vector
+    let mut result = Vec::new();
+    
+    // Add or update min boundary tick
+    if has_min_tick {
+        // Update existing tick
+        for tick in &sorted_ticks {
+            if tick.index == valid_min_tick {
                 result.push(Tick {
                     index: valid_min_tick,
                     liquidity_delta: min_liquidity_delta,
                 });
             } else {
-                // Update existing tick with calculated delta
-                for t in result.iter_mut() {
-                    if t.index == valid_min_tick {
-                        t.liquidity_delta = min_liquidity_delta;
-                        break;
-                    }
-                }
-            }
-            
-            // Reset for calculating max tick delta
-            liquidity_sum = liquidity as i128;
-        }
-        
-        // Add this tick's delta to running total
-        if !found_active_tick || i > 0 {  // Skip double-counting the active tick
-            liquidity_sum += tick.liquidity_delta;
-        }
-    }
-    
-    // If no tick > current_tick was found
-    if !found_active_tick {
-        // Min tick delta is difference between current liquidity and sum so far
-        let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
-        
-        // Add min tick boundary with calculated delta
-        if !result.iter().any(|t| t.index == valid_min_tick) {
-            result.push(Tick {
-                index: valid_min_tick,
-                liquidity_delta: min_liquidity_delta,
-            });
-        } else {
-            // Update existing tick with calculated delta
-            for t in result.iter_mut() {
-                if t.index == valid_min_tick {
-                    t.liquidity_delta = min_liquidity_delta;
-                    break;
-                }
+                result.push(tick.clone());
             }
         }
+    } else {
+        // Add all existing ticks
+        result.extend_from_slice(&sorted_ticks);
         
-        // Reset for max tick calculation
-        liquidity_sum = liquidity as i128;
+        // Add new min boundary tick
+        result.push(Tick {
+            index: valid_min_tick,
+            liquidity_delta: min_liquidity_delta,
+        });
     }
     
-    // Final liquidity delta for max tick is the negative of the sum
-    let max_liquidity_delta = -liquidity_sum;
-    
-    // Add max tick boundary
-    if !result.iter().any(|t| t.index == valid_max_tick) {
+    // Add or update max boundary tick
+    let has_max_tick_in_result = result.iter().any(|t| t.index == valid_max_tick);
+    if has_max_tick_in_result {
+        // Update existing tick
+        for tick in result.iter_mut() {
+            if tick.index == valid_max_tick {
+                tick.liquidity_delta = max_liquidity_delta;
+                break;
+            }
+        }
+    } else {
+        // Add new max boundary tick
         result.push(Tick {
             index: valid_max_tick,
             liquidity_delta: max_liquidity_delta,
         });
-    } else {
-        // Update existing tick with calculated delta
-        for t in result.iter_mut() {
-            if t.index == valid_max_tick {
-                t.liquidity_delta = max_liquidity_delta;
-                break;
-            }
-        }
     }
     
     // Sort the result
     result.sort_by_key(|tick| tick.index);
     
-    // Merge any duplicate ticks again after adding boundaries
+    // Merge any duplicate ticks
     let mut i = 0;
     while i + 1 < result.len() {
         if result[i].index == result[i + 1].index {

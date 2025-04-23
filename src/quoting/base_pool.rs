@@ -1,9 +1,8 @@
 use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO, MIN_TICK, MAX_TICK};
+use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::{approximate_number_of_tick_spacings_crossed, construct_sorted_ticks};
-use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::{Add, AddAssign};
 use num_traits::Zero;
@@ -239,7 +238,7 @@ impl BasePool {
         let spacing_i32 = tick_spacing as i32;
         
         // Get sorted ticks using the utility function
-        let mut sorted_ticks = construct_sorted_ticks(
+        let sorted_ticks = construct_sorted_ticks(
             partial_ticks,
             min_tick_searched,
             max_tick_searched,
