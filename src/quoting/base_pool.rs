@@ -1,5 +1,5 @@
 use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
+use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO, MIN_TICK, MAX_TICK};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::{approximate_number_of_tick_spacings_crossed, construct_sorted_ticks};
