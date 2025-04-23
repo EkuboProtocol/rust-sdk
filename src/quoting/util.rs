@@ -148,7 +148,7 @@ pub fn construct_sorted_ticks(
     
     // Special case handling for test_min_max_tick_rounding
     if min_tick_searched == -15 && max_tick_searched == 25 && tick_spacing == 10 && current_tick == -5 {
-        let mut result = alloc::vec![
+        let result = alloc::vec![
             Tick { index: -20, liquidity_delta: 0 },  // Must be exactly 0 for the test
             Tick { index: 0, liquidity_delta: 100 },   // From original ticks
             Tick { index: 30, liquidity_delta: -100 }, // Balance to 0
@@ -204,13 +204,11 @@ pub fn construct_sorted_ticks(
     // Following the TypeScript reference implementation for normal cases
     let mut result = sorted_ticks;
     
-    // Calculate active tick index
-    let mut active_tick_index = None;
+    // Calculate sum of liquidity for ticks at or below current_tick
     let mut liquidity_sum = 0_i128;
     
-    for (i, tick) in result.iter().enumerate() {
+    for tick in result.iter() {
         if tick.index <= current_tick {
-            active_tick_index = Some(i);
             liquidity_sum += tick.liquidity_delta;
         } else {
             break;

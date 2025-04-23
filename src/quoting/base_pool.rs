@@ -3,6 +3,7 @@ use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO, MIN_TICK,
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::{approximate_number_of_tick_spacings_crossed, construct_sorted_ticks};
+use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::{Add, AddAssign};
 use num_traits::Zero;
