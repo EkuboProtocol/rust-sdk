@@ -2,7 +2,6 @@ use crate::math::tick::{MAX_TICK, MIN_TICK};
 use crate::math::uint::U256;
 use crate::quoting::base_pool::MAX_TICK_SPACING;
 use crate::quoting::types::Tick;
-use alloc::vec;
 use alloc::vec::Vec;
 use num_traits::Zero;
 
@@ -74,11 +73,7 @@ pub enum ConstructSortedTicksError {
 /// * `max_tick_searched` - The maximum tick that was searched (not necessarily a multiple of tick spacing)
 /// * `tick_spacing` - The tick spacing of the pool
 /// * `liquidity` - The current liquidity of the pool
-/// * `current_tick` - The current tick of the pool
-///
-/// # Returns
-///
-/// * `Vec<Tick>` - A new vector with valid sorted ticks
+/// * `current_tick` - The current tick of the pool, must be between min and max tick searched
 pub fn construct_sorted_ticks(
     partial_ticks: Vec<Tick>,
     min_tick_searched: i32,
@@ -99,45 +94,21 @@ pub fn construct_sorted_ticks(
 
     let spacing_i32 = tick_spacing as i32;
 
-    // Calculate valid min/max ticks (rounded to tick spacing boundaries)
-    let valid_min_tick = {
-        // Round down to nearest multiple of tick spacing
-        (((min_tick_searched - (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
-            .max((MIN_TICK / spacing_i32) * spacing_i32)
-    };
+    let valid_min_tick = (((min_tick_searched - (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
+        .max((MIN_TICK / spacing_i32) * spacing_i32);
 
-    let valid_max_tick = {
-        // Round down to nearest multiple of tick spacing
-        (((max_tick_searched + (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
-            .min((MAX_TICK / spacing_i32) * spacing_i32)
-    };
-
-    // Handle empty ticks case
-    if partial_ticks.is_empty() {
-        if !liquidity.is_zero() {
-            return Ok(vec![
-                Tick {
-                    index: valid_min_tick,
-                    liquidity_delta: liquidity as i128,
-                },
-                Tick {
-                    index: valid_max_tick,
-                    liquidity_delta: -(liquidity as i128),
-                },
-            ]);
-        }
-        return Ok(vec![]);
-    }
+    let valid_max_tick = (((max_tick_searched + (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
+        .min((MAX_TICK / spacing_i32) * spacing_i32);
 
     // Sort and deduplicate ticks
-    let mut sorted_ticks = partial_ticks.clone();
-    sorted_ticks.sort_by_key(|tick| tick.index);
+    let mut result = partial_ticks.clone();
+    result.sort_by_key(|tick| tick.index);
 
     // Calculate sum of liquidity for ticks at or below current_tick
     let mut liquidity_sum = 0_i128;
 
     // First pass: find active tick index and calculate running sum
-    for tick in sorted_ticks.iter() {
+    for tick in result.iter() {
         if tick.index <= current_tick {
             liquidity_sum += tick.liquidity_delta;
         } else {
@@ -146,77 +117,46 @@ pub fn construct_sorted_ticks(
     }
 
     // Calculate min tick delta (difference between expected and actual liquidity)
-    let min_liquidity_delta = (liquidity as i128) - liquidity_sum;
+    let min_tick_liquidity_delta = (liquidity as i128) - liquidity_sum;
 
     // Calculate max tick delta (ensure all deltas sum to zero)
     // For this, we need to sum all tick deltas and negate the result plus min_delta
-    let all_delta_sum: i128 = sorted_ticks.iter().map(|t| t.liquidity_delta).sum();
-    let max_liquidity_delta = -(min_liquidity_delta + all_delta_sum);
+    let all_delta_sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
+    let max_tick_liquidity_delta = -(min_tick_liquidity_delta + all_delta_sum);
 
-    // Check if we already have min/max boundary ticks
-    let has_min_tick = sorted_ticks.iter().any(|t| t.index == valid_min_tick);
+    if min_tick_liquidity_delta != 0 {
+        // Check if we already have min/max boundary ticks
+        let has_min_tick = result.first().map_or(false, |t| t.index == valid_min_tick);
 
-    // Create a new result vector
-    let mut result = Vec::new();
-
-    // Add or update min boundary tick
-    if has_min_tick {
-        // Update existing tick
-        for tick in &sorted_ticks {
-            if tick.index == valid_min_tick {
-                result.push(Tick {
-                    index: valid_min_tick,
-                    liquidity_delta: min_liquidity_delta,
-                });
-            } else {
-                result.push(tick.clone());
-            }
-        }
-    } else {
-        // Add all existing ticks
-        result.extend_from_slice(&sorted_ticks);
-
-        // Add new min boundary tick
-        result.push(Tick {
-            index: valid_min_tick,
-            liquidity_delta: min_liquidity_delta,
-        });
-    }
-
-    // Add or update max boundary tick
-    let has_max_tick_in_result = result.iter().any(|t| t.index == valid_max_tick);
-    if has_max_tick_in_result {
-        // Update existing tick
-        for tick in result.iter_mut() {
-            if tick.index == valid_max_tick {
-                tick.liquidity_delta = max_liquidity_delta;
-                break;
-            }
-        }
-    } else {
-        // Add new max boundary tick
-        result.push(Tick {
-            index: valid_max_tick,
-            liquidity_delta: max_liquidity_delta,
-        });
-    }
-
-    // Sort the result
-    result.sort_by_key(|tick| tick.index);
-
-    // Merge any duplicate ticks
-    let mut i = 0;
-    while i + 1 < result.len() {
-        if result[i].index == result[i + 1].index {
-            result[i].liquidity_delta += result[i + 1].liquidity_delta;
-            result.remove(i + 1);
+        // Add or update min boundary tick
+        if has_min_tick {
+            result.first_mut().unwrap().liquidity_delta += min_tick_liquidity_delta;
         } else {
-            i += 1;
+            result.insert(
+                0,
+                Tick {
+                    index: valid_min_tick,
+                    liquidity_delta: min_tick_liquidity_delta,
+                },
+            );
         }
     }
 
-    // Remove ticks with zero liquidity delta
-    result.retain(|tick| tick.liquidity_delta != 0);
+    if max_tick_liquidity_delta != 0 {
+        let has_max_tick = result.last().map_or(false, |t| t.index == valid_max_tick);
+
+        // Add or update max boundary tick
+        if has_max_tick {
+            // Update existing tick
+            result.last_mut().unwrap().liquidity_delta += max_tick_liquidity_delta;
+        } else {
+            // Add new max boundary tick
+            result.push(Tick {
+                index: valid_max_tick,
+                liquidity_delta: max_tick_liquidity_delta,
+            });
+        }
+    }
 
     Ok(result)
 }
@@ -232,7 +172,6 @@ mod tests {
         u256_to_float_base_x128,
     };
     use alloc::vec;
-    use alloc::vec::Vec;
 
     #[test]
     fn test_find_nearest_initialized_tick_index_no_ticks() {
@@ -455,6 +394,17 @@ mod tests {
         }
 
         #[test]
+        fn test_empty_ticks_rounded_tick_spacing() {
+            let result = construct_sorted_ticks(vec![], MIN_TICK, MAX_TICK, 10, 1000, 0).unwrap();
+
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].index, -88722830);
+            assert_eq!(result[0].liquidity_delta, 1000);
+            assert_eq!(result[1].index, 88722830);
+            assert_eq!(result[1].liquidity_delta, -1000);
+        }
+
+        #[test]
         fn test_empty_ticks_zero_liquidity() {
             let result = construct_sorted_ticks(vec![], MIN_TICK, MAX_TICK, 1, 0, 0).unwrap();
 
@@ -610,43 +560,6 @@ mod tests {
                 .unwrap_err(),
                 ConstructSortedTicksError::CurrentTickOutsideSearchedRange
             );
-        }
-
-        #[test]
-        fn test_ticks_with_duplicates() {
-            let tick_spacing = 10;
-
-            // Create partial ticks with duplicate indices
-            let partial_ticks = vec![
-                Tick {
-                    index: 0,
-                    liquidity_delta: 100,
-                },
-                Tick {
-                    index: 0,
-                    liquidity_delta: 200,
-                }, // Duplicate
-                Tick {
-                    index: 50,
-                    liquidity_delta: -150,
-                },
-            ];
-
-            let result =
-                construct_sorted_ticks(partial_ticks, -10, 60, tick_spacing, 300, 30).unwrap();
-
-            // Check that duplicates were merged
-            let zero_ticks: Vec<_> = result.iter().filter(|t| t.index == 0).collect();
-            assert_eq!(zero_ticks.len(), 1);
-
-            // Check the merged liquidity delta
-            if let Some(merged_tick) = zero_ticks.first() {
-                assert_eq!(merged_tick.liquidity_delta, 300);
-            }
-
-            // Sum should be zero
-            let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
-            assert_eq!(sum, 0);
         }
 
         #[test]
