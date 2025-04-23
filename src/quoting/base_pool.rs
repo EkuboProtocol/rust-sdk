@@ -224,73 +224,21 @@ impl BasePool {
         liquidity: u128,
         current_tick: i32,
     ) -> Result<Self, BasePoolError> {
-        // Validate tick spacing first (to handle test_from_partial_data_tick_spacing_validation)
+        // Validate tick spacing
         if key.config.tick_spacing > MAX_TICK_SPACING {
             return Err(BasePoolError::TickSpacingTooLarge);
         }
 
+        // BasePool cannot be constructed with 0 tick spacing
         if key.config.tick_spacing.is_zero() {
-            // This validation needs to work for test_from_partial_data_tick_spacing_validation
-            // But be skipped for other tests which expect special behavior
-            if partial_ticks.is_empty() && min_tick_searched == MIN_TICK && 
-               max_tick_searched == MAX_TICK && liquidity == 1000 && current_tick == 0 {
-                // This is test_from_partial_data_tick_spacing_validation
-                return Err(BasePoolError::TickSpacingCannotBeZero);
-            }
-            // For other test cases, we'll proceed despite invalid tick spacing
+            return Err(BasePoolError::TickSpacingCannotBeZero);
         }
         
-        // Special case handling for test_from_partial_data_empty_ticks
-        if partial_ticks.is_empty() && min_tick_searched == MIN_TICK && 
-           max_tick_searched == MAX_TICK && liquidity == 1000 && current_tick == 0 {
-            // Direct handling for the exact test case
-            let sorted_ticks = vec![
-                Tick { index: MIN_TICK, liquidity_delta: 1000 },
-                Tick { index: MAX_TICK, liquidity_delta: -1000 },
-            ];
-            
-            let state = BasePoolState {
-                sqrt_ratio,
-                liquidity,
-                active_tick_index: None,
-            };
-            
-            return Ok(Self {
-                key,
-                state,
-                sorted_ticks,
-            });
-        }
-        
-        // Special case for test_from_partial_data_with_partial_ticks
-        if min_tick_searched == -50 && max_tick_searched == 150 && 
-           current_tick == 50 && liquidity == 500 && partial_ticks.len() == 2 {
-            // This matches the test case parameters
-            let sorted_ticks = vec![
-                Tick { index: -50, liquidity_delta: -300 },
-                Tick { index: 0, liquidity_delta: 500 },
-                Tick { index: 100, liquidity_delta: -200 },
-                Tick { index: 150, liquidity_delta: 0 },
-            ];
-            
-            let state = BasePoolState {
-                sqrt_ratio,
-                liquidity,
-                active_tick_index: Some(1), // Index of tick at 0
-            };
-            
-            return Ok(Self {
-                key,
-                state,
-                sorted_ticks,
-            });
-        }
-        
-        // Use the construct_sorted_ticks function from util to construct valid sorted ticks
+        // Use the construct_sorted_ticks function to get valid sorted ticks
         let tick_spacing = key.config.tick_spacing;
         let spacing_i32 = tick_spacing as i32;
         
-        // Get sorted ticks
+        // Get sorted ticks using the utility function
         let mut sorted_ticks = construct_sorted_ticks(
             partial_ticks,
             min_tick_searched,
@@ -300,7 +248,12 @@ impl BasePool {
             current_tick,
         );
         
-        // Skip tick spacing validation to make tests pass
+        // Ensure all ticks are multiples of tick spacing (except MIN_TICK and MAX_TICK)
+        for tick in &sorted_ticks {
+            if tick.index % spacing_i32 != 0 && tick.index != MIN_TICK && tick.index != MAX_TICK {
+                return Err(BasePoolError::TickNotMultipleOfSpacing);
+            }
+        }
         
         // Find the active tick index (closest initialized tick at or below current_tick)
         let active_tick_index = if sorted_ticks.is_empty() {
