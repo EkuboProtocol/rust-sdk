@@ -128,8 +128,13 @@ impl Pool for MEVResistPool {
 
                 let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
 
-                let approximate_fee_multiplier = ((tick_after_swap - self.tick).abs() as u32)
-                    / self.base_pool.get_key().config.tick_spacing;
+                let approximate_fee_multiplier = ((tick_after_swap - self.tick).abs() as f64)
+                    / (self.base_pool.get_key().config.tick_spacing as f64);
+
+                let fixed_point_additional_fee: u64 =
+                    ((approximate_fee_multiplier * self.get_key().config.fee as f64).round()
+                        as u128)
+                        .min(u64::MAX as u128) as u64;
 
                 let pool_time = params
                     .override_state
@@ -139,7 +144,7 @@ impl Pool for MEVResistPool {
                 // this is at least 2 additional SSTOREs
                 let state_update_count = if pool_time != current_time { 1 } else { 0 };
 
-                if approximate_fee_multiplier == 0 {
+                if fixed_point_additional_fee == 0 {
                     // nothing to do here
                     return Ok(Quote {
                         calculated_amount: quote.calculated_amount,
