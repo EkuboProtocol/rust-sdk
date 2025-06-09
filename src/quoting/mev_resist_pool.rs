@@ -1,3 +1,4 @@
+use crate::math::swap::{amount_before_fee, compute_fee};
 use crate::math::tick::{approximate_sqrt_ratio_to_tick, FULL_RANGE_TICK_SPACING};
 use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
@@ -128,12 +129,12 @@ impl Pool for MEVResistPool {
 
                 let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
 
+                let pool_config = self.base_pool.get_key().config;
                 let approximate_fee_multiplier = ((tick_after_swap - self.tick).abs() as f64)
-                    / (self.base_pool.get_key().config.tick_spacing as f64);
+                    / (pool_config.tick_spacing as f64);
 
                 let fixed_point_additional_fee: u64 =
-                    ((approximate_fee_multiplier * self.get_key().config.fee as f64).round()
-                        as u128)
+                    ((approximate_fee_multiplier * pool_config.fee as f64).round() as u128)
                         .min(u64::MAX as u128) as u64;
 
                 let pool_time = params
@@ -162,9 +163,30 @@ impl Pool for MEVResistPool {
                     });
                 }
 
-                return Ok(Quote {
-                    // todo: discount the calculated amount
-                    calculated_amount: quote.calculated_amount,
+                let mut calculated_amount = quote.calculated_amount;
+
+                if params.token_amount.amount >= 0 {
+                    // exact input, remove the additional fee from the output
+                    calculated_amount -=
+                        compute_fee(calculated_amount as u128, fixed_point_additional_fee) as i128;
+                } else {
+                    let input_amount_fee: u128 =
+                        compute_fee(calculated_amount as u128, pool_config.fee);
+                    let input_amount = (calculated_amount as u128) - input_amount_fee;
+
+                    if let Some(bf) = amount_before_fee(input_amount, fixed_point_additional_fee) {
+                        let fee = bf - input_amount;
+                        // exact output, compute the additional fee for the output
+                        calculated_amount += fee as i128;
+                    } else {
+                        return Err(BasePoolQuoteError::FailedComputeSwapStep(
+                            crate::math::swap::ComputeStepError::AmountBeforeFeeOverflow,
+                        ));
+                    }
+                }
+
+                Ok(Quote {
+                    calculated_amount: calculated_amount,
                     consumed_amount: quote.consumed_amount,
                     execution_resources: MEVResistPoolResources {
                         state_update_count: state_update_count,
@@ -176,9 +198,9 @@ impl Pool for MEVResistPool {
                         last_update_time: current_time,
                         base_pool_state: quote.state_after,
                     },
-                });
+                })
             }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         }
     }
 
@@ -196,5 +218,156 @@ impl Pool for MEVResistPool {
 
     fn is_path_dependent(&self) -> bool {
         true
+    }
+}
+
+mod tests {
+    use alloc::vec;
+
+    use crate::{
+        math::{tick::to_sqrt_ratio, uint::U256},
+        quoting::{
+            base_pool::{BasePool, BasePoolState},
+            mev_resist_pool::MEVResistPool,
+            types::{Config, NodeKey, Pool, QuoteParams, Tick, TokenAmount},
+        },
+    };
+
+    #[test]
+    fn test_swap_input_amount_token0() {
+        let liquidity: i128 = 28_898_102;
+        let pool = MEVResistPool::new(
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + U256::one(),
+                    config: Config {
+                        fee: ((1_u128 << 64) / 100) as u64,
+                        tick_spacing: 20_000,
+                        extension: U256::one(),
+                    },
+                },
+                BasePoolState {
+                    active_tick_index: Some(0),
+                    liquidity: liquidity as u128,
+                    sqrt_ratio: to_sqrt_ratio(700_000).unwrap(),
+                },
+                vec![
+                    Tick {
+                        index: 600_000,
+                        liquidity_delta: liquidity,
+                    },
+                    Tick {
+                        index: 800_000,
+                        liquidity_delta: -liquidity,
+                    },
+                ],
+            )
+            .unwrap(),
+            1,
+            700_000,
+        )
+        .unwrap();
+
+        let result = pool
+            .quote(QuoteParams {
+                meta: 1,
+                override_state: None,
+                sqrt_ratio_limit: None,
+                token_amount: TokenAmount {
+                    amount: 100_000,
+                    token: U256::one(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result.consumed_amount, result.calculated_amount),
+            (100_000, 197_432)
+        );
+        assert_eq!(result.state_after.last_update_time, 1);
+
+        // two swaps
+        let mut result = pool
+            .quote(QuoteParams {
+                meta: 1,
+                override_state: None,
+                sqrt_ratio_limit: None,
+                token_amount: TokenAmount {
+                    amount: 300_000,
+                    token: U256::one(),
+                },
+            })
+            .unwrap();
+        result = pool
+            .quote(QuoteParams {
+                meta: 1,
+                override_state: Some(result.state_after),
+                sqrt_ratio_limit: None,
+                token_amount: TokenAmount {
+                    amount: 300_000,
+                    token: U256::one(),
+                },
+            })
+            .unwrap();
+        assert_eq!(
+            (result.consumed_amount, result.calculated_amount),
+            (300_000, 556_308)
+        );
+    }
+
+    #[test]
+    fn test_swap_output_amount_token0() {
+        let liquidity: i128 = 28_898_102;
+        let pool = MEVResistPool::new(
+            BasePool::new(
+                NodeKey {
+                    token0: U256::one(),
+                    token1: U256::one() + U256::one(),
+                    config: Config {
+                        fee: ((1_u128 << 64) / 100) as u64,
+                        tick_spacing: 20_000,
+                        extension: U256::one(),
+                    },
+                },
+                BasePoolState {
+                    active_tick_index: Some(0),
+                    liquidity: liquidity as u128,
+                    sqrt_ratio: to_sqrt_ratio(700_000).unwrap(),
+                },
+                vec![
+                    Tick {
+                        index: 600_000,
+                        liquidity_delta: liquidity,
+                    },
+                    Tick {
+                        index: 800_000,
+                        liquidity_delta: -liquidity,
+                    },
+                ],
+            )
+            .unwrap(),
+            1,
+            700_000,
+        )
+        .unwrap();
+
+        let result = pool
+            .quote(QuoteParams {
+                meta: 1,
+                override_state: None,
+                sqrt_ratio_limit: None,
+                token_amount: TokenAmount {
+                    amount: -100_000,
+                    token: U256::one(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result.consumed_amount, result.calculated_amount),
+            (-100_000, 205_416)
+        );
+        assert_eq!(result.state_after.last_update_time, 1);
     }
 }
