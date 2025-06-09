@@ -53,6 +53,7 @@ pub struct FullRangePool {
 pub enum FullRangePoolError {
     /// Token0 must be less than token1.
     TokenOrderInvalid,
+    SqrtRatioInvalid,
 }
 
 impl FullRangePool {
@@ -61,13 +62,14 @@ impl FullRangePool {
             return Err(FullRangePoolError::TokenOrderInvalid);
         }
 
-        // Ensure sqrt_ratio is within valid bounds
-        let sqrt_ratio = state.sqrt_ratio.clamp(MIN_SQRT_RATIO, MAX_SQRT_RATIO);
+        if state.sqrt_ratio < MIN_SQRT_RATIO || state.sqrt_ratio > MAX_SQRT_RATIO {
+            return Err(FullRangePoolError::SqrtRatioInvalid);
+        }
 
         Ok(Self {
             key,
             state: FullRangePoolState {
-                sqrt_ratio,
+                sqrt_ratio: state.sqrt_ratio,
                 liquidity: state.liquidity,
             },
         })
@@ -219,6 +221,10 @@ impl Pool for FullRangePool {
         } else {
             None
         }
+    }
+
+    fn is_path_dependent(&self) -> bool {
+        false
     }
 }
 

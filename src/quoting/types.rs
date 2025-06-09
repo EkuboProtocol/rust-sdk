@@ -39,7 +39,8 @@ pub mod serde_u256 {
     where
         D: serde::Deserializer<'de>,
     {
-        let hex_str: alloc::borrow::Cow<'static, str> = serde::Deserialize::deserialize(deserializer)?;
+        let hex_str: alloc::borrow::Cow<'static, str> =
+            serde::Deserialize::deserialize(deserializer)?;
         U256::from_str_radix(&hex_str, 16).map_err(serde::de::Error::custom)
     }
 }
@@ -122,6 +123,9 @@ pub trait Pool: Send + Sync + Debug + Clone + PartialEq + Eq {
     fn max_tick_with_liquidity(&self) -> Option<i32>;
     // Returns the smallest tick with non-zero liquidity in the pool
     fn min_tick_with_liquidity(&self) -> Option<i32>;
+
+    // Returns false if a swap of x followed by a swap of y will have the same output as a swap of x + y
+    fn is_path_dependent(&self) -> bool;
 }
 
 #[cfg(test)]

@@ -387,6 +387,10 @@ impl Pool for TwammPool {
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.full_range_pool.min_tick_with_liquidity()
     }
+
+    fn is_path_dependent(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
