@@ -651,6 +651,10 @@ impl Pool for BasePool {
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.sorted_ticks.first().map(|t| t.index)
     }
+
+    fn is_path_dependent(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
