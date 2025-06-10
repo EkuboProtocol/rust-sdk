@@ -168,7 +168,7 @@ impl Pool for MEVResistPool {
                 if params.token_amount.amount >= 0 {
                     // exact input, remove the additional fee from the output
                     calculated_amount -=
-                        compute_fee(calculated_amount as u128, fixed_point_additional_fee) as i128;
+                        compute_fee(calculated_amount as u128, fixed_point_additional_fee);
                 } else {
                     let input_amount_fee: u128 =
                         compute_fee(calculated_amount as u128, pool_config.fee);
@@ -177,7 +177,7 @@ impl Pool for MEVResistPool {
                     if let Some(bf) = amount_before_fee(input_amount, fixed_point_additional_fee) {
                         let fee = bf - input_amount;
                         // exact output, compute the additional fee for the output
-                        calculated_amount += fee as i128;
+                        calculated_amount += fee;
                     } else {
                         return Err(BasePoolQuoteError::FailedComputeSwapStep(
                             crate::math::swap::ComputeStepError::AmountBeforeFeeOverflow,
@@ -221,6 +221,7 @@ impl Pool for MEVResistPool {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use alloc::vec;
 

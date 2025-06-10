@@ -506,7 +506,7 @@ impl Pool for BasePool {
             }
         };
 
-        let mut calculated_amount: i128 = 0;
+        let mut calculated_amount: u128 = 0;
         let mut fees_paid: u128 = 0;
         let mut initialized_ticks_crossed: u32 = 0;
         let mut amount_remaining = amount;

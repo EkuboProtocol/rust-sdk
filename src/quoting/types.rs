@@ -92,7 +92,7 @@ pub struct QuoteParams<S, M> {
 pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
-    pub calculated_amount: i128,
+    pub calculated_amount: u128,
     pub execution_resources: R,
     pub state_after: S,
     pub fees_paid: u128,
