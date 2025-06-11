@@ -5,7 +5,7 @@ use crate::quoting::full_range_pool::{
     FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState,
 };
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
-use core::ops::Add;
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OraclePoolState {
@@ -19,15 +19,35 @@ pub struct OraclePoolResources {
     pub snapshots_written: u32,
 }
 
+impl AddAssign for OraclePoolResources {
+    fn add_assign(&mut self, rhs: Self) {
+        self.full_range_pool_resources += rhs.full_range_pool_resources;
+        self.snapshots_written += rhs.snapshots_written;
+    }
+}
+
 impl Add for OraclePoolResources {
     type Output = OraclePoolResources;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        OraclePoolResources {
-            full_range_pool_resources: self.full_range_pool_resources
-                + rhs.full_range_pool_resources,
-            snapshots_written: self.snapshots_written + rhs.snapshots_written,
-        }
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl SubAssign for OraclePoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.full_range_pool_resources -= rhs.full_range_pool_resources;
+        self.snapshots_written -= rhs.snapshots_written;
+    }
+}
+
+impl Sub for OraclePoolResources {
+    type Output = Self;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
     }
 }
 

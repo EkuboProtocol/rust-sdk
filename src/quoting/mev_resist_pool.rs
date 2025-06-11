@@ -2,7 +2,7 @@ use crate::math::swap::{amount_before_fee, compute_fee};
 use crate::math::tick::{approximate_sqrt_ratio_to_tick, FULL_RANGE_TICK_SPACING};
 use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
-use core::ops::{Add, AddAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 // Resources consumed during any swap execution in a full range pool.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
@@ -23,6 +23,22 @@ impl Add for MEVResistPoolResources {
 
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
+        self
+    }
+}
+
+impl SubAssign for MEVResistPoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.state_update_count -= rhs.state_update_count;
+        self.base_pool_resources -= rhs.base_pool_resources;
+    }
+}
+
+impl Sub for MEVResistPoolResources {
+    type Output = Self;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
         self
     }
 }
@@ -142,7 +158,7 @@ impl Pool for MEVResistPool {
                     .map_or(self.last_update_time, |mrps| mrps.last_update_time);
 
                 // if the time is updated, fees are accumulated to the current liquidity providers
-                // this is at least 2 additional SSTOREs
+                // this causes up to 3 additional SSTOREs (~15k gas)
                 let state_update_count = if pool_time != current_time { 1 } else { 0 };
 
                 if fixed_point_additional_fee == 0 {
@@ -167,12 +183,10 @@ impl Pool for MEVResistPool {
 
                 if params.token_amount.amount >= 0 {
                     // exact input, remove the additional fee from the output
-                    calculated_amount -=
-                        compute_fee(calculated_amount as u128, fixed_point_additional_fee);
+                    calculated_amount -= compute_fee(calculated_amount, fixed_point_additional_fee);
                 } else {
-                    let input_amount_fee: u128 =
-                        compute_fee(calculated_amount as u128, pool_config.fee);
-                    let input_amount = (calculated_amount as u128) - input_amount_fee;
+                    let input_amount_fee: u128 = compute_fee(calculated_amount, pool_config.fee);
+                    let input_amount = calculated_amount - input_amount_fee;
 
                     if let Some(bf) = amount_before_fee(input_amount, fixed_point_additional_fee) {
                         let fee = bf - input_amount;

@@ -7,7 +7,7 @@ use crate::quoting::full_range_pool::{
 use crate::quoting::types::{BlockTimestamp, Config};
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, TokenAmount};
 use alloc::vec::Vec;
-use core::ops::Add;
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,19 +29,39 @@ pub struct TwammPoolResources {
     pub virtual_orders_executed: u32,
 }
 
+impl AddAssign for TwammPoolResources {
+    fn add_assign(&mut self, rhs: Self) {
+        self.full_range_pool_resources += rhs.full_range_pool_resources;
+        self.virtual_order_delta_times_crossed += rhs.virtual_order_delta_times_crossed;
+        self.virtual_order_seconds_executed += rhs.virtual_order_seconds_executed;
+        self.virtual_orders_executed += rhs.virtual_orders_executed;
+    }
+}
+
 impl Add for TwammPoolResources {
     type Output = TwammPoolResources;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        TwammPoolResources {
-            full_range_pool_resources: self.full_range_pool_resources
-                + rhs.full_range_pool_resources,
-            virtual_order_delta_times_crossed: self.virtual_order_delta_times_crossed
-                + rhs.virtual_order_delta_times_crossed,
-            virtual_order_seconds_executed: self.virtual_order_seconds_executed
-                + rhs.virtual_order_seconds_executed,
-            virtual_orders_executed: self.virtual_orders_executed + rhs.virtual_orders_executed,
-        }
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl SubAssign for TwammPoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.full_range_pool_resources -= rhs.full_range_pool_resources;
+        self.virtual_order_delta_times_crossed -= rhs.virtual_order_delta_times_crossed;
+        self.virtual_order_seconds_executed -= rhs.virtual_order_seconds_executed;
+        self.virtual_orders_executed -= rhs.virtual_orders_executed;
+    }
+}
+
+impl Sub for TwammPoolResources {
+    type Output = TwammPoolResources;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
     }
 }
 

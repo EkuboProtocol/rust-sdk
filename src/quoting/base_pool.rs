@@ -6,7 +6,7 @@ use crate::quoting::util::{
     approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
 };
 use alloc::vec::Vec;
-use core::ops::{Add, AddAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 
 // Resources consumed during any swap execution.
@@ -30,6 +30,23 @@ impl Add for BasePoolResources {
 
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
+        self
+    }
+}
+
+impl SubAssign for BasePoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.no_override_price_change -= rhs.no_override_price_change;
+        self.initialized_ticks_crossed -= rhs.initialized_ticks_crossed;
+        self.tick_spacings_crossed -= rhs.tick_spacings_crossed;
+    }
+}
+
+impl Sub for BasePoolResources {
+    type Output = Self;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
         self
     }
 }

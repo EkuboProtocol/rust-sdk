@@ -1,6 +1,6 @@
 use crate::math::uint::U256;
 use core::fmt::Debug;
-use core::ops::Add;
+use core::ops::{Add, Sub};
 
 // Unique key identifying the pool.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -102,7 +102,7 @@ pub struct Quote<R, S> {
 pub type BlockTimestamp = u64;
 
 pub trait Pool: Send + Sync + Debug + Clone + PartialEq + Eq {
-    type Resources: Add + Debug + Default + Copy + PartialEq + Eq;
+    type Resources: Add + Sub + Debug + Default + Copy + PartialEq + Eq;
     type State: Debug + Copy + PartialEq + Eq;
     type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp

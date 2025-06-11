@@ -2,7 +2,7 @@ use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
 use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams};
-use core::ops::{Add, AddAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 
 // Resources consumed during any swap execution in a full range pool.
@@ -22,6 +22,21 @@ impl Add for FullRangePoolResources {
 
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
+        self
+    }
+}
+
+impl SubAssign for FullRangePoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.no_override_price_change -= rhs.no_override_price_change;
+    }
+}
+
+impl Sub for FullRangePoolResources {
+    type Output = Self;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
         self
     }
 }
