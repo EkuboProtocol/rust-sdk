@@ -53,8 +53,8 @@ pub struct MEVResistPool {
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub struct MEVResistPoolState {
-    last_update_time: u32,
-    base_pool_state: BasePoolState,
+    pub last_update_time: u32,
+    pub base_pool_state: BasePoolState,
 }
 
 /// Errors that can occur when constructing a MEVResistPool.
