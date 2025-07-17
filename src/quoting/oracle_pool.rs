@@ -6,7 +6,7 @@ use crate::quoting::base_pool::{
 };
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
 use alloc::vec;
-use core::ops::{Add, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,14 +22,19 @@ pub struct OraclePoolResources {
     pub snapshots_written: u32,
 }
 
+impl AddAssign for OraclePoolResources {
+    fn add_assign(&mut self, rhs: Self) {
+        self.base_pool_resources += rhs.base_pool_resources;
+        self.snapshots_written += rhs.snapshots_written;
+    }
+}
+
 impl Add for OraclePoolResources {
     type Output = OraclePoolResources;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        OraclePoolResources {
-            base_pool_resources: self.base_pool_resources + rhs.base_pool_resources,
-            snapshots_written: self.snapshots_written + rhs.snapshots_written,
-        }
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
     }
 }
 
