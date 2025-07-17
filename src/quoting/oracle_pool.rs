@@ -65,6 +65,7 @@ pub struct OraclePool {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OraclePoolError {
     BasePoolError(BasePoolError),
+    ActiveLiquidityDoesNotFitSignedInteger,
 }
 
 impl OraclePool {
@@ -76,7 +77,9 @@ impl OraclePool {
         active_liquidity: u128,
         last_snapshot_time: u64,
     ) -> Result<Self, OraclePoolError> {
-        let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
+        let signed_liquidity: i128 = active_liquidity
+            .to_i128()
+            .ok_or_else(|| OraclePoolError::ActiveLiquidityDoesNotFitSignedInteger)?;
 
         let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
             (None, vec![], 0)

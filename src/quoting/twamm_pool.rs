@@ -91,6 +91,7 @@ pub struct TwammPool {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TwammPoolError {
     BasePoolError(BasePoolError),
+    ActiveLiquidityDoesNotFitSignedInteger,
     SaleRateDeltasNotOrdered,
     SaleRateDeltasSumToZero,
 }
@@ -108,7 +109,9 @@ impl TwammPool {
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
     ) -> Result<Self, TwammPoolError> {
-        let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
+        let signed_liquidity: i128 = active_liquidity
+            .to_i128()
+            .ok_or_else(|| TwammPoolError::ActiveLiquidityDoesNotFitSignedInteger)?;
 
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
