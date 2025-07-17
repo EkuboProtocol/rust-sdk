@@ -7,7 +7,7 @@ use num_traits::Zero;
 #[derive(Debug, PartialEq)]
 pub struct SwapResult {
     pub consumed_amount: i128,
-    pub calculated_amount: i128,
+    pub calculated_amount: u128,
     pub sqrt_ratio_next: U256,
     pub fee_amount: u128,
 }
@@ -52,7 +52,7 @@ fn no_op(sqrt_ratio_next: U256) -> SwapResult {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ComputeStepError {
     WrongDirection,
     AmountBeforeFeeOverflow,
@@ -122,18 +122,14 @@ pub fn compute_step(
                     .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
                 Ok(SwapResult {
                     consumed_amount: amount,
-                    calculated_amount: including_fee
-                        .try_into()
-                        .map_err(ComputeStepError::SignedIntegerOverflow)?,
+                    calculated_amount: including_fee,
                     sqrt_ratio_next,
                     fee_amount: including_fee - calculated_amount_excluding_fee,
                 })
             } else {
                 Ok(SwapResult {
                     consumed_amount: amount,
-                    calculated_amount: calculated_amount_excluding_fee
-                        .try_into()
-                        .map_err(ComputeStepError::SignedIntegerOverflow)?,
+                    calculated_amount: calculated_amount_excluding_fee,
                     sqrt_ratio_next,
                     fee_amount: amount.unsigned_abs() - price_impact_amount.unsigned_abs(),
                 })
@@ -164,9 +160,7 @@ pub fn compute_step(
                 .map_err(ComputeStepError::AmountDeltaError)?
                 .try_into()
                 .map_err(ComputeStepError::SignedIntegerOverflow)?,
-            calculated_amount: before_fee
-                .try_into()
-                .map_err(ComputeStepError::SignedIntegerOverflow)?,
+            calculated_amount: before_fee,
             fee_amount: before_fee - amount_after_fee,
             sqrt_ratio_next: sqrt_ratio_limit,
         })
@@ -182,9 +176,7 @@ pub fn compute_step(
             consumed_amount: before_fee
                 .try_into()
                 .map_err(ComputeStepError::SignedIntegerOverflow)?,
-            calculated_amount: calculated_amount
-                .try_into()
-                .map_err(ComputeStepError::SignedIntegerOverflow)?,
+            calculated_amount: calculated_amount,
             fee_amount: before_fee - specified_amount,
             sqrt_ratio_next: sqrt_ratio_limit,
         })
@@ -215,8 +207,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 0i128);
-        assert_eq!(result.consumed_amount, 0i128);
+        assert_eq!(result.calculated_amount, 0);
+        assert_eq!(result.consumed_amount, 0);
         assert_eq!(result.fee_amount, 0u128);
         assert_eq!(result.sqrt_ratio_next, sqrt_ratio);
     }
@@ -240,8 +232,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 0i128);
-        assert_eq!(result.consumed_amount, 0i128);
+        assert_eq!(result.calculated_amount, 0);
+        assert_eq!(result.consumed_amount, 0);
         assert_eq!(result.fee_amount, 0u128);
         assert_eq!(result.sqrt_ratio_next, sqrt_ratio);
     }
@@ -265,8 +257,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 0i128);
-        assert_eq!(result.consumed_amount, 0i128);
+        assert_eq!(result.calculated_amount, 0);
+        assert_eq!(result.consumed_amount, 0);
         assert_eq!(result.fee_amount, 0u128);
         assert_eq!(result.sqrt_ratio_next, sqrt_ratio);
     }
@@ -290,8 +282,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 4_761i128);
-        assert_eq!(result.consumed_amount, 10_000i128);
+        assert_eq!(result.calculated_amount, 4_761);
+        assert_eq!(result.consumed_amount, 10_000);
         assert_eq!(result.fee_amount, 5_000u128);
         assert_eq!(
             result.sqrt_ratio_next,
@@ -318,8 +310,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 4_761i128);
-        assert_eq!(result.consumed_amount, 10_000i128);
+        assert_eq!(result.calculated_amount, 4_761);
+        assert_eq!(result.consumed_amount, 10_000);
         assert_eq!(result.fee_amount, 5_000u128);
         assert_eq!(
             result.sqrt_ratio_next,
@@ -346,8 +338,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 22_224i128);
-        assert_eq!(result.consumed_amount, -10_000i128);
+        assert_eq!(result.calculated_amount, 22_224);
+        assert_eq!(result.consumed_amount, -10_000);
         assert_eq!(result.fee_amount, 11_112u128);
         assert_eq!(
             result.sqrt_ratio_next,
@@ -374,8 +366,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 22_224i128);
-        assert_eq!(result.consumed_amount, -10_000i128);
+        assert_eq!(result.calculated_amount, 22_224);
+        assert_eq!(result.consumed_amount, -10_000);
         assert_eq!(result.fee_amount, 11_112u128);
         assert_eq!(
             result.sqrt_ratio_next,
@@ -403,8 +395,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 11_112i128);
-        assert_eq!(result.consumed_amount, -5_263i128);
+        assert_eq!(result.calculated_amount, 11_112);
+        assert_eq!(result.consumed_amount, -5_263);
         assert_eq!(result.fee_amount, 5_556u128);
         assert_eq!(result.sqrt_ratio_next, sqrt_ratio_limit);
     }
@@ -429,8 +421,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.calculated_amount, 10_528i128);
-        assert_eq!(result.consumed_amount, -5_000i128);
+        assert_eq!(result.calculated_amount, 10_528);
+        assert_eq!(result.consumed_amount, -5_000);
         assert_eq!(result.fee_amount, 5_264u128);
         assert_eq!(result.sqrt_ratio_next, sqrt_ratio_limit);
     }

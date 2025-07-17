@@ -1,4 +1,4 @@
-use crate::math::uint::U256;
+use crate::{math::uint::u256_to_float_base_x128, math::uint::U256};
 
 const ONE_X128: U256 = U256([0, 0, 1, 0]);
 
@@ -65,50 +65,104 @@ pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
     Some(ratio)
 }
 
+const SQRT_TICK_SIZE: f64 =
+    1.00000049999987500006249996093752734372949220361326815796989439990616646_f64;
+
+pub fn approximate_sqrt_ratio_to_tick(sqrt_ratio: U256) -> i32 {
+    u256_to_float_base_x128(sqrt_ratio)
+        .log(SQRT_TICK_SIZE)
+        .round() as i32
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{to_sqrt_ratio, MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
-    use crate::math::uint::U256;
+    mod to_sqrt_ratio {
+        use super::super::{to_sqrt_ratio, MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
+        use crate::math::uint::U256;
 
-    #[test]
-    fn test_tick_examples() {
-        assert_eq!(
-            to_sqrt_ratio(1000000).unwrap(),
-            U256::from_str_radix("561030636129153856592777659729523183729", 10).unwrap(),
-        );
-        assert_eq!(
-            to_sqrt_ratio(10000000).unwrap(),
-            U256::from_str_radix("50502254805927926084427918474025309948677", 10).unwrap(),
-        );
-        assert_eq!(
-            to_sqrt_ratio(-1000000).unwrap(),
-            U256::from_str_radix("206391740095027370700312310531588921767", 10).unwrap(),
-        );
-        assert_eq!(
-            to_sqrt_ratio(-10000000).unwrap(),
-            U256::from_str_radix("2292810285051363400276741638672651165", 10).unwrap(),
-        );
+        #[test]
+        fn test_tick_examples() {
+            assert_eq!(
+                to_sqrt_ratio(1000000).unwrap(),
+                U256::from_str_radix("561030636129153856592777659729523183729", 10).unwrap(),
+            );
+            assert_eq!(
+                to_sqrt_ratio(10000000).unwrap(),
+                U256::from_str_radix("50502254805927926084427918474025309948677", 10).unwrap(),
+            );
+            assert_eq!(
+                to_sqrt_ratio(-1000000).unwrap(),
+                U256::from_str_radix("206391740095027370700312310531588921767", 10).unwrap(),
+            );
+            assert_eq!(
+                to_sqrt_ratio(-10000000).unwrap(),
+                U256::from_str_radix("2292810285051363400276741638672651165", 10).unwrap(),
+            );
+        }
+
+        #[test]
+        fn test_tick_too_small() {
+            assert!(to_sqrt_ratio(MIN_TICK - 1).is_none());
+            assert!(to_sqrt_ratio(i32::MIN).is_none());
+        }
+
+        #[test]
+        fn test_min_tick() {
+            assert_eq!(to_sqrt_ratio(MIN_TICK).unwrap(), MIN_SQRT_RATIO,);
+        }
+
+        #[test]
+        fn test_max_tick() {
+            assert_eq!(to_sqrt_ratio(MAX_TICK).unwrap(), MAX_SQRT_RATIO,);
+        }
+
+        #[test]
+        fn test_tick_too_large() {
+            assert!(to_sqrt_ratio(MAX_TICK + 1).is_none());
+            assert!(to_sqrt_ratio(i32::MAX).is_none());
+        }
     }
 
-    #[test]
-    fn test_tick_too_small() {
-        assert!(to_sqrt_ratio(MIN_TICK - 1).is_none());
-        assert!(to_sqrt_ratio(i32::MIN).is_none());
-    }
+    mod approximate_sqrt_ratio_to_tick {
+        use crate::math::tick::{MAX_TICK, MIN_TICK};
 
-    #[test]
-    fn test_min_tick() {
-        assert_eq!(to_sqrt_ratio(MIN_TICK).unwrap(), MIN_SQRT_RATIO,);
-    }
+        use super::super::{approximate_sqrt_ratio_to_tick, to_sqrt_ratio};
 
-    #[test]
-    fn test_max_tick() {
-        assert_eq!(to_sqrt_ratio(MAX_TICK).unwrap(), MAX_SQRT_RATIO,);
-    }
+        #[test]
+        fn test_tick_examples() {
+            assert_eq!(approximate_sqrt_ratio_to_tick(to_sqrt_ratio(0).unwrap()), 0,);
+            assert_eq!(
+                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(1000000).unwrap()),
+                1000000,
+            );
+            assert_eq!(
+                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(10000000).unwrap()),
+                10000000
+            );
+            assert_eq!(
+                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(-1000000).unwrap()),
+                -1000000,
+            );
+            assert_eq!(
+                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(-10000000).unwrap()),
+                -10000000,
+            );
+        }
 
-    #[test]
-    fn test_tick_too_large() {
-        assert!(to_sqrt_ratio(MAX_TICK + 1).is_none());
-        assert!(to_sqrt_ratio(i32::MAX).is_none());
+        #[test]
+        fn test_min_tick() {
+            assert_eq!(
+                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(MIN_TICK).unwrap()),
+                MIN_TICK,
+            );
+        }
+
+        #[test]
+        fn test_max_tick() {
+            assert_eq!(
+                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(MAX_TICK).unwrap()),
+                MAX_TICK,
+            );
+        }
     }
 }

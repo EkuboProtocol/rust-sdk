@@ -1,19 +1,47 @@
 use crate::math::uint::U256;
 use core::fmt::Debug;
-use core::ops::Add;
+use core::ops::{Add, Sub};
 
 // Unique key identifying the pool.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NodeKey {
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token0: U256,
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token1: U256,
     pub fee: u128,
     pub tick_spacing: u32,
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub extension: U256,
 }
 
+#[cfg(feature = "serde")]
+pub mod serde_u256 {
+    use super::*;
+    use serde::Serializer;
+
+    pub fn serialize<S>(value: &U256, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex_str = alloc::format!("{:x}", value);
+        serializer.serialize_str(&hex_str)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let hex_str: alloc::borrow::Cow<'static, str> =
+            serde::Deserialize::deserialize(deserializer)?;
+        U256::from_str_radix(&hex_str, 16).map_err(serde::de::Error::custom)
+    }
+}
+
 // The aggregate effect of all positions on a pool that are bounded by the specific tick
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tick {
     pub index: i32,
     pub liquidity_delta: i128,
@@ -27,7 +55,7 @@ pub struct TokenAmount {
 }
 
 // Parameters for a quote operation.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct QuoteParams<S, M> {
     pub token_amount: TokenAmount,
     pub sqrt_ratio_limit: Option<U256>,
@@ -36,11 +64,11 @@ pub struct QuoteParams<S, M> {
 }
 
 // The result of all pool swaps is some input and output delta
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
-    pub calculated_amount: i128,
+    pub calculated_amount: u128,
     pub execution_resources: R,
     pub state_after: S,
     pub fees_paid: u128,
@@ -49,12 +77,12 @@ pub struct Quote<R, S> {
 // Commonly used as meta
 pub type BlockTimestamp = u64;
 
-pub trait Pool: Send + Sync {
-    type Resources: Add<Output = Self::Resources> + Default + Copy;
-    type State: Copy;
+pub trait Pool: Send + Sync + Debug + Clone + PartialEq + Eq {
+    type Resources: Add + Sub + Debug + Default + Copy + PartialEq + Eq;
+    type State: Debug + Copy + PartialEq + Eq;
     type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
-    type Meta: Copy;
+    type Meta: Debug + Copy;
 
     fn get_key(&self) -> &NodeKey;
 
@@ -71,6 +99,9 @@ pub trait Pool: Send + Sync {
     fn max_tick_with_liquidity(&self) -> Option<i32>;
     // Returns the smallest tick with non-zero liquidity in the pool
     fn min_tick_with_liquidity(&self) -> Option<i32>;
+
+    // Returns false if a swap of x followed by a swap of y will have the same output as a swap of x + y
+    fn is_path_dependent(&self) -> bool;
 }
 
 #[cfg(test)]
@@ -126,5 +157,30 @@ mod tests {
                 amount: 1,
             }
         );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_node_key() {
+        use crate::quoting::types::NodeKey;
+
+        let key = NodeKey {
+            token0: U256::from(1),
+            token1: U256::from(2),
+            tick_spacing: 100,
+            fee: 1 << 63,
+            extension: U256::from(123),
+        };
+
+        let serialized = serde_json::to_string(&key).unwrap();
+        let expected = serde_json::json!({
+            "token0": "1",
+            "token1": "2",
+            "tick_spacing": 100,
+            "fee": "9223372036854775808",
+            "extension": "123"
+        });
+
+        assert_eq!(serde_json::from_str::<NodeKey>(&serialized).unwrap(), key);
     }
 }

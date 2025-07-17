@@ -1,7 +1,7 @@
 use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
 use crate::math::uint::U256;
 use crate::quoting::base_pool::{
-    BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState,
+    BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState,
     MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MAX_TICK_AT_MAX_TICK_SPACING, MAX_TICK_SPACING,
     MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
 };
@@ -9,10 +9,11 @@ use crate::quoting::types::BlockTimestamp;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick, TokenAmount};
 use alloc::vec;
 use alloc::vec::Vec;
-use core::ops::Add;
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPoolState {
     pub base_pool_state: BasePoolState,
     pub token0_sale_rate: u128,
@@ -20,7 +21,8 @@ pub struct TwammPoolState {
     pub last_execution_time: u64,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPoolResources {
     pub base_pool_resources: BasePoolResources,
     // The number of seconds that passed since the last virtual order execution
@@ -31,28 +33,51 @@ pub struct TwammPoolResources {
     pub virtual_orders_executed: u32,
 }
 
-impl Add for TwammPoolResources {
-    type Output = TwammPoolResources;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        TwammPoolResources {
-            base_pool_resources: self.base_pool_resources + rhs.base_pool_resources,
-            virtual_order_delta_times_crossed: self.virtual_order_delta_times_crossed
-                + rhs.virtual_order_delta_times_crossed,
-            virtual_order_seconds_executed: self.virtual_order_seconds_executed
-                + rhs.virtual_order_seconds_executed,
-            virtual_orders_executed: self.virtual_orders_executed + rhs.virtual_orders_executed,
-        }
+impl AddAssign for TwammPoolResources {
+    fn add_assign(&mut self, rhs: Self) {
+        self.base_pool_resources += rhs.base_pool_resources;
+        self.virtual_order_delta_times_crossed += rhs.virtual_order_delta_times_crossed;
+        self.virtual_order_seconds_executed += rhs.virtual_order_seconds_executed;
+        self.virtual_orders_executed += rhs.virtual_orders_executed;
     }
 }
 
-#[derive(Clone)]
+impl Add for TwammPoolResources {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl SubAssign for TwammPoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.base_pool_resources -= rhs.base_pool_resources;
+        self.virtual_order_seconds_executed -= rhs.virtual_order_seconds_executed;
+        self.virtual_order_delta_times_crossed -= rhs.virtual_order_delta_times_crossed;
+        self.virtual_orders_executed -= rhs.virtual_orders_executed;
+    }
+}
+
+impl Sub for TwammPoolResources {
+    type Output = Self;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammSaleRateDelta {
     pub time: u64,
     pub sale_rate_delta0: i128,
     pub sale_rate_delta1: i128,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPool {
     base_pool: BasePool,
     active_liquidity: u128,
@@ -60,6 +85,14 @@ pub struct TwammPool {
     token1_sale_rate: u128,
     last_execution_time: u64,
     virtual_order_deltas: Vec<TwammSaleRateDelta>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TwammPoolError {
+    BasePoolError(BasePoolError),
+    SaleRateDeltasNotOrdered,
+    SaleRateDeltasSumToZero,
 }
 
 impl TwammPool {
@@ -74,18 +107,18 @@ impl TwammPool {
         token0_sale_rate: u128,
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
-    ) -> Self {
+    ) -> Result<Self, TwammPoolError> {
         let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
 
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
         for t in virtual_order_deltas.iter() {
-            assert!(
-                t.time > last_time,
-                "Sale rate deltas are not ordered and greater than `last_execution_time`"
-            );
+            if t.time <= last_time {
+                return Err(TwammPoolError::SaleRateDeltasNotOrdered);
+            }
             last_time = t.time;
+
             if t.sale_rate_delta0 < 0 {
                 sr0 -= t.sale_rate_delta0.unsigned_abs();
             } else {
@@ -98,10 +131,9 @@ impl TwammPool {
             }
         }
 
-        assert!(
-            sr0.is_zero() && sr1.is_zero(),
-            "sum of current sale rate and sale rate deltas must be zero"
-        );
+        if !sr0.is_zero() || !sr1.is_zero() {
+            return Err(TwammPoolError::SaleRateDeltasSumToZero);
+        }
 
         let (active_tick_index, sorted_ticks) = if active_liquidity.is_zero() {
             (None, vec![])
@@ -121,7 +153,7 @@ impl TwammPool {
             )
         };
 
-        TwammPool {
+        Ok(TwammPool {
             active_liquidity,
             base_pool: BasePool::new(
                 NodeKey {
@@ -142,12 +174,13 @@ impl TwammPool {
                     active_tick_index,
                 },
                 sorted_ticks,
-            ),
+            )
+            .map_err(TwammPoolError::BasePoolError)?,
             virtual_order_deltas,
             last_execution_time,
             token0_sale_rate,
             token1_sale_rate,
-        }
+        })
     }
 
     // Returns the list of sale rate deltas
@@ -384,6 +417,10 @@ impl Pool for TwammPool {
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.base_pool.min_tick_with_liquidity()
     }
+
+    fn is_path_dependent(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -406,7 +443,7 @@ mod tests {
         use crate::quoting::base_pool::{
             MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
         };
-        use crate::quoting::twamm_pool::{TwammPool, TwammSaleRateDelta};
+        use crate::quoting::twamm_pool::{TwammPool, TwammPoolError, TwammSaleRateDelta};
         use crate::quoting::types::Pool;
         use alloc::vec;
 
@@ -425,6 +462,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -447,6 +485,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -469,6 +508,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -491,6 +531,7 @@ mod tests {
                     0,
                     vec![]
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -499,83 +540,88 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(
-            expected = "Sale rate deltas are not ordered and greater than `last_execution_time`"
-        )]
         fn test_sale_rate_deltas_must_be_gt_last_execution_time() {
-            TwammPool::new(
-                U256::one(),
-                U256::one() + 1,
-                0,
-                U256::zero(),
-                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                1,
-                0,
-                0,
-                0,
-                vec![TwammSaleRateDelta {
-                    time: 0,
-                    sale_rate_delta0: 0,
-                    sale_rate_delta1: 0,
-                }],
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                    0,
+                    0,
+                    vec![TwammSaleRateDelta {
+                        time: 0,
+                        sale_rate_delta0: 0,
+                        sale_rate_delta1: 0,
+                    }],
+                )
+                .unwrap_err(),
+                TwammPoolError::SaleRateDeltasNotOrdered
             );
         }
 
         #[test]
-        #[should_panic(
-            expected = "Sale rate deltas are not ordered and greater than `last_execution_time`"
-        )]
         fn test_sale_rate_deltas_must_be_ordered() {
-            TwammPool::new(
-                U256::one(),
-                U256::one() + 1,
-                0,
-                U256::zero(),
-                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                1,
-                0,
-                0,
-                0,
-                vec![
-                    TwammSaleRateDelta {
-                        time: 2,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 0,
-                    },
-                    TwammSaleRateDelta {
-                        time: 1,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 0,
-                    },
-                ],
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                    0,
+                    0,
+                    vec![
+                        TwammSaleRateDelta {
+                            time: 2,
+                            sale_rate_delta0: 0,
+                            sale_rate_delta1: 0,
+                        },
+                        TwammSaleRateDelta {
+                            time: 1,
+                            sale_rate_delta0: 0,
+                            sale_rate_delta1: 0,
+                        },
+                    ],
+                )
+                .unwrap_err(),
+                TwammPoolError::SaleRateDeltasNotOrdered
             );
         }
 
         #[test]
-        #[should_panic(expected = "sum of current sale rate and sale rate deltas must be zero")]
         fn test_sale_rate_deltas_must_sum_to_zero() {
-            TwammPool::new(
-                U256::one(),
-                U256::one() + 1,
-                0,
-                U256::zero(),
-                MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                1,
-                0,
-                54,
-                2,
-                vec![
-                    TwammSaleRateDelta {
-                        time: 1,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 1,
-                    },
-                    TwammSaleRateDelta {
-                        time: 2,
-                        sale_rate_delta0: 1,
-                        sale_rate_delta1: 0,
-                    },
-                ],
+            assert_eq!(
+                TwammPool::new(
+                    U256::one(),
+                    U256::one() + 1,
+                    0,
+                    U256::zero(),
+                    MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                    1,
+                    0,
+                    54,
+                    2,
+                    vec![
+                        TwammSaleRateDelta {
+                            time: 1,
+                            sale_rate_delta0: 0,
+                            sale_rate_delta1: 1,
+                        },
+                        TwammSaleRateDelta {
+                            time: 2,
+                            sale_rate_delta0: 1,
+                            sale_rate_delta1: 0,
+                        },
+                    ],
+                )
+                .unwrap_err(),
+                TwammPoolError::SaleRateDeltasSumToZero
             );
         }
 
@@ -603,7 +649,8 @@ mod tests {
                         sale_rate_delta1: -35,
                     },
                 ],
-            );
+            )
+            .unwrap();
         }
     }
 
@@ -620,7 +667,8 @@ mod tests {
             0,
             0,
             vec![],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -655,7 +703,8 @@ mod tests {
             0,
             0,
             vec![],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -694,7 +743,8 @@ mod tests {
                 sale_rate_delta0: 0,
                 sale_rate_delta1: -(1 << 32),
             }],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -733,7 +783,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: 0,
             }],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -775,7 +826,8 @@ mod tests {
                 sale_rate_delta0: 0,
                 sale_rate_delta1: -(1 << 32),
             }],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -823,7 +875,8 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let quote = pool
             .quote(QuoteParams {
@@ -876,7 +929,8 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -929,7 +983,8 @@ mod tests {
                     sale_rate_delta1: -(1 << 32),
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let quote = pool
             .quote(QuoteParams {
@@ -982,7 +1037,8 @@ mod tests {
                     sale_rate_delta1: -100_000 * (1 << 32),
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1028,7 +1084,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1074,7 +1131,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1120,7 +1178,8 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1166,7 +1225,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1212,7 +1272,8 @@ mod tests {
                 sale_rate_delta0: -(10 << 32),
                 sale_rate_delta1: -(1 << 32),
             }], // No sale rate deltas
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1258,7 +1319,8 @@ mod tests {
                 sale_rate_delta0: -(1 << 32),
                 sale_rate_delta1: -(10 << 32),
             }], // No sale rate deltas
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1304,7 +1366,8 @@ mod tests {
                 sale_rate_delta1: -(2u128.pow(32) as i128),
                 time: 16u64,
             }],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1357,7 +1420,8 @@ mod tests {
                     sale_rate_delta1: -(1 << 33),
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let result = pool.quote(QuoteParams {
             token_amount: TokenAmount {
@@ -1403,7 +1467,8 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        )
+        .unwrap();
 
         // First quote: no swap
         let first = pool
@@ -1460,7 +1525,8 @@ mod tests {
                 sale_rate_delta1: -((10u128.pow(18) << 32) as i128),
                 time: 120u64,
             }],
-        );
+        )
+        .unwrap();
 
         // Quote at time 60 (0 seconds pass)
         pool.quote(QuoteParams {
@@ -1574,7 +1640,8 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        )
+        .unwrap();
 
         // First swap
         let first_swap = pool
@@ -1650,7 +1717,8 @@ mod tests {
                 sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
                 sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
-        );
+        )
+        .unwrap();
 
         // First swap
         let first_swap = pool

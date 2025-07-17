@@ -13,6 +13,13 @@ keywords = ["crypto", "math", "ekubo", "protocol", "defi"]
 [dependencies]
 num-traits = "0.2.19"
 uint = "0.10.0"
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = { version = "1.0" }
 
 [lib]
 path = "src/lib.rs"
+
+[features]
+serde = ["dep:serde"]

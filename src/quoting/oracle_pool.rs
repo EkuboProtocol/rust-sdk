@@ -1,21 +1,22 @@
 use crate::math::uint::U256;
 use crate::quoting::base_pool::{
-    BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState,
+    BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState,
     MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, MAX_TICK_AT_MAX_TICK_SPACING, MAX_TICK_SPACING,
     MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, MIN_TICK_AT_MAX_TICK_SPACING,
 };
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
 use alloc::vec;
-use core::ops::Add;
+use core::ops::{Add, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePoolState {
     pub base_pool_state: BasePoolState,
     pub last_snapshot_time: u64,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct OraclePoolResources {
     pub base_pool_resources: BasePoolResources,
     pub snapshots_written: u32,
@@ -32,9 +33,33 @@ impl Add for OraclePoolResources {
     }
 }
 
+impl SubAssign for OraclePoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.base_pool_resources -= rhs.base_pool_resources;
+        self.snapshots_written -= rhs.snapshots_written;
+    }
+}
+
+impl Sub for OraclePoolResources {
+    type Output = Self;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePool {
     base_pool: BasePool,
     last_snapshot_time: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum OraclePoolError {
+    BasePoolError(BasePoolError),
 }
 
 impl OraclePool {
@@ -45,7 +70,7 @@ impl OraclePool {
         sqrt_ratio: U256,
         active_liquidity: u128,
         last_snapshot_time: u64,
-    ) -> Self {
+    ) -> Result<Self, OraclePoolError> {
         let signed_liquidity: i128 = active_liquidity.to_i128().expect("Liquidity overflow i128");
 
         let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
@@ -75,7 +100,7 @@ impl OraclePool {
             )
         };
 
-        OraclePool {
+        Ok(OraclePool {
             base_pool: BasePool::new(
                 NodeKey {
                     token0,
@@ -90,9 +115,10 @@ impl OraclePool {
                     active_tick_index,
                 },
                 sorted_ticks,
-            ),
+            )
+            .map_err(OraclePoolError::BasePoolError)?,
             last_snapshot_time,
-        }
+        })
     }
 }
 
@@ -156,6 +182,10 @@ impl Pool for OraclePool {
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.base_pool.min_tick_with_liquidity()
     }
+
+    fn is_path_dependent(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -201,6 +231,7 @@ mod tests {
                     1,
                     0,
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -219,6 +250,7 @@ mod tests {
                     1,
                     0,
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -237,6 +269,7 @@ mod tests {
                     1,
                     0,
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -255,6 +288,7 @@ mod tests {
                     1,
                     0,
                 )
+                .unwrap()
                 .get_state()
                 .base_pool_state
                 .liquidity,
@@ -276,7 +310,8 @@ mod tests {
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
             1,
-        );
+        )
+        .unwrap();
 
         let params = QuoteParams {
             token_amount: TokenAmount {
@@ -312,7 +347,8 @@ mod tests {
             to_sqrt_ratio(0).unwrap(),
             1_000_000_000,
             1,
-        );
+        )
+        .unwrap();
 
         let params = QuoteParams {
             token_amount: TokenAmount {
