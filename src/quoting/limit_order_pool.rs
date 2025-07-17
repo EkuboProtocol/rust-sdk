@@ -1,17 +1,20 @@
 use crate::math::swap::is_price_increasing;
 use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
-use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
+use crate::quoting::base_pool::{
+    BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState,
+};
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::find_nearest_initialized_tick_index;
 use alloc::vec::Vec;
-use core::ops::Add;
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 
 use super::types::TokenAmount;
 use super::util::approximate_number_of_tick_spacings_crossed;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPoolState {
     pub base_pool_state: BasePoolState,
 
@@ -22,7 +25,7 @@ pub struct LimitOrderPoolState {
     pub tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct LimitOrderPoolResources {
     pub base_pool_resources: BasePoolResources,
     // the number of orders that were pulled, i.e. the number of times we crossed active ticks
@@ -30,23 +33,55 @@ pub struct LimitOrderPoolResources {
     pub orders_pulled: u32,
 }
 
-impl Add for LimitOrderPoolResources {
-    type Output = LimitOrderPoolResources;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        LimitOrderPoolResources {
-            base_pool_resources: self.base_pool_resources + rhs.base_pool_resources,
-            orders_pulled: self.orders_pulled + rhs.orders_pulled,
-        }
+impl AddAssign for LimitOrderPoolResources {
+    fn add_assign(&mut self, rhs: Self) {
+        self.base_pool_resources += rhs.base_pool_resources;
+        self.orders_pulled += rhs.orders_pulled;
     }
 }
 
+impl Add for LimitOrderPoolResources {
+    type Output = LimitOrderPoolResources;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl SubAssign for LimitOrderPoolResources {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.base_pool_resources -= rhs.base_pool_resources;
+        self.orders_pulled -= rhs.orders_pulled;
+    }
+}
+
+impl Sub for LimitOrderPoolResources {
+    type Output = LimitOrderPoolResources;
+
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPool {
     base_pool: BasePool,
 }
 
 pub const LIMIT_ORDER_TICK_SPACING: i32 = 128;
 pub const DOUBLE_LIMIT_ORDER_TICK_SPACING: i32 = 2i32 * LIMIT_ORDER_TICK_SPACING;
+
+/// Errors that can occur when constructing a BasePool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum LimitPoolError {
+    BasePoolError(BasePoolError),
+    AllTicksMustHaveNeighbor,
+    LastTickHasNoNeighbor,
+}
 
 impl LimitOrderPool {
     pub fn new(
@@ -57,7 +92,7 @@ impl LimitOrderPool {
         tick: i32,
         liquidity: u128,
         sorted_ticks: Vec<Tick>,
-    ) -> Self {
+    ) -> Result<Self, LimitPoolError> {
         // check that each tick has at least 1 neighbor within 128 ticks
         let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
         let mut maybe_last: Option<(&Tick, usize)> = None;
@@ -66,19 +101,20 @@ impl LimitOrderPool {
                 if t.index == last.index + LIMIT_ORDER_TICK_SPACING {
                     maybe_last = Some((t, count + 1));
                 } else {
-                    assert!(!count.is_zero(), "all ticks must have a neighbor");
+                    if count.is_zero() {
+                        return Err(LimitPoolError::AllTicksMustHaveNeighbor);
+                    }
                     maybe_last = Some((t, 0));
                 }
             } else {
                 maybe_last = Some((t, 0));
             }
         }
-        assert!(
-            maybe_last.map_or(true, |(_, count)| !count.is_zero()),
-            "last tick has no neighbor"
-        );
+        if !maybe_last.map_or(true, |(_, count)| !count.is_zero()) {
+            return Err(LimitPoolError::LastTickHasNoNeighbor);
+        }
 
-        LimitOrderPool {
+        Ok(LimitOrderPool {
             base_pool: BasePool::new(
                 NodeKey {
                     token0,
@@ -93,8 +129,9 @@ impl LimitOrderPool {
                     active_tick_index,
                 },
                 sorted_ticks,
-            ),
-        }
+            )
+            .map_err(LimitPoolError::BasePoolError)?,
+        })
     }
 }
 
@@ -382,6 +419,10 @@ impl Pool for LimitOrderPool {
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.base_pool.min_tick_with_liquidity()
     }
+
+    fn is_path_dependent(&self) -> bool {
+        false
+    }
 }
 
 fn calculate_orders_pulled(
@@ -427,80 +468,91 @@ mod tests {
     mod constructor_validation {
         use crate::math::tick::to_sqrt_ratio;
         use crate::quoting::limit_order_pool::tests::{EXTENSION, TOKEN0, TOKEN1};
-        use crate::quoting::limit_order_pool::{LimitOrderPool, LIMIT_ORDER_TICK_SPACING};
+        use crate::quoting::limit_order_pool::{
+            LimitOrderPool, LimitPoolError, LIMIT_ORDER_TICK_SPACING,
+        };
         use crate::quoting::types::Tick;
         use alloc::vec;
 
         #[test]
-        #[should_panic(expected = "all ticks must have a neighbor")]
         fn test_neighbor_ticks_validation() {
-            LimitOrderPool::new(
-                TOKEN0,
-                TOKEN1,
-                EXTENSION,
-                to_sqrt_ratio(0).unwrap(),
-                0,
-                1,
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 1,
-                    },
-                    Tick {
-                        index: LIMIT_ORDER_TICK_SPACING * 2,
-                        liquidity_delta: -1,
-                    },
-                ],
+            assert_eq!(
+                LimitOrderPool::new(
+                    TOKEN0,
+                    TOKEN1,
+                    EXTENSION,
+                    to_sqrt_ratio(0).unwrap(),
+                    0,
+                    1,
+                    vec![
+                        Tick {
+                            index: 0,
+                            liquidity_delta: 1,
+                        },
+                        Tick {
+                            index: LIMIT_ORDER_TICK_SPACING * 2,
+                            liquidity_delta: -1,
+                        },
+                    ],
+                )
+                .unwrap_err(),
+                LimitPoolError::AllTicksMustHaveNeighbor
             );
         }
 
         #[test]
-        #[should_panic(expected = "all ticks must have a neighbor")]
         fn test_neighbor_ticks_validation_skipping_netted_tick() {
-            LimitOrderPool::new(
-                TOKEN0,
-                TOKEN1,
-                EXTENSION,
-                to_sqrt_ratio(0).unwrap(),
-                0,
-                1,
-                vec![
-                    Tick {
-                        index: LIMIT_ORDER_TICK_SPACING * -1,
-                        liquidity_delta: 1,
-                    },
-                    Tick {
-                        index: LIMIT_ORDER_TICK_SPACING,
-                        liquidity_delta: -1,
-                    },
-                ],
+            assert_eq!(
+                LimitOrderPool::new(
+                    TOKEN0,
+                    TOKEN1,
+                    EXTENSION,
+                    to_sqrt_ratio(0).unwrap(),
+                    0,
+                    1,
+                    vec![
+                        Tick {
+                            index: LIMIT_ORDER_TICK_SPACING * -1,
+                            liquidity_delta: 1,
+                        },
+                        Tick {
+                            index: LIMIT_ORDER_TICK_SPACING,
+                            liquidity_delta: -1,
+                        },
+                    ],
+                )
+                .unwrap_err(),
+                LimitPoolError::AllTicksMustHaveNeighbor
             );
         }
 
         #[test]
-        #[should_panic(expected = "last tick has no neighbor")]
         fn test_neighbor_ticks_validation_no_neighbor_last_tick() {
-            LimitOrderPool::new(
-                TOKEN0,
-                TOKEN1,
-                EXTENSION,
-                to_sqrt_ratio(0).unwrap(),
-                0,
-                2,
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 2,
-                    },
-                    Tick {
-                        index: LIMIT_ORDER_TICK_SPACING,
-                        liquidity_delta: -1,
-                    },
-                    Tick {
-                        index: LIMIT_ORDER_TICK_SPACING * 3,
-                        liquidity_delta: -1,
-                    },
-                ],
+            assert_eq!(
+                LimitOrderPool::new(
+                    TOKEN0,
+                    TOKEN1,
+                    EXTENSION,
+                    to_sqrt_ratio(0).unwrap(),
+                    0,
+                    2,
+                    vec![
+                        Tick {
+                            index: 0,
+                            liquidity_delta: 2,
+                        },
+                        Tick {
+                            index: LIMIT_ORDER_TICK_SPACING,
+                            liquidity_delta: -1,
+                        },
+                        Tick {
+                            index: LIMIT_ORDER_TICK_SPACING * 3,
+                            liquidity_delta: -1,
+                        },
+                    ],
+                )
+                .unwrap_err(),
+                LimitPoolError::LastTickHasNoNeighbor
             );
         }
     }
@@ -525,7 +577,8 @@ mod tests {
                     liquidity_delta: -liquidity,
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let quote = pool
             .quote(QuoteParams {
@@ -598,7 +651,8 @@ mod tests {
                     liquidity_delta: -liquidity,
                 },
             ],
-        );
+        )
+        .unwrap();
 
         let quote = pool
             .quote(QuoteParams {
@@ -663,7 +717,8 @@ mod tests {
                     liquidity_delta: -liquidity,
                 },
             ],
-        );
+        )
+        .unwrap();
 
         // trade all the way through the order
         let quote0 = pool
@@ -743,7 +798,8 @@ mod tests {
                     liquidity_delta: -liquidity,
                 },
             ],
-        );
+        )
+        .unwrap();
 
         // trade all the way through the order
         let quote0 = pool
@@ -855,7 +911,8 @@ mod tests {
                     liquidity_delta: -liquidity,
                 },
             ],
-        );
+        )
+        .unwrap();
 
         // trade to tick 4.5
         let quote0 = pool
@@ -986,7 +1043,8 @@ mod tests {
                     liquidity_delta: -liquidity,
                 },
             ],
-        );
+        )
+        .unwrap();
 
         // trade to tick -2.5, through 1.5 orders
         let quote0 = pool
