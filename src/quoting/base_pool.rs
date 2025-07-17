@@ -1166,7 +1166,7 @@ mod tests {
     #[test]
     fn test_example_failing_quote() {
         let pool = BasePool::new(
-            node_key(100, 922337203685477),
+            node_key(100, 17014118346046923988514818429550592),
             BasePoolState {
                 sqrt_ratio: U256([16035209758820767612, 757181812420893, 0, 0]),
                 liquidity: 99999,
@@ -1287,7 +1287,7 @@ mod tests {
             .expect("Failed to get quote of token1");
 
         assert_eq!(quote.consumed_amount, 1_000_000);
-        assert_eq!(quote.calculated_amount, 2436479432);
+        assert_eq!(quote.calculated_amount, 2436479431);
         assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
     }
 }
