@@ -146,7 +146,7 @@ impl Pool for MEVResistPool {
                 let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
 
                 let pool_config = self.base_pool.get_key().config;
-                let approximate_fee_multiplier = ((tick_after_swap - self.tick).abs() as f64)
+                let approximate_fee_multiplier = (((tick_after_swap - self.tick).abs() + 1) as f64)
                     / (pool_config.tick_spacing as f64);
 
                 let fixed_point_additional_fee: u64 =
@@ -160,24 +160,6 @@ impl Pool for MEVResistPool {
                 // if the time is updated, fees are accumulated to the current liquidity providers
                 // this causes up to 3 additional SSTOREs (~15k gas)
                 let state_update_count = if pool_time != current_time { 1 } else { 0 };
-
-                if fixed_point_additional_fee == 0 {
-                    // nothing to do here
-                    return Ok(Quote {
-                        calculated_amount: quote.calculated_amount,
-                        consumed_amount: quote.consumed_amount,
-                        execution_resources: MEVResistPoolResources {
-                            state_update_count: state_update_count,
-                            base_pool_resources: quote.execution_resources,
-                        },
-                        fees_paid: quote.fees_paid,
-                        is_price_increasing: quote.is_price_increasing,
-                        state_after: MEVResistPoolState {
-                            last_update_time: current_time,
-                            base_pool_state: quote.state_after,
-                        },
-                    });
-                }
 
                 let mut calculated_amount = quote.calculated_amount;
 
@@ -384,5 +366,83 @@ mod tests {
             (-100_000, 205_416)
         );
         assert_eq!(result.state_after.last_update_time, 1);
+    }
+
+    #[test]
+    fn test_swap_example_mainnet() {
+        let liquidity: i128 = 187957823162863064741;
+        let tick: i32 = 8015514;
+        let fee: u64 = 9223372036854775;
+        let tick_spacing: u32 = 1000;
+
+        let pool = MEVResistPool::new(
+            BasePool::new(
+                NodeKey {
+                    token0: U256::zero(),
+                    token1: U256::one(),
+                    config: Config {
+                        fee: fee,
+                        tick_spacing: tick_spacing,
+                        extension: U256::one(),
+                    },
+                },
+                BasePoolState {
+                    active_tick_index: Some(0),
+                    liquidity: liquidity as u128,
+                    sqrt_ratio: U256::from_dec_str("18723430188006331344089883003460461264896")
+                        .unwrap(),
+                },
+                vec![
+                    Tick {
+                        index: 7755000,
+                        liquidity_delta: liquidity,
+                    },
+                    Tick {
+                        index: 8267000,
+                        liquidity_delta: -liquidity,
+                    },
+                ],
+            )
+            .unwrap(),
+            1,
+            tick,
+        )
+        .unwrap();
+
+        let specified_amount: i128 = 1000000000000000;
+        let result = pool
+            .quote(QuoteParams {
+                meta: 2,
+                override_state: None,
+                sqrt_ratio_limit: None,
+                token_amount: TokenAmount {
+                    amount: specified_amount,
+                    token: U256::zero(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result.consumed_amount, result.calculated_amount),
+            (specified_amount, 3024269006844199936)
+        );
+
+        let specified_amount: i128 = 5000000000000000;
+        let result = pool
+            .quote(QuoteParams {
+                meta: 2,
+                override_state: None,
+                sqrt_ratio_limit: None,
+                token_amount: TokenAmount {
+                    amount: specified_amount,
+                    token: U256::zero(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result.consumed_amount, result.calculated_amount),
+            (specified_amount, 15086011739862955657)
+        );
     }
 }
