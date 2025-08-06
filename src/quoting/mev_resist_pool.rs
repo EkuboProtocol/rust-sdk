@@ -445,4 +445,116 @@ mod tests {
             (specified_amount, 15086011739862955657)
         );
     }
+
+    #[test]
+    fn test_swap_example_mainnet_split_trade() {
+        let liquidity: i128 = 187957823162863064741;
+        let tick: i32 = 8092285;
+        let fee: u64 = 9223372036854775;
+        let tick_spacing: u32 = 1000;
+
+        let pool = MEVResistPool::new(
+            BasePool::new(
+                NodeKey {
+                    token0: U256::zero(),
+                    token1: U256::one(),
+                    config: Config {
+                        fee: fee,
+                        tick_spacing: tick_spacing,
+                        extension: U256::one(),
+                    },
+                },
+                BasePoolState {
+                    active_tick_index: Some(0),
+                    liquidity: liquidity as u128,
+                    sqrt_ratio: U256::from_dec_str("19456111242847136401729567804224169836544")
+                        .unwrap(),
+                },
+                vec![
+                    Tick {
+                        index: 7755000,
+                        liquidity_delta: liquidity,
+                    },
+                    Tick {
+                        index: 8267000,
+                        liquidity_delta: -liquidity,
+                    },
+                ],
+            )
+            .unwrap(),
+            1,
+            tick,
+        )
+        .unwrap();
+
+        let sqrt_ratio_limit = Some(U256::from_dec_str("18447191164202170524").unwrap());
+
+        let result0 = pool
+            .quote(QuoteParams {
+                meta: 2,
+                override_state: None,
+                sqrt_ratio_limit,
+                token_amount: TokenAmount {
+                    amount: 125000000000000000,
+                    token: U256::zero(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result0.consumed_amount, result0.calculated_amount),
+            (125000000000000000, 378805738986174441222) // 378805738986174437170 is actual
+        );
+
+        let result1 = pool
+            .quote(QuoteParams {
+                meta: 2,
+                override_state: Some(result0.state_after),
+                sqrt_ratio_limit,
+                token_amount: TokenAmount {
+                    amount: 50000000000000000,
+                    token: U256::zero(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result1.consumed_amount, result1.calculated_amount),
+            (50000000000000000, 141694588268248470538) // 141694588268248472157 is actual
+        );
+
+        let result2 = pool
+            .quote(QuoteParams {
+                meta: 2,
+                override_state: Some(result1.state_after),
+                sqrt_ratio_limit,
+                token_amount: TokenAmount {
+                    amount: 12500000000000000,
+                    token: U256::zero(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result2.consumed_amount, result2.calculated_amount),
+            (12500000000000000, 34654649033984065500) // 34654649033984065687 is actual
+        );
+
+        let result3 = pool
+            .quote(QuoteParams {
+                meta: 2,
+                override_state: Some(result2.state_after),
+                sqrt_ratio_limit,
+                token_amount: TokenAmount {
+                    amount: 12500000000000000,
+                    token: U256::zero(),
+                },
+            })
+            .unwrap();
+
+        assert_eq!(
+            (result3.consumed_amount, result3.calculated_amount),
+            (12500000000000000, 34275601333991479466) // 34275601333991479737 is actual
+        );
+    }
 }
