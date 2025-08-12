@@ -8,6 +8,7 @@ use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePoolState {
     pub full_range_pool_state: FullRangePoolState,
     pub last_snapshot_time: u64,
