@@ -11,6 +11,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPoolState {
     pub full_range_pool_state: FullRangePoolState,
     pub token0_sale_rate: u128,
