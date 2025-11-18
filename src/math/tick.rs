@@ -1,4 +1,7 @@
-use crate::{math::uint::u256_to_float_base_x128, math::uint::U256};
+use crate::{
+    chain::Chain,
+    math::uint::{u256_to_float_base_x128, U256},
+};
 
 const ONE_X128: U256 = U256([0, 0, 1, 0]);
 
@@ -32,20 +35,8 @@ const MASKS: [U256; 27] = [
     U256([6723154418996326713, 49365, 0, 0]),
 ];
 
-pub const MIN_TICK: i32 = -88722835;
-pub const MAX_TICK: i32 = 88722835;
-pub const MAX_TICK_SPACING: u32 = 698605;
-pub const FULL_RANGE_TICK_SPACING: u32 = 0;
-
-pub const MIN_SQRT_RATIO: U256 = U256([447090492618908, 1, 0, 0]);
-pub const MAX_SQRT_RATIO: U256 = U256([0, 7567914946021818368, 18446296994052723738, 0]);
-
-const TWO_POW_160: U256 = U256([0, 0, 0x100000000, 0]);
-const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
-const TWO_POW_96: U256 = U256([0, 0x0100000000, 0, 0]);
-
-pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
-    if tick < MIN_TICK || tick > MAX_TICK {
+pub fn to_sqrt_ratio<C: Chain>(tick: i32) -> Option<U256> {
+    if tick < C::min_tick() || tick > C::max_tick() {
         return None;
     }
 
@@ -63,17 +54,7 @@ pub fn to_sqrt_ratio(tick: i32) -> Option<U256> {
         ratio = U256::MAX / ratio;
     }
 
-    ratio = if ratio >= TWO_POW_160 {
-        (ratio >> 98) << 98
-    } else if ratio >= TWO_POW_128 {
-        (ratio >> 66) << 66
-    } else if ratio >= TWO_POW_96 {
-        (ratio >> 34) << 34
-    } else {
-        (ratio >> 2) << 2
-    };
-
-    Some(ratio)
+    Some(C::adjust_sqrt_ratio_precision(ratio))
 }
 
 const SQRT_TICK_SIZE: f64 =

@@ -1,22 +1,28 @@
-use crate::math::uint::U256;
-use core::fmt::Debug;
+use crate::{
+    chain::{Chain, Evm},
+    math::uint::U256,
+};
 use core::ops::{Add, Sub};
+use core::{
+    fmt::Debug,
+    ops::{AddAssign, SubAssign},
+};
 
-// Unique key identifying the pool.
+/// Unique key identifying the pool.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct NodeKey {
+pub struct NodeKey<C: Chain> {
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token0: U256,
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token1: U256,
-    pub config: Config,
+    pub config: Config<C>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Config {
-    pub fee: u64,
+pub struct Config<C: Chain> {
+    pub fee: C::Fee,
     pub tick_spacing: u32,
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub extension: U256,
@@ -45,8 +51,8 @@ pub mod serde_u256 {
     }
 }
 
-impl From<U256> for Config {
-    fn from(value: U256) -> Config {
+impl From<U256> for Config<Evm> {
+    fn from(value: U256) -> Config<Evm> {
         Config {
             tick_spacing: (value % U256([4294967296, 0, 0, 0])).as_u32(),
             fee: ((value >> 32) % U256([0, 1, 0, 0])).as_u64(),
@@ -55,8 +61,8 @@ impl From<U256> for Config {
     }
 }
 
-impl From<Config> for U256 {
-    fn from(value: Config) -> U256 {
+impl From<Config<Evm>> for U256 {
+    fn from(value: Config<Evm>) -> U256 {
         U256::from(value.tick_spacing)
             + (U256::from(value.fee) << 32)
             + (U256::from(value.extension) << 96)
@@ -101,14 +107,22 @@ pub struct Quote<R, S> {
 // Commonly used as meta
 pub type BlockTimestamp = u64;
 
-pub trait Pool: Send + Sync + Debug + Clone + PartialEq + Eq {
-    type Resources: Add + Sub + Debug + Default + Copy + PartialEq + Eq;
-    type State: Debug + Copy + PartialEq + Eq;
+pub trait Pool<C: Chain>: Send + Sync + Debug + Clone + PartialEq + Eq {
+    type Resources: Add<Output = Self::Resources>
+        + AddAssign
+        + Sub<Output = Self::Resources>
+        + SubAssign
+        + Debug
+        + Default
+        + Copy
+        + PartialEq
+        + Eq;
+    type State: Debug + Copy + PartialEq + Eq + PoolState;
     type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
     type Meta: Debug + Copy;
 
-    fn get_key(&self) -> &NodeKey;
+    fn get_key(&self) -> &NodeKey<C>;
 
     fn get_state(&self) -> Self::State;
 
@@ -126,6 +140,11 @@ pub trait Pool: Send + Sync + Debug + Clone + PartialEq + Eq {
 
     // Returns false if a swap of x followed by a swap of y will have the same output as a swap of x + y
     fn is_path_dependent(&self) -> bool;
+}
+
+pub trait PoolState {
+    fn sqrt_ratio(&self) -> U256;
+    fn liquidity(&self) -> u128;
 }
 
 #[cfg(test)]

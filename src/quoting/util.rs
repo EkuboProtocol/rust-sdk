@@ -1,7 +1,8 @@
-use crate::math::tick::{MAX_TICK, MIN_TICK};
-use crate::math::uint::{u256_to_float_base_x128, U256};
-use crate::quoting::base_pool::MAX_TICK_SPACING;
 use crate::quoting::types::Tick;
+use crate::{
+    chain::Chain,
+    math::uint::{u256_to_float_base_x128, U256},
+};
 use alloc::vec::Vec;
 use num_traits::Zero;
 
@@ -67,7 +68,7 @@ pub enum ConstructSortedTicksError {
 /// * `tick_spacing` - The tick spacing of the pool
 /// * `liquidity` - The current liquidity of the pool
 /// * `current_tick` - The current tick of the pool, must be between min and max tick searched
-pub fn construct_sorted_ticks(
+pub fn construct_sorted_ticks<C: Chain>(
     partial_ticks: Vec<Tick>,
     min_tick_searched: i32,
     max_tick_searched: i32,
@@ -81,17 +82,17 @@ pub fn construct_sorted_ticks(
     if min_tick_searched > max_tick_searched {
         return Err(ConstructSortedTicksError::MinTickLessThanMaxTick);
     }
-    if tick_spacing.is_zero() || tick_spacing > MAX_TICK_SPACING {
+    if tick_spacing.is_zero() || tick_spacing > C::max_tick_spacing() {
         return Err(ConstructSortedTicksError::InvalidTickSpacing);
     }
 
     let spacing_i32 = tick_spacing as i32;
 
     let valid_min_tick = (((min_tick_searched - (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
-        .max((MIN_TICK / spacing_i32) * spacing_i32);
+        .max((C::min_tick() / spacing_i32) * spacing_i32);
 
     let valid_max_tick = (((max_tick_searched + (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
-        .min((MAX_TICK / spacing_i32) * spacing_i32);
+        .min((C::max_tick() / spacing_i32) * spacing_i32);
 
     // Sort and deduplicate ticks
     let mut result = partial_ticks.clone();

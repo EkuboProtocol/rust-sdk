@@ -1,7 +1,9 @@
-use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
-use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams};
+use crate::{
+    chain::Evm,
+    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+};
+use crate::{math::uint::U256, quoting::types::PoolState};
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 
@@ -59,7 +61,7 @@ pub struct FullRangePoolState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FullRangePool {
-    key: NodeKey,
+    key: NodeKey<Evm>,
     state: FullRangePoolState,
 }
 
@@ -72,12 +74,12 @@ pub enum FullRangePoolError {
 }
 
 impl FullRangePool {
-    pub fn new(key: NodeKey, state: FullRangePoolState) -> Result<Self, FullRangePoolError> {
+    pub fn new(key: NodeKey<Evm>, state: FullRangePoolState) -> Result<Self, FullRangePoolError> {
         if !(key.token0 < key.token1) {
             return Err(FullRangePoolError::TokenOrderInvalid);
         }
 
-        if state.sqrt_ratio < MIN_SQRT_RATIO || state.sqrt_ratio > MAX_SQRT_RATIO {
+        if state.sqrt_ratio < Evm::MIN_SQRT_RATIO || state.sqrt_ratio > Evm::MAX_SQRT_RATIO {
             return Err(FullRangePoolError::SqrtRatioInvalid);
         }
 
@@ -91,13 +93,13 @@ impl FullRangePool {
     }
 }
 
-impl Pool for FullRangePool {
+impl Pool<Evm> for FullRangePool {
     type Resources = FullRangePoolResources;
     type State = FullRangePoolState;
     type QuoteError = FullRangePoolQuoteError;
     type Meta = ();
 
-    fn get_key(&self) -> &NodeKey {
+    fn get_key(&self) -> &NodeKey<Evm> {
         &self.key
     }
 
@@ -158,25 +160,25 @@ impl Pool for FullRangePool {
             if !is_increasing && limit > sqrt_ratio {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit < MIN_SQRT_RATIO {
+            if limit < Evm::MIN_SQRT_RATIO {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit > MAX_SQRT_RATIO {
+            if limit > Evm::MAX_SQRT_RATIO {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
         } else {
             if is_increasing {
-                MAX_SQRT_RATIO
+                Evm::MAX_SQRT_RATIO
             } else {
-                MIN_SQRT_RATIO
+                Evm::MIN_SQRT_RATIO
             }
         };
 
         let starting_sqrt_ratio = sqrt_ratio;
 
         // Since we're in a full range pool, we can complete the swap in a single step
-        let step = compute_step(
+        let step = compute_step::<Evm>(
             sqrt_ratio,
             liquidity,
             sqrt_ratio_limit,
@@ -222,24 +224,26 @@ impl Pool for FullRangePool {
 
     // For full range pools, if there's liquidity, then the max tick is MAX_TICK
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        if self.has_liquidity() {
-            Some(crate::math::tick::MAX_TICK)
-        } else {
-            None
-        }
+        self.has_liquidity().then_some(Evm::MAX_TICK)
     }
 
     // For full range pools, if there's liquidity, then the min tick is MIN_TICK
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        if self.has_liquidity() {
-            Some(crate::math::tick::MIN_TICK)
-        } else {
-            None
-        }
+        self.has_liquidity().then_some(Evm::MIN_TICK)
     }
 
     fn is_path_dependent(&self) -> bool {
         false
+    }
+}
+
+impl PoolState for FullRangePoolState {
+    fn sqrt_ratio(&self) -> U256 {
+        self.sqrt_ratio
+    }
+
+    fn liquidity(&self) -> u128 {
+        self.liquidity
     }
 }
 

@@ -1,9 +1,69 @@
-use crate::math::muldiv::muldiv;
-use crate::math::twamm::exp2::exp2;
-use crate::math::uint::U256;
+use crate::math::{twamm::exp2::exp2, uint::U256};
+use crate::{chain::Chain, math::muldiv::muldiv};
 use num_traits::Zero;
 
-const TWO_POW_64: U256 = U256([0, 1, 0, 0]);
+const EXPONENT_LIMIT: U256 = U256([0, 88, 0, 0]);
+const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
+
+pub fn calculate_next_sqrt_ratio<C: Chain>(
+    sqrt_ratio: U256,
+    liquidity: u128,
+    sale_rate_token0: u128,
+    sale_rate_token1: u128,
+    time_elapsed: u32,
+    fee: C::Fee,
+) -> U256 {
+    let sqrt_sale_ratio = compute_sqrt_sale_ratio_x128(sale_rate_token0, sale_rate_token1);
+
+    let round_up = sqrt_ratio > sqrt_sale_ratio;
+    let (c, c_sign_negative) = (compute_c(sqrt_ratio, sqrt_sale_ratio), round_up);
+
+    if c.is_zero() || liquidity.is_zero() {
+        return sqrt_sale_ratio;
+    }
+
+    let sale_rate = ((U256::from(sale_rate_token1) * U256::from(sale_rate_token0)).integer_sqrt()
+        * (C::fee_denominator() - fee))
+        / C::fee_denominator();
+
+    let round_up = sqrt_ratio > sqrt_sale_ratio;
+
+    let exponent: U256 =
+        (sale_rate * U256::from(time_elapsed) * U256([12392656037, 0, 0, 0])) / liquidity;
+
+    if exponent >= U256::from(0x400000000000000000_u128) {
+        return sqrt_sale_ratio;
+    }
+
+    let e_pow_exponent_x128 = U256::from(exp2(exponent.low_u128())) << 64;
+
+    let mut sqrt_ratio_next = if c_sign_negative {
+        muldiv(
+            sqrt_sale_ratio,
+            e_pow_exponent_x128.checked_add(c).unwrap(),
+            e_pow_exponent_x128.checked_sub(c).unwrap(),
+            false,
+        )
+        .unwrap_or(sqrt_sale_ratio)
+    } else {
+        muldiv(
+            sqrt_sale_ratio,
+            e_pow_exponent_x128.checked_sub(c).unwrap(),
+            e_pow_exponent_x128.checked_add(c).unwrap(),
+            false,
+        )
+        .unwrap_or(sqrt_sale_ratio)
+    };
+
+    // we should never exceed the sale ratio
+    if round_up {
+        sqrt_ratio_next = sqrt_ratio_next.max(sqrt_sale_ratio);
+    } else {
+        sqrt_ratio_next = sqrt_ratio_next.min(sqrt_sale_ratio);
+    }
+
+    sqrt_ratio_next
+}
 
 fn compute_sqrt_sale_ratio_x128(sale_rate_token0: u128, sale_rate_token1: u128) -> U256 {
     let sale_ratio: U256 = (U256::from(sale_rate_token1) << 128) / sale_rate_token0;
@@ -19,81 +79,14 @@ fn compute_sqrt_sale_ratio_x128(sale_rate_token0: u128, sale_rate_token1: u128) 
     }
 }
 
-fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> (U256, bool) {
-    (
-        muldiv(
-            sqrt_sale_ratio.abs_diff(sqrt_ratio),
-            U256([0, 0, 1, 0]),
-            sqrt_sale_ratio + sqrt_ratio,
-            false,
-        )
-        .unwrap(),
-        sqrt_sale_ratio < sqrt_ratio,
+fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> U256 {
+    muldiv(
+        sqrt_sale_ratio.abs_diff(sqrt_ratio),
+        U256([0, 0, 1, 0]),
+        sqrt_sale_ratio + sqrt_ratio,
+        false,
     )
-}
-
-pub fn calculate_next_sqrt_ratio(
-    sqrt_ratio: U256,
-    liquidity: u128,
-    sale_rate_token0: u128,
-    sale_rate_token1: u128,
-    time_elapsed: u32,
-    fee: u64,
-) -> U256 {
-    let sqrt_sale_ratio = compute_sqrt_sale_ratio_x128(sale_rate_token0, sale_rate_token1);
-
-    if liquidity.is_zero() {
-        return sqrt_sale_ratio;
-    }
-
-    let (c, c_sign_negative) = compute_c(sqrt_ratio, sqrt_sale_ratio);
-
-    if c.is_zero() || liquidity == 0 {
-        sqrt_sale_ratio
-    } else {
-        let sale_rate = ((U256::from(sale_rate_token1) * U256::from(sale_rate_token0))
-            .integer_sqrt()
-            * (TWO_POW_64 - fee))
-            / TWO_POW_64;
-
-        let round_up = sqrt_ratio > sqrt_sale_ratio;
-
-        let exponent: U256 =
-            (sale_rate * U256::from(time_elapsed) * U256([12392656037, 0, 0, 0])) / liquidity;
-
-        if exponent >= U256::from(0x400000000000000000_u128) {
-            return sqrt_sale_ratio;
-        }
-
-        let e_pow_exponent_x128 = U256::from(exp2(exponent.low_u128())) << 64;
-
-        let mut sqrt_ratio_next = if c_sign_negative {
-            muldiv(
-                sqrt_sale_ratio,
-                e_pow_exponent_x128.checked_add(c).unwrap(),
-                e_pow_exponent_x128.checked_sub(c).unwrap(),
-                false,
-            )
-            .unwrap_or(sqrt_sale_ratio)
-        } else {
-            muldiv(
-                sqrt_sale_ratio,
-                e_pow_exponent_x128.checked_sub(c).unwrap(),
-                e_pow_exponent_x128.checked_add(c).unwrap(),
-                false,
-            )
-            .unwrap_or(sqrt_sale_ratio)
-        };
-
-        // we should never exceed the sale ratio
-        if round_up {
-            sqrt_ratio_next = sqrt_ratio_next.max(sqrt_sale_ratio);
-        } else {
-            sqrt_ratio_next = sqrt_ratio_next.min(sqrt_sale_ratio);
-        }
-
-        sqrt_ratio_next
-    }
+    .unwrap()
 }
 
 #[cfg(test)]

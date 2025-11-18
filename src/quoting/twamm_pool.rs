@@ -1,27 +1,29 @@
-use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
-use crate::math::twamm::sqrt_ratio::calculate_next_sqrt_ratio;
-use crate::math::uint::U256;
-use crate::quoting::full_range_pool::{
-    FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState,
-};
 use crate::quoting::types::{BlockTimestamp, Config};
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, TokenAmount};
+use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick, TokenAmount};
+use crate::quoting::{
+    base_pool::{BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState},
+    types::PoolState,
+};
+use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
+use crate::{math::uint::U256, quoting::full_range_pool::FullRangePool};
+
 use alloc::vec::Vec;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TwammPoolState {
-    pub full_range_pool_state: FullRangePoolState,
+pub struct TwammPoolState<S> {
+    pub full_range_pool_state: S,
     pub token0_sale_rate: u128,
     pub token1_sale_rate: u128,
     pub last_execution_time: u64,
 }
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
-pub struct TwammPoolResources {
-    pub full_range_pool_resources: FullRangePoolResources,
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TwammPoolResources<R> {
+    pub full_range_pool_resources: R,
     // The number of seconds that passed since the last virtual order execution
     pub virtual_order_seconds_executed: u32,
     // The amount of order updates that were applied to the sale rate
@@ -30,7 +32,7 @@ pub struct TwammPoolResources {
     pub virtual_orders_executed: u32,
 }
 
-impl AddAssign for TwammPoolResources {
+impl<R: AddAssign> AddAssign for TwammPoolResources<R> {
     fn add_assign(&mut self, rhs: Self) {
         self.full_range_pool_resources += rhs.full_range_pool_resources;
         self.virtual_order_delta_times_crossed += rhs.virtual_order_delta_times_crossed;
@@ -39,26 +41,25 @@ impl AddAssign for TwammPoolResources {
     }
 }
 
-impl Add for TwammPoolResources {
-    type Output = TwammPoolResources;
-
+impl<R: AddAssign> Add for TwammPoolResources<R> {
+    type Output = Self;
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
         self
     }
 }
 
-impl SubAssign for TwammPoolResources {
+impl<R: SubAssign> SubAssign for TwammPoolResources<R> {
     fn sub_assign(&mut self, rhs: Self) {
         self.full_range_pool_resources -= rhs.full_range_pool_resources;
-        self.virtual_order_delta_times_crossed -= rhs.virtual_order_delta_times_crossed;
         self.virtual_order_seconds_executed -= rhs.virtual_order_seconds_executed;
+        self.virtual_order_delta_times_crossed -= rhs.virtual_order_delta_times_crossed;
         self.virtual_orders_executed -= rhs.virtual_orders_executed;
     }
 }
 
-impl Sub for TwammPoolResources {
-    type Output = TwammPoolResources;
+impl<R: SubAssign> Sub for TwammPoolResources<R> {
+    type Output = Self;
 
     fn sub(mut self, rhs: Self) -> Self::Output {
         self -= rhs;
@@ -66,7 +67,7 @@ impl Sub for TwammPoolResources {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammSaleRateDelta {
     pub time: u64,
@@ -76,8 +77,8 @@ pub struct TwammSaleRateDelta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TwammPool {
-    full_range_pool: FullRangePool,
+pub struct TwammPool<C: Chain> {
+    full_range_pool: C::FullRangePool,
     active_liquidity: u128,
     token0_sale_rate: u128,
     token1_sale_rate: u128,
@@ -85,11 +86,11 @@ pub struct TwammPool {
     virtual_order_deltas: Vec<TwammSaleRateDelta>,
 }
 
-/// Errors that can occur when constructing a TwammPool.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum TwammPoolError {
-    /// Errors from the underlying FullRangePool constructor.
-    FullRangePoolError(FullRangePoolError),
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TwammPoolError<E> {
+    /// Errors from the underlying full range pool constructor.
+    FullRangePoolError(E),
     /// Sale rate deltas are not ordered or not greater than last_execution_time.
     SaleRateDeltasInvalid,
     /// Sale rate deltas overflow or underflow at some point
@@ -98,13 +99,11 @@ pub enum TwammPoolError {
     SaleRateDeltaSumNonZero,
 }
 
-use crate::quoting::full_range_pool::FullRangePoolError;
-
-impl TwammPool {
+impl<C: Chain> TwammPool<C> {
     pub fn new(
         token0: U256,
         token1: U256,
-        fee: u64,
+        fee: C::Fee,
         extension: U256,
         sqrt_ratio: U256,
         active_liquidity: u128,
@@ -112,16 +111,15 @@ impl TwammPool {
         token0_sale_rate: u128,
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
-    ) -> Result<Self, TwammPoolError> {
+    ) -> Result<Self, TwammPoolError<C::FullRangePoolError>> {
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
 
         for t in virtual_order_deltas.iter() {
-            if !(t.time > last_time) {
+            if t.time <= last_time {
                 return Err(TwammPoolError::SaleRateDeltasInvalid);
             }
-
             last_time = t.time;
 
             if t.sale_rate_delta0 < 0 {
@@ -149,29 +147,26 @@ impl TwammPool {
             return Err(TwammPoolError::SaleRateDeltaSumNonZero);
         }
 
-        let full_range_pool = FullRangePool::new(
-            NodeKey {
-                token0,
-                token1,
-                config: Config {
-                    fee,
-                    tick_spacing: 0,
-                    extension,
-                },
-            },
-            FullRangePoolState {
-                // we just force the pool state to always be within the bounds of min/max to simplify the state
-                // this does not change accuracy of quote results
-                // it just reduces accuracy of resource estimations in extreme cases by a negligible amount.
-                sqrt_ratio: sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO),
-                liquidity: active_liquidity,
-            },
-        )
-        .map_err(TwammPoolError::FullRangePoolError)?;
+        // we just force the pool state to always be within the bounds of min/max to simplify the state
+        // this does not change accuracy of quote results
+        // it just reduces accuracy of resource estimations in extreme cases by a negligible amount.
+        let sqrt_ratio = sqrt_ratio.clamp(
+            C::min_sqrt_ratio_full_range(),
+            C::max_sqrt_ratio_full_range(),
+        );
 
         Ok(TwammPool {
             active_liquidity,
-            full_range_pool,
+
+            full_range_pool: C::new_full_range_pool(
+                token0,
+                token1,
+                fee,
+                extension,
+                sqrt_ratio,
+                active_liquidity,
+            )
+            .map_err(TwammPoolError::FullRangePoolError)?,
             virtual_order_deltas,
             last_execution_time,
             token0_sale_rate,
@@ -186,21 +181,21 @@ impl TwammPool {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum TwammPoolQuoteError {
+pub enum TwammPoolQuoteError<E> {
     ExecutionTimeExceedsBlockTime,
     FailedCalculateNextSqrtRatio,
     SaleAmountOverflow,
     TooMuchTimePassedSinceLastExecution,
-    FullRangePoolQuoteError(FullRangePoolQuoteError),
+    FullRangeQuoteError(E),
 }
 
-impl Pool for TwammPool {
-    type Resources = TwammPoolResources;
-    type State = TwammPoolState;
-    type QuoteError = TwammPoolQuoteError;
+impl<C: Chain> Pool<C> for TwammPool<C> {
+    type Resources = TwammPoolResources<<C::FullRangePool as Pool<C>>::Resources>;
+    type State = TwammPoolState<<C::FullRangePool as Pool<C>>::State>;
+    type QuoteError = TwammPoolQuoteError<<C::FullRangePool as Pool<C>>::QuoteError>;
     type Meta = BlockTimestamp;
 
-    fn get_key(&self) -> &NodeKey {
+    fn get_key(&self) -> &NodeKey<C> {
         self.full_range_pool.get_key()
     }
 
@@ -227,7 +222,7 @@ impl Pool for TwammPool {
         let current_time = meta;
         let initial_state = override_state.unwrap_or_else(|| self.get_state());
 
-        let mut next_sqrt_ratio = initial_state.full_range_pool_state.sqrt_ratio;
+        let mut next_sqrt_ratio = initial_state.full_range_pool_state.sqrt_ratio();
         let mut token0_sale_rate = initial_state.token0_sale_rate;
         let mut token1_sale_rate = initial_state.token1_sale_rate;
         let mut last_execution_time = initial_state.last_execution_time;
@@ -244,12 +239,13 @@ impl Pool for TwammPool {
             .unwrap_or(self.virtual_order_deltas.len());
 
         let mut full_range_pool_state_override = override_state.map(|s| s.full_range_pool_state);
-        let mut full_range_pool_execution_resources: FullRangePoolResources = Default::default();
+        let mut full_range_pool_execution_resources =
+            <C::FullRangePool as Pool<C>>::Resources::default();
 
-        let NodeKey {
+        let &NodeKey {
             token0,
             token1,
-            config,
+            config: Config { fee, .. },
         } = self.full_range_pool.get_key();
 
         while last_execution_time != current_time {
@@ -271,16 +267,19 @@ impl Pool for TwammPool {
                 ((U256::from(token1_sale_rate) * U256::from(time_elapsed)) >> 32).low_u128();
 
             if amount0 > 0 && amount1 > 0 {
-                let current_sqrt_ratio = next_sqrt_ratio.min(MAX_SQRT_RATIO).max(MIN_SQRT_RATIO);
+                let current_sqrt_ratio = next_sqrt_ratio.clamp(
+                    C::min_sqrt_ratio_full_range(),
+                    C::max_sqrt_ratio_full_range(),
+                );
 
-                next_sqrt_ratio = calculate_next_sqrt_ratio(
+                next_sqrt_ratio = calculate_next_sqrt_ratio::<C>(
                     current_sqrt_ratio,
                     // we explicitly do not use the liquidity state variable, we always calculate this with active liquidity
                     self.active_liquidity,
                     token0_sale_rate,
                     token1_sale_rate,
                     time_elapsed as u32,
-                    config.fee,
+                    fee,
                 );
 
                 let (token, amount) = if current_sqrt_ratio < next_sqrt_ratio {
@@ -296,21 +295,21 @@ impl Pool for TwammPool {
                             amount: amount
                                 .to_i128()
                                 .ok_or(TwammPoolQuoteError::SaleAmountOverflow)?,
-                            token: *token,
+                            token,
                         },
                         sqrt_ratio_limit: Some(next_sqrt_ratio),
                         override_state: full_range_pool_state_override,
                         meta: (),
                     })
-                    .map_err(TwammPoolQuoteError::FullRangePoolQuoteError)?;
+                    .map_err(TwammPoolQuoteError::FullRangeQuoteError)?;
 
                 full_range_pool_state_override = Some(quote.state_after);
                 full_range_pool_execution_resources += quote.execution_resources;
             } else if amount0 > 0 || amount1 > 0 {
                 let (amount, is_token1, sqrt_ratio_limit) = if amount0 != 0 {
-                    (amount0, false, MIN_SQRT_RATIO)
+                    (amount0, false, C::min_sqrt_ratio_full_range())
                 } else {
-                    (amount1, true, MAX_SQRT_RATIO)
+                    (amount1, true, C::max_sqrt_ratio_full_range())
                 };
 
                 let token = if is_token1 {
@@ -332,13 +331,12 @@ impl Pool for TwammPool {
                         override_state: full_range_pool_state_override,
                         meta: (),
                     })
-                    .map_err(TwammPoolQuoteError::FullRangePoolQuoteError)?;
+                    .map_err(TwammPoolQuoteError::FullRangeQuoteError)?;
 
                 full_range_pool_state_override = Some(quote.state_after);
-                full_range_pool_execution_resources =
-                    full_range_pool_execution_resources + quote.execution_resources;
+                full_range_pool_execution_resources += quote.execution_resources;
 
-                next_sqrt_ratio = quote.state_after.sqrt_ratio;
+                next_sqrt_ratio = quote.state_after.sqrt_ratio();
             }
 
             if let Some(next_delta) = sale_rate_delta {
@@ -369,7 +367,7 @@ impl Pool for TwammPool {
                 meta: (),
                 override_state: full_range_pool_state_override,
             })
-            .map_err(TwammPoolQuoteError::FullRangePoolQuoteError)?;
+            .map_err(TwammPoolQuoteError::FullRangeQuoteError)?;
 
         Ok(Quote {
             is_price_increasing: final_quote.is_price_increasing,
@@ -411,6 +409,16 @@ impl Pool for TwammPool {
 
     fn is_path_dependent(&self) -> bool {
         false
+    }
+}
+
+impl<S: PoolState> PoolState for TwammPoolState<S> {
+    fn sqrt_ratio(&self) -> U256 {
+        self.full_range_pool_state.sqrt_ratio()
+    }
+
+    fn liquidity(&self) -> u128 {
+        self.full_range_pool_state.liquidity()
     }
 }
 

@@ -1,6 +1,9 @@
-use crate::math::delta::{amount0_delta, amount1_delta, AmountDeltaError};
 use crate::math::sqrt_ratio::{next_sqrt_ratio_from_amount0, next_sqrt_ratio_from_amount1};
 use crate::math::uint::U256;
+use crate::{
+    chain::Chain,
+    math::delta::{amount0_delta, amount1_delta, AmountDeltaError},
+};
 use core::num::TryFromIntError;
 use num_traits::Zero;
 
@@ -16,10 +19,11 @@ pub fn is_price_increasing(amount: i128, is_token1: bool) -> bool {
     (amount < 0) != is_token1
 }
 
-const TWO_POW_64: U256 = U256([0, 1, 0, 0]);
+const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
 
-pub fn amount_before_fee(after_fee: u128, fee: u64) -> Option<u128> {
-    let (quotient, remainder) = (U256::from(after_fee) << 64).div_mod(TWO_POW_64 - U256::from(fee));
+pub fn amount_before_fee<C: Chain>(after_fee: u128, fee: C::Fee) -> Option<u128> {
+    let (quotient, remainder) =
+        (U256::from(after_fee) << C::fee_bits()).div_mod(C::fee_denominator() - fee.into());
 
     if !quotient.0[3].is_zero() || !quotient.0[2].is_zero() {
         None
@@ -32,9 +36,10 @@ pub fn amount_before_fee(after_fee: u128, fee: u64) -> Option<u128> {
     }
 }
 
-pub fn compute_fee(amount: u128, fee: u64) -> u128 {
-    let num = U256::from(amount) * U256::from(fee);
-    let (quotient, remainder) = num.div_mod(TWO_POW_64);
+pub fn compute_fee<C: Chain>(amount: u128, fee: C::Fee) -> u128 {
+    let num = U256::from(amount) * fee.into();
+    let (quotient, remainder) = num.div_mod(C::fee_denominator());
+
     if !remainder.is_zero() {
         quotient.low_u128() + 1
     } else {
@@ -59,13 +64,13 @@ pub enum ComputeStepError {
     AmountDeltaError(AmountDeltaError),
 }
 
-pub fn compute_step(
+pub fn compute_step<C: Chain>(
     sqrt_ratio: U256,
     liquidity: u128,
     sqrt_ratio_limit: U256,
     amount: i128,
     is_token1: bool,
-    fee: u64,
+    fee: C::Fee,
 ) -> Result<SwapResult, ComputeStepError> {
     if amount.is_zero() || sqrt_ratio == sqrt_ratio_limit {
         return Ok(no_op(sqrt_ratio));
@@ -85,7 +90,9 @@ pub fn compute_step(
         amount
     } else {
         // compute_fee always returns a value less than amount so we can just unwrap
-        let fee: i128 = compute_fee(amount.unsigned_abs(), fee).try_into().unwrap();
+        let fee: i128 = compute_fee::<C>(amount.unsigned_abs(), fee)
+            .try_into()
+            .unwrap();
         amount - fee
     };
 
@@ -117,7 +124,7 @@ pub fn compute_step(
             .map_err(ComputeStepError::AmountDeltaError)?;
 
             return if amount < 0 {
-                let including_fee = amount_before_fee(calculated_amount_excluding_fee, fee)
+                let including_fee = amount_before_fee::<C>(calculated_amount_excluding_fee, fee)
                     .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
                 Ok(SwapResult {
                     consumed_amount: amount,
@@ -152,7 +159,7 @@ pub fn compute_step(
     if amount < 0 {
         let amount_after_fee =
             calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
-        let before_fee = amount_before_fee(amount_after_fee, fee)
+        let before_fee = amount_before_fee::<C>(amount_after_fee, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
         Ok(SwapResult {
             consumed_amount: -specified_amount_delta
@@ -166,7 +173,7 @@ pub fn compute_step(
     } else {
         let specified_amount =
             specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
-        let before_fee = amount_before_fee(specified_amount, fee)
+        let before_fee = amount_before_fee::<C>(specified_amount, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
         let calculated_amount =
             calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;

@@ -1,7 +1,13 @@
-use crate::math::swap::{amount_before_fee, compute_fee};
-use crate::math::tick::{approximate_sqrt_ratio_to_tick, FULL_RANGE_TICK_SPACING};
-use crate::quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState};
 use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
+use crate::{
+    chain::Evm,
+    math::swap::{amount_before_fee, compute_fee},
+};
+use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
+use crate::{
+    math::uint::U256,
+    quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState},
+};
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 // Resources consumed during any swap execution in a full range pool.
@@ -46,7 +52,7 @@ impl Sub for MEVResistPoolResources {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MEVResistPool {
-    base_pool: BasePool,
+    base_pool: BasePool<Evm>,
     last_update_time: u32,
     tick: i32,
 }
@@ -69,7 +75,7 @@ pub enum MEVResistPoolError {
 impl MEVResistPool {
     // An MEV resist pool just wraps a base pool with some additional logic
     pub fn new(
-        base_pool: BasePool,
+        base_pool: BasePool<Evm>,
         last_update_time: u32,
         tick: i32,
     ) -> Result<Self, MEVResistPoolError> {
@@ -77,7 +83,7 @@ impl MEVResistPool {
         if key.config.fee == 0 {
             return Err(MEVResistPoolError::FeeMustBeGreaterThanZero);
         }
-        if key.config.tick_spacing == FULL_RANGE_TICK_SPACING {
+        if key.config.tick_spacing == Evm::FULL_RANGE_TICK_SPACING {
             return Err(MEVResistPoolError::CannotBeFullRange);
         }
         if key.config.extension.is_zero() {
@@ -113,13 +119,13 @@ impl MEVResistPool {
     }
 }
 
-impl Pool for MEVResistPool {
+impl Pool<Evm> for MEVResistPool {
     type Resources = MEVResistPoolResources;
     type State = MEVResistPoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = BlockTimestamp;
 
-    fn get_key(&self) -> &NodeKey {
+    fn get_key(&self) -> &NodeKey<Evm> {
         self.base_pool.get_key()
     }
 
@@ -165,12 +171,16 @@ impl Pool for MEVResistPool {
 
                 if params.token_amount.amount >= 0 {
                     // exact input, remove the additional fee from the output
-                    calculated_amount -= compute_fee(calculated_amount, fixed_point_additional_fee);
+                    calculated_amount -=
+                        compute_fee::<Evm>(calculated_amount, fixed_point_additional_fee);
                 } else {
-                    let input_amount_fee: u128 = compute_fee(calculated_amount, pool_config.fee);
+                    let input_amount_fee: u128 =
+                        compute_fee::<Evm>(calculated_amount, pool_config.fee);
                     let input_amount = calculated_amount - input_amount_fee;
 
-                    if let Some(bf) = amount_before_fee(input_amount, fixed_point_additional_fee) {
+                    if let Some(bf) =
+                        amount_before_fee::<Evm>(input_amount, fixed_point_additional_fee)
+                    {
                         let fee = bf - input_amount;
                         // exact output, compute the additional fee for the output
                         calculated_amount += fee;
@@ -214,6 +224,16 @@ impl Pool for MEVResistPool {
 
     fn is_path_dependent(&self) -> bool {
         true
+    }
+}
+
+impl PoolState for MEVResistPoolState {
+    fn sqrt_ratio(&self) -> U256 {
+        self.base_pool_state.sqrt_ratio()
+    }
+
+    fn liquidity(&self) -> u128 {
+        self.base_pool_state.liquidity()
     }
 }
 

@@ -1,34 +1,38 @@
-use super::types::Config;
-use crate::math::uint::U256;
-use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;
-use crate::quoting::full_range_pool::{
-    FullRangePool, FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState,
+use crate::quoting::types::Config;
+use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
+use crate::quoting::{
+    base_pool::{BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState},
+    full_range_pool::FullRangePool,
 };
-use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
+use crate::{math::uint::U256, quoting::types::PoolState};
+use alloc::vec;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
+use num_traits::{ToPrimitive, Zero};
+
+use crate::chain::{Chain, Starknet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct OraclePoolState {
-    pub full_range_pool_state: FullRangePoolState,
+pub struct OraclePoolState<S> {
+    pub full_range_pool_state: S,
     pub last_snapshot_time: u64,
 }
 
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct OraclePoolResources {
-    pub full_range_pool_resources: FullRangePoolResources,
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub struct OraclePoolResources<R> {
+    pub underlying_pool_resources: R,
     pub snapshots_written: u32,
 }
 
-impl AddAssign for OraclePoolResources {
+impl<R: AddAssign> AddAssign for OraclePoolResources<R> {
     fn add_assign(&mut self, rhs: Self) {
-        self.full_range_pool_resources += rhs.full_range_pool_resources;
+        self.underlying_pool_resources += rhs.underlying_pool_resources;
         self.snapshots_written += rhs.snapshots_written;
     }
 }
 
-impl Add for OraclePoolResources {
-    type Output = OraclePoolResources;
+impl<R: AddAssign> Add for OraclePoolResources<R> {
+    type Output = Self;
 
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
@@ -36,14 +40,14 @@ impl Add for OraclePoolResources {
     }
 }
 
-impl SubAssign for OraclePoolResources {
+impl<R: SubAssign> SubAssign for OraclePoolResources<R> {
     fn sub_assign(&mut self, rhs: Self) {
-        self.full_range_pool_resources -= rhs.full_range_pool_resources;
+        self.underlying_pool_resources -= rhs.underlying_pool_resources;
         self.snapshots_written -= rhs.snapshots_written;
     }
 }
 
-impl Sub for OraclePoolResources {
+impl<R: SubAssign> Sub for OraclePoolResources<R> {
     type Output = Self;
 
     fn sub(mut self, rhs: Self) -> Self::Output {
@@ -52,61 +56,50 @@ impl Sub for OraclePoolResources {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct OraclePool {
-    full_range_pool: FullRangePool,
+pub struct OraclePool<C: Chain> {
+    full_range_pool: C::FullRangePool,
     last_snapshot_time: u64,
 }
 
-/// Errors that can occur when constructing an OraclePool.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum OraclePoolError {
-    /// Errors from the underlying FullRangePool constructor.
-    FullRangePoolError(FullRangePoolError),
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum OraclePoolError<E> {
+    FullRangePoolError(E),
 }
 
-use crate::quoting::full_range_pool::FullRangePoolError;
-
-impl OraclePool {
+impl<C: Chain> OraclePool<C> {
     pub fn new(
+        token0: U256,
         token1: U256,
         extension: U256,
         sqrt_ratio: U256,
         active_liquidity: u128,
         last_snapshot_time: u64,
-    ) -> Result<Self, OraclePoolError> {
-        let full_range_pool = FullRangePool::new(
-            NodeKey {
-                token0: NATIVE_TOKEN_ADDRESS,
-                token1,
-                config: Config {
-                    fee: 0,
-                    tick_spacing: 0,
-                    extension,
-                },
-            },
-            FullRangePoolState {
-                sqrt_ratio,
-                liquidity: active_liquidity,
-            },
-        )
-        .map_err(OraclePoolError::FullRangePoolError)?;
-
+    ) -> Result<Self, OraclePoolError<C::FullRangePoolError>> {
         Ok(OraclePool {
-            full_range_pool,
+            full_range_pool: C::new_full_range_pool(
+                token0,
+                token1,
+                Zero::zero(),
+                extension,
+                sqrt_ratio,
+                active_liquidity,
+            )
+            .map_err(OraclePoolError::FullRangePoolError)?,
             last_snapshot_time,
         })
     }
 }
 
-impl Pool for OraclePool {
-    type Resources = OraclePoolResources;
-    type State = OraclePoolState;
-    type QuoteError = FullRangePoolQuoteError;
+impl<C: Chain> Pool<C> for OraclePool<C> {
+    type Resources = OraclePoolResources<<C::FullRangePool as Pool<C>>::Resources>;
+    type State = OraclePoolState<<C::FullRangePool as Pool<C>>::State>;
+    type QuoteError = <C::FullRangePool as Pool<C>>::QuoteError;
     type Meta = BlockTimestamp;
 
-    fn get_key(&self) -> &NodeKey {
+    fn get_key(&self) -> &NodeKey<C> {
         self.full_range_pool.get_key()
     }
 
@@ -138,7 +131,7 @@ impl Pool for OraclePool {
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
                 snapshots_written: if pool_time != block_time { 1 } else { 0 },
-                full_range_pool_resources: result.execution_resources,
+                underlying_pool_resources: result.execution_resources,
             },
             fees_paid: result.fees_paid,
             is_price_increasing: result.is_price_increasing,
@@ -163,6 +156,16 @@ impl Pool for OraclePool {
 
     fn is_path_dependent(&self) -> bool {
         false
+    }
+}
+
+impl<S: PoolState> PoolState for OraclePoolState<S> {
+    fn sqrt_ratio(&self) -> U256 {
+        self.full_range_pool_state.sqrt_ratio()
+    }
+
+    fn liquidity(&self) -> u128 {
+        self.full_range_pool_state.liquidity()
     }
 }
 

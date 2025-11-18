@@ -1,10 +1,13 @@
-use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{to_sqrt_ratio, MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 use crate::math::uint::U256;
 use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
     approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
 };
+use crate::{
+    chain::Chain,
+    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+};
+use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
 use alloc::vec::Vec;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
@@ -51,9 +54,6 @@ impl Sub for BasePoolResources {
     }
 }
 
-pub const FULL_RANGE_TICK_SPACING: u32 = 0;
-pub const MAX_TICK_SPACING: u32 = 698605;
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BasePoolQuoteError {
     InvalidToken,
@@ -73,8 +73,8 @@ pub struct BasePoolState {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasePool {
-    key: NodeKey,
+pub struct BasePool<C: Chain> {
+    key: NodeKey<C>,
     state: BasePoolState,
     sorted_ticks: Vec<Tick>,
 }
@@ -110,7 +110,7 @@ pub enum BasePoolError {
     ActiveLiquidityOverflow,
 }
 
-impl BasePool {
+impl<C: Chain> BasePool<C> {
     /// Creates a BasePool from partial tick data retrieved from a quote data fetcher lens contract.
     ///
     /// This helper constructor takes partial tick data along with min/max tick boundaries and constructs
@@ -130,7 +130,7 @@ impl BasePool {
     ///
     /// * `Result<Self, BasePoolError>` - A new BasePool instance or an error
     pub fn from_partial_data(
-        key: NodeKey,
+        key: NodeKey<C>,
         sqrt_ratio: U256,
         partial_ticks: Vec<Tick>,
         min_tick_searched: i32,
@@ -143,7 +143,7 @@ impl BasePool {
         let spacing_i32 = tick_spacing as i32;
 
         // Get sorted ticks using the utility function
-        let sorted_ticks = construct_sorted_ticks(
+        let sorted_ticks = construct_sorted_ticks::<C>(
             partial_ticks,
             min_tick_searched,
             max_tick_searched,
@@ -182,7 +182,7 @@ impl BasePool {
     }
 
     pub fn new(
-        key: NodeKey,
+        key: NodeKey<C>,
         state: BasePoolState,
         sorted_ticks: Vec<Tick>,
     ) -> Result<Self, BasePoolError> {
@@ -192,7 +192,7 @@ impl BasePool {
         }
 
         // Validate tick spacing
-        if key.config.tick_spacing > MAX_TICK_SPACING {
+        if key.config.tick_spacing > C::max_tick_spacing() {
             return Err(BasePoolError::TickSpacingTooLarge);
         }
 
@@ -258,15 +258,15 @@ impl BasePool {
                 .get(active)
                 .ok_or(BasePoolError::ActiveTickIndexOutOfBounds)?;
 
-            let active_tick_sqrt_ratio =
-                to_sqrt_ratio(tick.index).ok_or(BasePoolError::InvalidTickIndex(tick.index))?;
+            let active_tick_sqrt_ratio = to_sqrt_ratio::<C>(tick.index)
+                .ok_or(BasePoolError::InvalidTickIndex(tick.index))?;
 
             if !(active_tick_sqrt_ratio <= state.sqrt_ratio) {
                 return Err(BasePoolError::ActiveTickSqrtRatioInvalid);
             }
         } else {
             if let Some(first) = sorted_ticks.first() {
-                let first_tick_sqrt_ratio = to_sqrt_ratio(first.index)
+                let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index)
                     .ok_or(BasePoolError::InvalidTickIndex(first.index))?;
 
                 if !(state.sqrt_ratio <= first_tick_sqrt_ratio) {
@@ -284,6 +284,16 @@ impl BasePool {
 
     pub fn get_sorted_ticks(&self) -> &Vec<Tick> {
         &self.sorted_ticks
+    }
+}
+
+impl PoolState for BasePoolState {
+    fn sqrt_ratio(&self) -> U256 {
+        self.sqrt_ratio
+    }
+
+    fn liquidity(&self) -> u128 {
+        self.liquidity
     }
 }
 
@@ -452,13 +462,13 @@ mod from_partial_data_tests {
     }
 }
 
-impl Pool for BasePool {
+impl<C: Chain> Pool<C> for BasePool<C> {
     type Resources = BasePoolResources;
     type State = BasePoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = ();
 
-    fn get_key(&self) -> &NodeKey {
+    fn get_key(&self) -> &NodeKey<C> {
         &self.key
     }
 
@@ -508,18 +518,18 @@ impl Pool for BasePool {
             if !is_increasing && limit > sqrt_ratio {
                 return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit < MIN_SQRT_RATIO {
+            if limit < C::min_sqrt_ratio() {
                 return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit > MAX_SQRT_RATIO {
+            if limit > C::max_sqrt_ratio() {
                 return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
         } else {
             if is_increasing {
-                MAX_SQRT_RATIO
+                C::max_sqrt_ratio()
             } else {
-                MIN_SQRT_RATIO
+                C::min_sqrt_ratio()
             }
         };
 
@@ -537,7 +547,7 @@ impl Pool for BasePool {
                         Some((
                             index + 1,
                             next,
-                            to_sqrt_ratio(next.index)
+                            to_sqrt_ratio::<C>(next.index)
                                 .ok_or(BasePoolQuoteError::InvalidTick(next.index))?,
                         ))
                     } else {
@@ -548,7 +558,7 @@ impl Pool for BasePool {
                         Some((
                             0,
                             next,
-                            to_sqrt_ratio(next.index)
+                            to_sqrt_ratio::<C>(next.index)
                                 .ok_or(BasePoolQuoteError::InvalidTick(next.index))?,
                         ))
                     } else {
@@ -561,7 +571,7 @@ impl Pool for BasePool {
                         Some((
                             index,
                             tick,
-                            to_sqrt_ratio(tick.index)
+                            to_sqrt_ratio::<C>(tick.index)
                                 .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?,
                         ))
                     } else {
@@ -581,7 +591,7 @@ impl Pool for BasePool {
                     }
                 });
 
-            let step = compute_step(
+            let step = compute_step::<C>(
                 sqrt_ratio,
                 liquidity,
                 step_sqrt_ratio_limit,
