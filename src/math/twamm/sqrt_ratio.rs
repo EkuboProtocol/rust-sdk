@@ -1,6 +1,7 @@
 use crate::math::{sqrt_ratio::SQRT_RATIO_ONE, twamm::exp2::exp2, uint::U256};
 use crate::{chain::Chain, math::muldiv::muldiv};
 use num_traits::Zero;
+use ruint::uint;
 
 pub fn calculate_next_sqrt_ratio<C: Chain>(
     sqrt_ratio: U256,
@@ -19,20 +20,20 @@ pub fn calculate_next_sqrt_ratio<C: Chain>(
         return sqrt_sale_ratio;
     }
 
-    let sale_rate = ((U256::from(sale_rate_token1) * U256::from(sale_rate_token0)).integer_sqrt()
-        * (C::fee_denominator() - fee))
+    let sale_rate = ((U256::from(sale_rate_token1) * U256::from(sale_rate_token0)).root(2)
+        * (C::fee_denominator() - U256::from(fee.into())))
         / C::fee_denominator();
 
     let round_up = sqrt_ratio > sqrt_sale_ratio;
 
     let exponent: U256 =
-        (sale_rate * U256::from(time_elapsed) * U256([12392656037, 0, 0, 0])) / liquidity;
+        (sale_rate * U256::from(time_elapsed) * uint!(12392656037_U256)) / U256::from(liquidity);
 
-    if exponent >= U256::from(0x400000000000000000_u128) {
+    if exponent >= uint!(0x400000000000000000_U256) {
         return sqrt_sale_ratio;
     }
 
-    let e_pow_exponent_x128 = U256::from(exp2(exponent.low_u128())) << 64;
+    let e_pow_exponent_x128 = U256::from(exp2(exponent.try_into().unwrap())) << 64u8;
 
     let mut sqrt_ratio_next = if c_sign_negative {
         muldiv(
@@ -63,16 +64,16 @@ pub fn calculate_next_sqrt_ratio<C: Chain>(
 }
 
 fn compute_sqrt_sale_ratio_x128(sale_rate_token0: u128, sale_rate_token1: u128) -> U256 {
-    let sale_ratio: U256 = (U256::from(sale_rate_token1) << 128) / sale_rate_token0;
+    let sale_ratio: U256 = (U256::from(sale_rate_token1) << 128) / U256::from(sale_rate_token0);
 
-    if sale_ratio < U256([0, 0, 1, 0]) {
+    if sale_ratio < U256::from_limbs([0, 0, 1, 0]) {
         // full precision
-        (sale_ratio << 128).integer_sqrt()
-    } else if sale_ratio < U256([0, 0, 0, 1]) {
+        (sale_ratio << 128u8).root(2)
+    } else if sale_ratio < U256::from_limbs([0, 0, 0, 1]) {
         // we know it only has 192 bits, so we can shift it 64 before rooting to get more precision
-        (sale_ratio << 64).integer_sqrt() << 32
+        (sale_ratio << 64u8).root(2) << 32
     } else {
-        (sale_ratio << 16).integer_sqrt() << 56
+        (sale_ratio << 16u8).root(2) << 56
     }
 }
 
@@ -95,7 +96,9 @@ mod tests {
     const TOKEN_SALE_RATE: u128 = ONE_E18 * SHIFT_32; // 10^18 * 2^32
 
     mod calculate_next_sqrt_ratio {
-        use crate::chain::{tests::chain_test, Evm};
+        use ruint::uint;
+
+        use crate::chain::{evm::Evm, tests::chain_test};
 
         use super::*;
 
@@ -116,30 +119,23 @@ mod tests {
             )
         }
 
-        fn dec(value: &str) -> U256 {
-            U256::from_dec_str(value).unwrap()
-        }
-
         chain_test!(zero_liquidity_price_eq_sale_ratio, {
-            let result = run_case::<ChainTy>(
-                U256::zero(),
-                0,
-                TOKEN_SALE_RATE,
-                TOKEN_SALE_RATE,
-                0,
-            );
-            assert_eq!(result, dec("340282366920938463463374607431768211456"));
+            let result = run_case::<ChainTy>(U256::ZERO, 0, TOKEN_SALE_RATE, TOKEN_SALE_RATE, 0);
+            assert_eq!(result, uint!(340282366920938463463374607431768211456_U256));
         });
 
         chain_test!(large_exponent_price_sqrt_ratio, {
             let result = run_case::<ChainTy>(
-                U256::one() << 128,
+                U256::ONE << 128,
                 1,
                 TOKEN_SALE_RATE,
                 1980 * ONE_E18 * SHIFT_32,
                 1,
             );
-            assert_eq!(result, dec("15141609448466370575828005229206655991808"));
+            assert_eq!(
+                result,
+                uint!(15141609448466370575828005229206655991808_U256)
+            );
         });
 
         chain_test!(low_liquiidty_same_sale_ratio, {
@@ -150,29 +146,29 @@ mod tests {
                 TOKEN_SALE_RATE,
                 1,
             );
-            assert_eq!(result, dec("340282366920938463463374607431768211456"));
+            assert_eq!(result, uint!(340282366920938463463374607431768211456_U256));
         });
 
         chain_test!(low_liquidity_token0_gt_token1, {
             let result = run_case::<ChainTy>(
-                U256::one() << 128,
+                U256::ONE << 128,
                 1,
                 2 * TOKEN_SALE_RATE,
                 TOKEN_SALE_RATE,
                 16,
             );
-            assert_eq!(result, dec("240615969168004511545033772477625056927"));
+            assert_eq!(result, uint!(240615969168004511545033772477625056927_U256));
         });
 
         chain_test!(low_liquidity_token1_gt_token0, {
             let result = run_case::<ChainTy>(
-                U256::one() << 128,
+                U256::ONE << 128,
                 1,
                 TOKEN_SALE_RATE,
                 2 * TOKEN_SALE_RATE,
                 16,
             );
-            assert_eq!(result, dec("481231938336009023090067544951314448384"));
+            assert_eq!(result, uint!(481231938336009023090067544951314448384_U256));
         });
 
         chain_test!(high_liquidity_same_sale_ratio, {
@@ -183,40 +179,40 @@ mod tests {
                 TOKEN_SALE_RATE,
                 1,
             );
-            assert_eq!(result, dec("680563712996817890757827685335626524191"));
+            assert_eq!(result, uint!(680563712996817890757827685335626524191_U256));
         });
 
         chain_test!(high_liquidity_token0_gt_token1, {
             let result = run_case::<ChainTy>(
-                U256::one() << 128,
+                U256::ONE << 128,
                 1_000_000 * ONE_E18,
                 2 * TOKEN_SALE_RATE,
                 TOKEN_SALE_RATE,
                 1,
             );
-            assert_eq!(result, dec("340282026639252118183347287047607050305"));
+            assert_eq!(result, uint!(340282026639252118183347287047607050305_U256));
         });
 
         chain_test!(high_liquidity_token1_gt_token0, {
             let result = run_case::<ChainTy>(
-                U256::one() << 128,
+                U256::ONE << 128,
                 1_000_000 * ONE_E18,
                 TOKEN_SALE_RATE,
                 2 * TOKEN_SALE_RATE,
                 1,
             );
-            assert_eq!(result, dec("340282707202965090089453576058304747105"));
+            assert_eq!(result, uint!(340282707202965090089453576058304747105_U256));
         });
 
         chain_test!(round_in_direction_of_price, {
             let result = run_case::<ChainTy>(
-                U256::from_dec_str("481231811499356508086519009265716982182").unwrap(),
+                uint!(481231811499356508086519009265716982182_U256),
                 70_710_696_755_630_728_101_718_334,
                 10_526_880_627_450_980_392_156_862_745,
                 10_526_880_627_450_980_392_156_862_745,
                 2040,
             );
-            assert_eq!(result, dec("481207752340104468493822013619596511452"));
+            assert_eq!(result, uint!(481207752340104468493822013619596511452_U256));
         });
 
         mod evm {
@@ -227,7 +223,7 @@ mod tests {
                 assert_eq!(
                     calculate_next_sqrt_ratio::<Evm>(
                         // price is 10k**2
-                        U256::from_dec_str("3402823669209384634633746074317682114560000").unwrap(),
+                        uint!(3402823669209384634633746074317682114560000_U256),
                         // low liquidity
                         10_000,
                         // 0.1 per second
@@ -238,7 +234,7 @@ mod tests {
                         0
                     ),
                     // expect 2.100594408164651 ** 2
-                    U256::from_dec_str("714795237151155238093993646993154300599").unwrap()
+                    uint!(714795237151155238093993646993154300599_U256)
                 );
             }
 
@@ -246,14 +242,14 @@ mod tests {
             fn solidity_example_upper() {
                 assert_eq!(
                     calculate_next_sqrt_ratio::<Evm>(
-                        U256::from_dec_str("2738179289227384381927918250491904").unwrap(),
+                        uint!(2738179289227384381927918250491904_U256),
                         4472135213867,
                         3728260255814876407785,
                         1597830095238095,
                         2688,
                         9223372036854775
                     ),
-                    U256::from_dec_str("75660834358443397537995256863811143").unwrap()
+                    uint!(75660834358443397537995256863811143_U256)
                 );
             }
         }

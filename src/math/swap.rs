@@ -20,28 +20,26 @@ pub fn is_price_increasing(amount: i128, is_token1: bool) -> bool {
 }
 
 pub fn amount_before_fee<C: Chain>(after_fee: u128, fee: C::Fee) -> Option<u128> {
-    let (quotient, remainder) =
-        (U256::from(after_fee) << C::fee_bits()).div_mod(C::fee_denominator() - fee.into());
+    let denominator = C::fee_denominator() - U256::from(fee.into());
+    let (quotient, remainder) = (U256::from(after_fee) << C::fee_bits()).div_rem(denominator);
 
-    if !quotient.0[3].is_zero() || !quotient.0[2].is_zero() {
-        None
+    let unrounded = u128::try_from(quotient).ok()?;
+    if remainder.is_zero() {
+        Some(unrounded)
     } else {
-        if remainder.is_zero() {
-            Some(quotient.low_u128())
-        } else {
-            quotient.low_u128().checked_add(1)
-        }
+        unrounded.checked_add(1)
     }
 }
 
 pub fn compute_fee<C: Chain>(amount: u128, fee: C::Fee) -> u128 {
-    let num = U256::from(amount) * fee.into();
-    let (quotient, remainder) = num.div_mod(C::fee_denominator());
+    let num = U256::from(amount) * U256::from(fee.into());
+    let (quotient, remainder) = num.div_rem(C::fee_denominator());
 
-    if !remainder.is_zero() {
-        quotient.low_u128() + 1
+    let unrounded = u128::try_from(quotient).expect("fee quotient should not exceed u128");
+    if remainder.is_zero() {
+        unrounded
     } else {
-        quotient.low_u128()
+        unrounded + 1
     }
 }
 
@@ -191,11 +189,13 @@ mod tests {
     use super::*;
     use crate::{
         chain::{
+            evm::Evm,
+            starknet::Starknet,
             tests::{ChainEnum, CHAINS},
-            Evm, Starknet,
         },
         math::sqrt_ratio::SQRT_RATIO_ONE,
     };
+    use ruint::uint;
 
     const DEFAULT_LIQUIDITY: u128 = 100_000;
     const ZERO_AMOUNT: i128 = 0;
@@ -247,10 +247,10 @@ mod tests {
         for chain in CHAINS {
             let res = match chain {
                 ChainEnum::Starknet => {
-                    compute_step::<Starknet>(step_params(U256::zero(), ZERO_AMOUNT, false, 0))
+                    compute_step::<Starknet>(step_params(U256::ZERO, ZERO_AMOUNT, false, 0))
                 }
                 ChainEnum::Evm => {
-                    compute_step::<Evm>(step_params(U256::zero(), ZERO_AMOUNT, false, 0))
+                    compute_step::<Evm>(step_params(U256::ZERO, ZERO_AMOUNT, false, 0))
                 }
             };
 
@@ -271,10 +271,10 @@ mod tests {
         for chain in CHAINS {
             let res = match chain {
                 ChainEnum::Starknet => {
-                    compute_step::<Starknet>(step_params(U256::zero(), ZERO_AMOUNT, true, 0))
+                    compute_step::<Starknet>(step_params(U256::ZERO, ZERO_AMOUNT, true, 0))
                 }
                 ChainEnum::Evm => {
-                    compute_step::<Evm>(step_params(U256::zero(), ZERO_AMOUNT, true, 0))
+                    compute_step::<Evm>(step_params(U256::ZERO, ZERO_AMOUNT, true, 0))
                 }
             };
 
@@ -337,8 +337,11 @@ mod tests {
                 SwapResult {
                     consumed_amount: POSITIVE_AMOUNT,
                     calculated_amount: 4_761,
-                    sqrt_ratio_next: U256::from_dec_str("324078444686608060441309149935017344244")
-                        .unwrap(),
+                    sqrt_ratio_next: U256::from_str_radix(
+                        "324078444686608060441309149935017344244",
+                        10
+                    )
+                    .unwrap(),
                     fee_amount: 5_000,
                 }
             );
@@ -368,8 +371,11 @@ mod tests {
                 SwapResult {
                     consumed_amount: POSITIVE_AMOUNT,
                     calculated_amount: 4_761,
-                    sqrt_ratio_next: U256::from_dec_str("357296485266985386636543337803356622028")
-                        .unwrap(),
+                    sqrt_ratio_next: U256::from_str_radix(
+                        "357296485266985386636543337803356622028",
+                        10
+                    )
+                    .unwrap(),
                     fee_amount: 5_000,
                 }
             );
@@ -399,8 +405,11 @@ mod tests {
                 SwapResult {
                     consumed_amount: NEGATIVE_AMOUNT,
                     calculated_amount: 22_224,
-                    sqrt_ratio_next: U256::from_dec_str("378091518801042737181527341590853568285")
-                        .unwrap(),
+                    sqrt_ratio_next: U256::from_str_radix(
+                        "378091518801042737181527341590853568285",
+                        10
+                    )
+                    .unwrap(),
                     fee_amount: 11_112,
                 }
             );
@@ -430,8 +439,11 @@ mod tests {
                 SwapResult {
                     consumed_amount: NEGATIVE_AMOUNT,
                     calculated_amount: 22_224,
-                    sqrt_ratio_next: U256::from_dec_str("306254130228844617117037146688591390310")
-                        .unwrap(),
+                    sqrt_ratio_next: U256::from_str_radix(
+                        "306254130228844617117037146688591390310",
+                        10
+                    )
+                    .unwrap(),
                     fee_amount: 11_112,
                 }
             );
@@ -440,7 +452,7 @@ mod tests {
 
     #[test]
     fn limited_token0_output() {
-        let limit = U256::from_dec_str("359186942860990600322450974511310889870").unwrap();
+        let limit = uint!(359186942860990600322450974511310889870_U256);
 
         for chain in CHAINS {
             let res = match chain {
@@ -472,7 +484,7 @@ mod tests {
 
     #[test]
     fn limited_token1_output() {
-        let limit = U256::from_dec_str("323268248574891540290205877060179800883").unwrap();
+        let limit = uint!(323268248574891540290205877060179800883_U256);
 
         for chain in CHAINS {
             let res = match chain {

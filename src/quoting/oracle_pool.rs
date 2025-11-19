@@ -168,14 +168,14 @@ impl<S: PoolState> PoolState for OraclePoolState<S> {
 mod tests {
     use super::*;
     use crate::{
-        chain::{tests::chain_test, Chain, Starknet},
+        chain::{starknet::Starknet, tests::chain_test, Chain},
         math::{tick::to_sqrt_ratio, uint::U256},
         quoting::types::{Pool, PoolState, QuoteParams, TokenAmount},
     };
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256([3, 0, 0, 0]);
+    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256::from_limbs([3, 0, 0, 0]);
     const DEFAULT_LIQUIDITY: u128 = 1_000_000_000;
 
     fn min_ratio<C: Chain>() -> U256 {

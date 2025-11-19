@@ -30,20 +30,16 @@ pub fn amount0_delta(
     let result_0 = muldiv(upper - lower, U256::from(liquidity) << 128, upper, round_up)
         .map_err(AmountDeltaError::MuldivError)?;
 
-    let (result, remainder) = result_0.div_mod(lower);
+    let (result, remainder) = result_0.div_rem(lower);
     let rounded = if round_up && !remainder.is_zero() {
         result
-            .checked_add(U256::from(1))
+            .checked_add(U256::ONE)
             .ok_or(AmountDeltaError::Overflow)?
     } else {
         result
     };
 
-    if rounded > u128::MAX.into() {
-        return Err(AmountDeltaError::Overflow);
-    }
-
-    Ok(rounded.low_u128())
+    rounded.try_into().map_err(|_| AmountDeltaError::Overflow)
 }
 
 pub fn amount1_delta(
@@ -66,11 +62,7 @@ pub fn amount1_delta(
     )
     .map_err(AmountDeltaError::MuldivError)?;
 
-    if result > u128::MAX.into() {
-        Err(AmountDeltaError::Overflow)
-    } else {
-        Ok(result.low_u128())
-    }
+    result.try_into().map_err(|_| AmountDeltaError::Overflow)
 }
 
 fn sort_ratios(sqrt_ratio_a: U256, sqrt_ratio_b: U256) -> Option<(U256, U256)> {
@@ -87,35 +79,33 @@ fn sort_ratios(sqrt_ratio_a: U256, sqrt_ratio_b: U256) -> Option<(U256, U256)> {
 mod tests {
     use super::*;
     use crate::chain::{
+        evm::Evm,
+        starknet::Starknet,
         tests::{ChainEnum, CHAINS},
-        Evm, Starknet,
     };
     use crate::math::uint::U256;
+    use ruint::uint;
 
     const SMALL_LIQUIDITY: u128 = 1_000_000;
     const LARGE_LIQUIDITY: u128 = 1_000_000_000_000_000_000;
 
-    fn sqrt_ratio_one() -> U256 {
-        U256::from_str_radix("100000000000000000000000000000000", 16).unwrap()
-    }
-
     fn sqrt_ratio_close_to_one() -> U256 {
-        U256::from_dec_str("339942424496442021441932674757011200255").unwrap()
+        uint!(339942424496442021441932674757011200255_U256)
     }
 
     mod amount0_delta {
         use super::*;
 
         fn sqrt_ratio_far_from_one() -> U256 {
-            let point_one = U256::from_dec_str("34028236692093846346337460743176821145").unwrap();
-            sqrt_ratio_one() + point_one
+            let point_one = uint!(34028236692093846346337460743176821145_U256);
+            SQRT_RATIO_ONE + point_one
         }
 
         #[test]
         fn small_delta() {
             assert_eq!(
                 amount0_delta(
-                    sqrt_ratio_one(),
+                    SQRT_RATIO_ONE,
                     sqrt_ratio_close_to_one(),
                     SMALL_LIQUIDITY,
                     false,
@@ -129,7 +119,7 @@ mod tests {
         fn large_delta() {
             assert_eq!(
                 amount0_delta(
-                    sqrt_ratio_one(),
+                    SQRT_RATIO_ONE,
                     sqrt_ratio_far_from_one(),
                     LARGE_LIQUIDITY,
                     false
@@ -144,19 +134,18 @@ mod tests {
             for chain in CHAINS {
                 let (expected, min_sqrt_ratio) = match chain {
                     ChainEnum::Evm => (
-                        "340274119756928397712370531121900180028",
+                        340_274_119_756_928_397_712_370_531_121_900_180_028,
                         Evm::MIN_SQRT_RATIO,
                     ),
                     ChainEnum::Starknet => (
-                        "340282286429718909724583623827301092853",
+                        340_282_286_429_718_909_724_583_623_827_301_092_853,
                         Starknet::MIN_SQRT_RATIO,
                     ),
                 };
 
                 assert_eq!(
-                    amount0_delta(sqrt_ratio_one(), min_sqrt_ratio, u64::MAX.into(), false)
-                        .unwrap(),
-                    U256::from_dec_str(expected).unwrap().as_u128()
+                    amount0_delta(SQRT_RATIO_ONE, min_sqrt_ratio, u64::MAX.into(), false).unwrap(),
+                    expected
                 );
             }
         }
@@ -181,14 +170,14 @@ mod tests {
         use super::*;
 
         fn sqrt_ratio_far_from_one() -> U256 {
-            U256::from_dec_str("309347606291762239512158734028880192232").unwrap()
+            uint!(309347606291762239512158734028880192232_U256)
         }
 
         #[test]
         fn small_delta() {
             assert_eq!(
                 amount1_delta(
-                    sqrt_ratio_one(),
+                    SQRT_RATIO_ONE,
                     sqrt_ratio_close_to_one(),
                     SMALL_LIQUIDITY,
                     false,
@@ -202,7 +191,7 @@ mod tests {
         fn large_delta() {
             assert_eq!(
                 amount1_delta(
-                    sqrt_ratio_one(),
+                    SQRT_RATIO_ONE,
                     sqrt_ratio_far_from_one(),
                     LARGE_LIQUIDITY,
                     false
@@ -217,19 +206,18 @@ mod tests {
             for chain in CHAINS {
                 let (expected, max_sqrt_ratio) = match chain {
                     ChainEnum::Evm => (
-                        "340274119756928397675478831269759003622",
+                        340_274_119_756_928_397_675_478_831_269_759_003_622,
                         Evm::MAX_SQRT_RATIO,
                     ),
                     ChainEnum::Starknet => (
-                        "340282286429718909724583623827301092853",
+                        340_282_286_429_718_909_724_583_623_827_301_092_853,
                         Starknet::MAX_SQRT_RATIO,
                     ),
                 };
 
                 assert_eq!(
-                    amount1_delta(sqrt_ratio_one(), max_sqrt_ratio, u64::MAX.into(), false)
-                        .unwrap(),
-                    U256::from_dec_str(expected).unwrap().as_u128()
+                    amount1_delta(SQRT_RATIO_ONE, max_sqrt_ratio, u64::MAX.into(), false).unwrap(),
+                    expected
                 );
             }
         }

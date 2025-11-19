@@ -8,12 +8,12 @@ use core::{
 /// Unique key identifying the pool.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PoolKey<Fee, PoolTypeConfig> {
+pub struct PoolKey<F, P> {
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token0: U256,
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token1: U256,
-    pub config: Config<Fee, PoolTypeConfig>,
+    pub config: Config<F, P>,
 }
 
 impl<Fee, C1> PoolKey<Fee, C1> {
@@ -76,8 +76,8 @@ pub mod serde_u256 {
 /*impl From<U256> for Config<Evm> {
     fn from(value: U256) -> Config<Evm> {
         Config {
-            tick_spacing: (value % U256([4294967296, 0, 0, 0])).as_u32(),
-            fee: ((value >> 32) % U256([0, 1, 0, 0])).as_u64(),
+            tick_spacing: (value % U256::from_limbs([4294967296, 0, 0, 0])).as_u32(),
+            fee: ((value >> 32) % U256::from_limbs([0, 1, 0, 0])).as_u64(),
             extension: value >> 96,
         }
     }
@@ -179,47 +179,47 @@ mod tests {
     fn test_ordering_token_amount() {
         assert!(
             TokenAmount {
-                token: U256::one(),
+                token: U256::ONE,
                 amount: 0,
             } > TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 1,
             }
         );
         assert_eq!(
             TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 0,
             },
             TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 0,
             }
         );
         assert!(
             TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 0,
             } > TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: -1,
             }
         );
         assert!(
             TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 0,
             } < TokenAmount {
-                token: U256::one(),
+                token: U256::ONE,
                 amount: -1,
             }
         );
         assert!(
             TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 0,
             } < TokenAmount {
-                token: U256::zero(),
+                token: U256::ZERO,
                 amount: 1,
             }
         );

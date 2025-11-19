@@ -9,49 +9,15 @@ use crate::{
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
 use crate::{math::uint::U256, quoting::types::Config};
 use alloc::vec::Vec;
-use core::ops::{Add, AddAssign, Sub, SubAssign};
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 
 // Resources consumed during any swap execution.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Add, AddAssign, Sub, SubAssign)]
 pub struct BasePoolResources {
     pub no_override_price_change: u32,
     pub initialized_ticks_crossed: u32,
     pub tick_spacings_crossed: u32,
-}
-
-impl AddAssign for BasePoolResources {
-    fn add_assign(&mut self, rhs: Self) {
-        self.no_override_price_change += rhs.no_override_price_change;
-        self.initialized_ticks_crossed += rhs.initialized_ticks_crossed;
-        self.tick_spacings_crossed += rhs.tick_spacings_crossed;
-    }
-}
-
-impl Add for BasePoolResources {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl SubAssign for BasePoolResources {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.no_override_price_change -= rhs.no_override_price_change;
-        self.initialized_ticks_crossed -= rhs.initialized_ticks_crossed;
-        self.tick_spacings_crossed -= rhs.tick_spacings_crossed;
-    }
-}
-
-impl Sub for BasePoolResources {
-    type Output = Self;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -325,10 +291,7 @@ impl PoolState for BasePoolState {
     }
 }
 
-impl<C> Pool<C> for BasePool<C>
-where
-    C: Chain<PoolTypeConfig: From<BasePoolTypeConfig>>,
-{
+impl<C: Chain> Pool<C> for BasePool<C> {
     type Resources = BasePoolResources;
     type State = BasePoolState;
     type QuoteError = BasePoolQuoteError;
@@ -529,15 +492,15 @@ where
 mod tests {
     use super::*;
     use crate::{
-        chain::{tests::run_for_all_chains, Starknet},
+        chain::{starknet::Starknet, tests::run_for_all_chains},
         math::sqrt_ratio::SQRT_RATIO_ONE,
         quoting::types::{Config, TokenAmount},
     };
     use alloc::vec;
     use num_traits::Zero;
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
 
     fn pool_key<C: Chain>(tick_spacing: u32, fee: C::Fee) -> BasePoolKey<C> {
         PoolKey {
@@ -546,7 +509,7 @@ mod tests {
             config: Config {
                 fee,
                 pool_type_config: TickSpacing(tick_spacing),
-                extension: U256::zero(),
+                extension: U256::ZERO,
             },
         }
     }
@@ -585,12 +548,12 @@ mod tests {
             run_for_all_chains!(ChainTy, _chain => {
                 let result = BasePool::<ChainTy>::new(
                     PoolKey {
-                        token0: U256::zero(),
-                        token1: U256::zero(),
+                        token0: U256::ZERO,
+                        token1: U256::ZERO,
                         config: Config {
                             fee: zero_fee::<ChainTy>(),
                             pool_type_config: TickSpacing(0),
-                            extension: U256::zero(),
+                            extension: U256::ZERO,
                         },
                     },
                     pool_state(SQRT_RATIO_ONE, 0, None),
@@ -683,7 +646,7 @@ mod tests {
             run_for_all_chains!(ChainTy, _chain => {
                 let result = BasePool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
-                    pool_state(sqrt_ratio::<ChainTy>(0), 0, Some(0)),
+                    pool_state(SQRT_RATIO_ONE, 0, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(result.unwrap_err(), BasePoolError::ActiveLiquidityMismatch);
@@ -695,7 +658,7 @@ mod tests {
             run_for_all_chains!(ChainTy, _chain => {
                 let result = BasePool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
-                    pool_state(sqrt_ratio::<ChainTy>(0) - 1, 2, Some(0)),
+                    pool_state(SQRT_RATIO_ONE - U256::ONE, 2, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(result.unwrap_err(), BasePoolError::ActiveTickSqrtRatioInvalid);
@@ -707,7 +670,7 @@ mod tests {
             run_for_all_chains!(ChainTy, _chain => {
                 let result = BasePool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
-                    pool_state(sqrt_ratio::<ChainTy>(0) + 1, 0, None),
+                    pool_state(SQRT_RATIO_ONE + U256::ONE, 0, None),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(result.unwrap_err(), BasePoolError::SqrtRatioTooHighWithNoActiveTick);
@@ -839,7 +802,7 @@ mod tests {
             let pool = BasePool::<Starknet>::new(
                 pool_key::<Starknet>(100, 17014118346046923988514818429550592u128),
                 BasePoolState {
-                    sqrt_ratio: U256([16035209758820767612, 757181812420893, 0, 0]),
+                    sqrt_ratio: U256::from_limbs([16035209758820767612, 757181812420893, 0, 0]),
                     liquidity: 99999,
                     active_tick_index: Some(16),
                 },

@@ -1,15 +1,15 @@
 use num_traits::Zero;
 
 use crate::{
+    chain::evm::Evm,
+    math::swap::{amount_before_fee, compute_fee},
+};
+use crate::{
     chain::Chain,
     quoting::{
         base_pool::{BasePoolTypeConfig, TickSpacing},
         types::{BlockTimestamp, Config, Pool, PoolKey, Quote, QuoteParams},
     },
-};
-use crate::{
-    chain::Evm,
-    math::swap::{amount_before_fee, compute_fee},
 };
 use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
 use crate::{
@@ -259,10 +259,11 @@ mod tests {
         quoting::types::{Config, Pool, PoolKey, QuoteParams, Tick, TokenAmount},
     };
     use alloc::vec::Vec;
+    use ruint::uint;
 
-    const TOKEN_A: U256 = U256([1, 0, 0, 0]);
-    const TOKEN_B: U256 = U256([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::one();
+    const TOKEN_A: U256 = U256::from_limbs([1, 0, 0, 0]);
+    const TOKEN_B: U256 = U256::from_limbs([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256::ONE;
     const DEFAULT_FEE: u64 = ((1u128 << 64) / 100) as u64;
     const DEFAULT_TICK_SPACING: u32 = 20_000;
 
@@ -416,11 +417,11 @@ mod tests {
         let tick = 8_015_514;
 
         let pool = build_pool(
-            U256::zero(),
-            U256::one(),
+            U256::ZERO,
+            U256::ONE,
             fee,
             tick_spacing,
-            U256::from_dec_str("18723430188006331344089883003460461264896").unwrap(),
+            uint!(18723430188006331344089883003460461264896_U256),
             liquidity,
             1,
             tick,
@@ -438,7 +439,7 @@ mod tests {
                     sqrt_ratio_limit: None,
                     token_amount: TokenAmount {
                         amount,
-                        token: U256::zero(),
+                        token: U256::ZERO,
                     },
                 })
                 .unwrap();
@@ -458,18 +459,18 @@ mod tests {
         let tick = 8_092_285;
 
         let pool = build_pool(
-            U256::zero(),
-            U256::one(),
+            U256::ZERO,
+            U256::ONE,
             fee,
             tick_spacing,
-            U256::from_dec_str("19456111242847136401729567804224169836544").unwrap(),
+            uint!(19456111242847136401729567804224169836544_U256),
             liquidity,
             1,
             tick,
             &[(7_755_000, liquidity), (8_267_000, -liquidity)],
         );
 
-        let sqrt_ratio_limit = Some(U256::from_dec_str("18447191164202170524").unwrap());
+        let sqrt_ratio_limit = Some(uint!(18447191164202170524_U256));
 
         let result0 = pool
             .quote(QuoteParams {
@@ -478,7 +479,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 125_000_000_000_000_000,
-                    token: U256::zero(),
+                    token: U256::ZERO,
                 },
             })
             .unwrap();
@@ -495,7 +496,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 50_000_000_000_000_000,
-                    token: U256::zero(),
+                    token: U256::ZERO,
                 },
             })
             .unwrap();
@@ -512,7 +513,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 12_500_000_000_000_000,
-                    token: U256::zero(),
+                    token: U256::ZERO,
                 },
             })
             .unwrap();
@@ -529,7 +530,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 12_500_000_000_000_000,
-                    token: U256::zero(),
+                    token: U256::ZERO,
                 },
             })
             .unwrap();

@@ -2,7 +2,7 @@ use crate::math::muldiv::{muldiv, MuldivError};
 use crate::math::uint::U256;
 use num_traits::Zero;
 
-pub const SQRT_RATIO_ONE: U256 = U256([0, 0, 1, 0]);
+pub const SQRT_RATIO_ONE: U256 = U256::from_limbs([0, 0, 1, 0]);
 
 #[derive(Debug, PartialEq)]
 pub enum PriceMathError {
@@ -25,11 +25,11 @@ pub fn next_sqrt_ratio_from_amount0(
         return Err(PriceMathError::NoLiquidity);
     }
 
-    let numerator1 = U256::from(liquidity) << 128;
+    let numerator1 = U256::from(liquidity) << 128u8;
 
     if amount0 < 0 {
-        // amount0 is negative
-        let amount0_abs = U256::from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?);
+        let amount0_abs = U256::try_from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?)
+            .map_err(|_| PriceMathError::Overflow)?;
 
         // product = amount0_abs * sqrt_ratio
         let product = amount0_abs
@@ -42,8 +42,7 @@ pub fn next_sqrt_ratio_from_amount0(
 
         muldiv(numerator1, sqrt_ratio, denominator, true).map_err(PriceMathError::MuldivError)
     } else {
-        // amount0 is positive
-        let amount0_u256 = U256::from(amount0);
+        let amount0_u256 = U256::try_from(amount0).map_err(|_| PriceMathError::Overflow)?;
 
         let denom_p1 = numerator1 / sqrt_ratio;
 
@@ -51,7 +50,7 @@ pub fn next_sqrt_ratio_from_amount0(
             .checked_add(amount0_u256)
             .ok_or(PriceMathError::Overflow)?;
 
-        muldiv(numerator1, U256::one(), denom, true).map_err(PriceMathError::MuldivError)
+        muldiv(numerator1, U256::ONE, denom, true).map_err(PriceMathError::MuldivError)
     }
 }
 
@@ -68,11 +67,12 @@ pub fn next_sqrt_ratio_from_amount1(
         return Err(PriceMathError::NoLiquidity);
     }
 
-    let amount1_abs = U256::from(amount1.abs());
+    let amount1_abs = U256::try_from(amount1.checked_abs().ok_or(PriceMathError::Overflow)?)
+        .map_err(|_| PriceMathError::Overflow)?;
 
     let round_up = amount1 < 0;
 
-    let quotient = muldiv(amount1_abs, SQRT_RATIO_ONE, liquidity.into(), round_up)
+    let quotient = muldiv(amount1_abs, SQRT_RATIO_ONE, U256::from(liquidity), round_up)
         .map_err(PriceMathError::MuldivError)?;
 
     if amount1 < 0 {
@@ -89,6 +89,7 @@ pub fn next_sqrt_ratio_from_amount1(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruint::uint;
 
     const LIQUIDITY_ONE: u128 = 1;
     const LIQUIDITY_MILLION: u128 = 1_000_000;
@@ -107,7 +108,7 @@ mod tests {
             assert_eq!(
                 next_sqrt_ratio_from_amount0(SQRT_RATIO_ONE, LIQUIDITY_MILLION, AMOUNT_SMALL_POS)
                     .unwrap(),
-                U256::from_dec_str("339942424496442021441932674757011200256").unwrap()
+                uint!(339942424496442021441932674757011200256_U256)
             );
         }
 
@@ -125,7 +126,7 @@ mod tests {
             assert_eq!(
                 next_sqrt_ratio_from_amount0(SQRT_RATIO_ONE, LIQUIDITY_ONE, AMOUNT_LARGE_POS)
                     .unwrap(),
-                U256::from_dec_str("3402823669209350606397054").unwrap()
+                uint!(3402823669209350606397054_U256)
             );
         }
 
@@ -138,7 +139,7 @@ mod tests {
                     AMOUNT_SMALL_NEG
                 )
                 .unwrap(),
-                U256::from_dec_str("340282370323762166700996274441730955874").unwrap()
+                uint!(340282370323762166700996274441730955874_U256)
             );
         }
     }
@@ -151,7 +152,7 @@ mod tests {
             assert_eq!(
                 next_sqrt_ratio_from_amount1(SQRT_RATIO_ONE, LIQUIDITY_MILLION, AMOUNT_SMALL_POS)
                     .unwrap(),
-                U256::from_dec_str("340622649287859401926837982039199979667").unwrap()
+                uint!(340622649287859401926837982039199979667_U256)
             );
         }
 
@@ -169,8 +170,7 @@ mod tests {
             assert_eq!(
                 next_sqrt_ratio_from_amount1(SQRT_RATIO_ONE, LIQUIDITY_ONE, AMOUNT_LARGE_POS)
                     .unwrap(),
-                U256::from_dec_str("34028236692094186628704381681640284520207431768211456")
-                    .unwrap()
+                uint!(34028236692094186628704381681640284520207431768211456_U256)
             );
         }
 
@@ -183,7 +183,7 @@ mod tests {
                     AMOUNT_SMALL_NEG
                 )
                 .unwrap(),
-                U256::from_dec_str("340282363518114794253989972798022137138").unwrap()
+                uint!(340282363518114794253989972798022137138_U256)
             );
         }
     }

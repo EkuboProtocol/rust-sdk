@@ -1,5 +1,5 @@
 use crate::{
-    chain::Starknet,
+    chain::starknet::Starknet,
     quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState},
 };
 

@@ -1,5 +1,6 @@
 use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::find_nearest_initialized_tick_index;
+use crate::{chain::starknet::Starknet, math::swap::is_price_increasing};
 use crate::{
     chain::Chain,
     quoting::base_pool::{
@@ -7,7 +8,6 @@ use crate::{
         BasePoolTypeConfig, TickSpacing,
     },
 };
-use crate::{chain::Starknet, math::swap::is_price_increasing};
 use crate::{math::tick::to_sqrt_ratio, quoting::types::Config};
 use crate::{math::uint::U256, quoting::types::PoolState};
 use alloc::vec::Vec;
@@ -476,14 +476,14 @@ fn calculate_orders_pulled(
 mod tests {
     use super::*;
     use crate::{
-        chain::Starknet,
+        chain::starknet::Starknet,
         math::{tick::to_sqrt_ratio, uint::U256},
         quoting::types::{Quote, QuoteParams, Tick, TokenAmount},
     };
 
-    const TOKEN0: U256 = U256([0, 0, 0, 1]);
-    const TOKEN1: U256 = U256([0, 0, 0, 2]);
-    const EXTENSION: U256 = U256([0, 0, 0, 3]);
+    const TOKEN0: U256 = U256::from_limbs([0, 0, 0, 1]);
+    const TOKEN1: U256 = U256::from_limbs([0, 0, 0, 2]);
+    const EXTENSION: U256 = U256::from_limbs([0, 0, 0, 3]);
     const DEFAULT_LIQUIDITY: i128 = 10_000_000;
 
     fn ticks(entries: &[(i32, i128)]) -> Vec<Tick> {

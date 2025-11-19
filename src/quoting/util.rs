@@ -279,10 +279,10 @@ mod tests {
         let min = ChainTy::min_sqrt_ratio();
         let max = ChainTy::max_sqrt_ratio();
         let cases = [
-            (min, min * 2, 0, 0),
-            (SQRT_RATIO_ONE, SQRT_RATIO_ONE * 2, 1, 1_386_295),
-            (min, min * 2, 1, 1_386_295),
-            (max, max / 2, 1, 1_386_295),
+            (min, min * U256::from(2), 0, 0),
+            (SQRT_RATIO_ONE, SQRT_RATIO_ONE * U256::from(2), 1, 1_386_295),
+            (min, min * U256::from(2), 1, 1_386_295),
+            (max, max / U256::from(2), 1, 1_386_295),
         ];
 
         for (start, end, spacing, expected) in cases {
@@ -299,9 +299,9 @@ mod tests {
             let min = ChainTy::min_sqrt_ratio();
             let max = ChainTy::max_sqrt_ratio();
             let cases = [
-                (SQRT_RATIO_ONE, SQRT_RATIO_ONE * 2, 5, 277_259),
-                (min, min * 2, 3, 462_098),
-                (max, max / 2, 200, 6_931),
+                (SQRT_RATIO_ONE, SQRT_RATIO_ONE * U256::from(2), 5, 277_259),
+                (min, min * U256::from(2), 3, 462_098),
+                (max, max / U256::from(2), 200, 6_931),
             ];
 
             for (start, end, spacing, expected) in cases {
@@ -316,20 +316,28 @@ mod tests {
     #[test]
     fn u256_to_fraction() {
         assert_eq!(
-            u256_to_float_base_x128(U256([16403144882676588163, 1525053501570699700, 35, 0])),
+            u256_to_float_base_x128(U256::from_limbs([
+                16403144882676588163,
+                1525053501570699700,
+                35,
+                0
+            ])),
             35.08267331597798
         );
         assert_eq!(
-            u256_to_float_base_x128(U256([123456, 0, 0, 0])),
+            u256_to_float_base_x128(U256::from_limbs([123456, 0, 0, 0])),
             3.628045764377908e-34
         );
         assert_eq!(
-            u256_to_float_base_x128(U256([0, 123456, 0, 0])),
+            u256_to_float_base_x128(U256::from_limbs([0, 123456, 0, 0])),
             6.692563170318522e-15
         );
-        assert_eq!(u256_to_float_base_x128(U256([0, 0, 123456, 0])), 123456.0);
         assert_eq!(
-            u256_to_float_base_x128(U256([0, 0, 0, 123456])),
+            u256_to_float_base_x128(U256::from_limbs([0, 0, 123456, 0])),
+            123456.0
+        );
+        assert_eq!(
+            u256_to_float_base_x128(U256::from_limbs([0, 0, 0, 123456])),
             2.2773612363638864e24
         );
     }

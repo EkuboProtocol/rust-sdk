@@ -222,9 +222,11 @@ impl<C: Chain> Pool<C> for TwammPool<C> {
 
             // we know this will never overflow because token0_sale_rate is a u128 and time_elapsed is a u32
             let amount0: u128 =
-                ((U256::from(token0_sale_rate) * U256::from(time_elapsed)) >> 32).low_u128();
+                u128::try_from((U256::from(token0_sale_rate) * U256::from(time_elapsed)) >> 32)
+                    .expect("sale rate delta fits in u128");
             let amount1: u128 =
-                ((U256::from(token1_sale_rate) * U256::from(time_elapsed)) >> 32).low_u128();
+                u128::try_from((U256::from(token1_sale_rate) * U256::from(time_elapsed)) >> 32)
+                    .expect("sale rate delta fits in u128");
 
             if amount0 > 0 && amount1 > 0 {
                 let current_sqrt_ratio = next_sqrt_ratio.clamp(
@@ -387,8 +389,8 @@ mod tests {
     use super::*;
     use crate::{
         chain::{
+            evm::Evm,
             tests::{run_for_all_chains, ChainEnum},
-            Evm,
         },
         math::{tick::to_sqrt_ratio, uint::U256},
         quoting::types::{Pool, QuoteParams, TokenAmount},
@@ -396,9 +398,9 @@ mod tests {
     use alloc::vec;
     use num_traits::Zero;
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::one();
+    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256::ONE;
 
     fn zero_fee<C: Chain>() -> C::Fee {
         C::Fee::zero()
@@ -757,7 +759,7 @@ mod tests {
         zero_sale_rate_token0_close_to_max_usable_price_deltas_move_to_usable_price_quote_token1,
         {
             let pool = build_pool::<ChainTy>(
-                max_ratio::<ChainTy>() + U256::one(),
+                max_ratio::<ChainTy>() + U256::ONE,
                 1_000_000,
                 0,
                 0,
@@ -1534,12 +1536,12 @@ mod tests {
             TOKEN0,
             TOKEN1,
             9_223_372_036_854_775,
-            U256::one(),
-            U256([4182607738901102592, 148436996701757, 0, 0]),
+            U256::ONE,
+            U256::from_limbs([4182607738901102592, 148436996701757, 0, 0]),
             4_472_135_213_867,
             1_743_726_720,
-            U256([2017952925546981353, 202, 0, 0]).low_u128(),
-            U256([1597830095238095, 0, 0, 0]).low_u128(),
+            3728260255814876407785,
+            1597830095238095,
             vec![
                 TwammSaleRateDelta {
                     time: 1_743_729_408,

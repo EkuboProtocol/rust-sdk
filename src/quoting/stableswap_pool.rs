@@ -1,15 +1,15 @@
 use crate::math::uint::U256;
 use crate::{
+    chain::evm::Evm,
+    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+};
+use crate::{
     chain::Chain,
     math::tick::to_sqrt_ratio,
     quoting::{
         full_range_pool::FullRangePoolState,
         types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount},
     },
-};
-use crate::{
-    chain::Evm,
-    math::swap::{compute_step, is_price_increasing, ComputeStepError},
 };
 use core::ops::Not;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -280,9 +280,9 @@ mod tests {
         quoting::types::{Config, Quote, QuoteParams, TokenAmount},
     };
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::zero();
+    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256::ZERO;
     const POSITION_AMOUNT: u128 = 1_000_000_000_000_000_000;
     const SMALL_AMOUNT: i128 = 1_000_000_000_000_000;
 

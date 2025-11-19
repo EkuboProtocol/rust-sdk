@@ -12,9 +12,11 @@ keywords = ["crypto", "math", "ekubo", "protocol", "defi"]
 
 [dependencies]
 num-traits = "0.2.19"
-uint = "0.10.0"
+ruint = "1.17.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 derive_more = { version = "2.0.1", features = ["add", "add_assign", "from"] }
 
 [features]
 serde = ["dep:serde"]
+starknet = []
+evm = []

@@ -1,10 +1,10 @@
 use crate::{
-    chain::Chain,
-    quoting::types::{Pool, PoolKey, Quote, QuoteParams},
+    chain::evm::Evm,
+    math::swap::{compute_step, is_price_increasing, ComputeStepError},
 };
 use crate::{
-    chain::Evm,
-    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+    chain::Chain,
+    quoting::types::{Pool, PoolKey, Quote, QuoteParams},
 };
 use crate::{math::uint::U256, quoting::types::PoolState};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -234,8 +234,8 @@ mod tests {
     use super::*;
     use crate::quoting::types::{Config, TokenAmount};
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
 
     fn pool_key(fee: u64) -> FullRangePoolKey<Evm> {
         PoolKey {
@@ -244,7 +244,7 @@ mod tests {
             config: Config {
                 pool_type_config: FullRangePoolTypeConfig,
                 fee,
-                extension: U256::zero(),
+                extension: U256::ZERO,
             },
         }
     }
@@ -255,16 +255,16 @@ mod tests {
     fn test_token0_lt_token1() {
         let result = FullRangePool::new(
             PoolKey {
-                token0: U256::zero(),
-                token1: U256::zero(),
+                token0: U256::ZERO,
+                token1: U256::ZERO,
                 config: Config {
-                    extension: U256::zero(),
+                    extension: U256::ZERO,
                     fee: 0,
                     pool_type_config: FullRangePoolTypeConfig,
                 },
             },
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 0,
             },
         );
@@ -276,7 +276,7 @@ mod tests {
         let pool = FullRangePool::new(
             pool_key(0),
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 0,
             },
         )
@@ -304,7 +304,7 @@ mod tests {
         let pool = FullRangePool::new(
             pool_key(0),
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
             },
         )
@@ -332,7 +332,7 @@ mod tests {
         let pool = FullRangePool::new(
             pool_key(0),
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
             },
         )
@@ -360,7 +360,7 @@ mod tests {
         let pool = FullRangePool::new(
             pool_key(1 << 32), // 0.01% fee
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
             },
         )
