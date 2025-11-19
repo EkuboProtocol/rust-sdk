@@ -4,6 +4,7 @@ pub mod limit_order_pool;
 pub mod mev_resist_pool;
 pub mod oracle_pool;
 pub mod spline_pool;
+pub mod stableswap_pool;
 pub mod twamm_pool;
 pub mod types;
 pub mod util;

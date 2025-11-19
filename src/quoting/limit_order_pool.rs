@@ -1,8 +1,12 @@
-use crate::quoting::base_pool::{
-    BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState,
-};
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
+use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::find_nearest_initialized_tick_index;
+use crate::{
+    chain::Chain,
+    quoting::base_pool::{
+        BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState,
+        BasePoolTypeConfig, TickSpacing,
+    },
+};
 use crate::{chain::Starknet, math::swap::is_price_increasing};
 use crate::{math::tick::to_sqrt_ratio, quoting::types::Config};
 use crate::{math::uint::U256, quoting::types::PoolState};
@@ -116,12 +120,12 @@ impl LimitOrderPool {
 
         Ok(LimitOrderPool {
             base_pool: BasePool::new(
-                NodeKey {
+                PoolKey {
                     token0,
                     token1,
                     config: Config {
                         fee: 0,
-                        tick_spacing: LIMIT_ORDER_TICK_SPACING.unsigned_abs(),
+                        pool_type_config: TickSpacing(LIMIT_ORDER_TICK_SPACING.unsigned_abs()),
                         extension,
                     },
                 },
@@ -142,14 +146,15 @@ impl Pool<Starknet> for LimitOrderPool {
     type State = LimitOrderPoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = ();
+    type PoolTypeConfig = BasePoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey<Starknet> {
-        self.base_pool.get_key()
+    fn key(&self) -> PoolKey<<Starknet as Chain>::Fee, Self::PoolTypeConfig> {
+        self.base_pool.key()
     }
 
-    fn get_state(&self) -> Self::State {
+    fn state(&self) -> Self::State {
         LimitOrderPoolState {
-            base_pool_state: self.base_pool.get_state(),
+            base_pool_state: self.base_pool.state(),
             tick_indices_reached: None,
         }
     }
@@ -158,12 +163,12 @@ impl Pool<Starknet> for LimitOrderPool {
         &self,
         params: QuoteParams<Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
-        let initial_state = params.override_state.unwrap_or_else(|| self.get_state());
+        let initial_state = params.override_state.unwrap_or_else(|| self.state());
         let sorted_ticks = self.base_pool.get_sorted_ticks();
 
         let is_increasing = is_price_increasing(
             params.token_amount.amount,
-            params.token_amount.token == self.get_key().token1,
+            params.token_amount.token == self.key().token1,
         );
 
         let mut calculated_amount = 0;
@@ -469,677 +474,391 @@ fn calculate_orders_pulled(
 
 #[cfg(test)]
 mod tests {
-    use crate::math::tick::to_sqrt_ratio;
-    use crate::math::uint::U256;
-    use crate::quoting::limit_order_pool::{LimitOrderPool, LIMIT_ORDER_TICK_SPACING};
-    use crate::quoting::types::{Pool, QuoteParams, Tick, TokenAmount};
-    use alloc::vec;
+    use super::*;
+    use crate::{
+        chain::Starknet,
+        math::{tick::to_sqrt_ratio, uint::U256},
+        quoting::types::{Quote, QuoteParams, Tick, TokenAmount},
+    };
 
     const TOKEN0: U256 = U256([0, 0, 0, 1]);
     const TOKEN1: U256 = U256([0, 0, 0, 2]);
     const EXTENSION: U256 = U256([0, 0, 0, 3]);
+    const DEFAULT_LIQUIDITY: i128 = 10_000_000;
+
+    fn ticks(entries: &[(i32, i128)]) -> Vec<Tick> {
+        entries
+            .iter()
+            .map(|(index, delta)| Tick {
+                index: *index,
+                liquidity_delta: *delta,
+            })
+            .collect()
+    }
+
+    fn pool_at(
+        sqrt_ratio_tick: i32,
+        active_tick: i32,
+        liquidity: u128,
+        entries: &[(i32, i128)],
+    ) -> LimitOrderPool {
+        LimitOrderPool::new(
+            TOKEN0,
+            TOKEN1,
+            EXTENSION,
+            to_sqrt_ratio::<Starknet>(sqrt_ratio_tick).unwrap(),
+            active_tick,
+            liquidity,
+            ticks(entries),
+        )
+        .unwrap()
+    }
+
+    fn default_pool(entries: &[(i32, i128)]) -> LimitOrderPool {
+        pool_at(0, 0, DEFAULT_LIQUIDITY.unsigned_abs(), entries)
+    }
+
+    fn quote_amount(
+        pool: &LimitOrderPool,
+        token: U256,
+        amount: i128,
+        sqrt_ratio_limit: Option<U256>,
+        override_state: Option<LimitOrderPoolState>,
+    ) -> Quote<LimitOrderPoolResources, LimitOrderPoolState> {
+        pool.quote(QuoteParams {
+            sqrt_ratio_limit,
+            override_state,
+            meta: (),
+            token_amount: TokenAmount { token, amount },
+        })
+        .unwrap()
+    }
 
     mod constructor_validation {
-        use crate::quoting::limit_order_pool::tests::{EXTENSION, TOKEN0, TOKEN1};
-        use crate::quoting::limit_order_pool::{
-            LimitOrderPool, LimitPoolError, LIMIT_ORDER_TICK_SPACING,
-        };
-        use crate::quoting::types::Tick;
-        use crate::{chain::Starknet, math::tick::to_sqrt_ratio};
-        use alloc::vec;
+        use super::*;
 
         #[test]
-        fn test_neighbor_ticks_validation() {
-            assert_eq!(
-                LimitOrderPool::new(
-                    TOKEN0,
-                    TOKEN1,
-                    EXTENSION,
-                    to_sqrt_ratio::<Starknet>(0).unwrap(),
-                    0,
-                    1,
-                    vec![
-                        Tick {
-                            index: 0,
-                            liquidity_delta: 1,
-                        },
-                        Tick {
-                            index: LIMIT_ORDER_TICK_SPACING * 2,
-                            liquidity_delta: -1,
-                        },
-                    ],
-                )
-                .unwrap_err(),
-                LimitPoolError::AllTicksMustHaveNeighbor
-            );
+        fn neighbor_ticks_validation() {
+            let err = LimitOrderPool::new(
+                TOKEN0,
+                TOKEN1,
+                EXTENSION,
+                to_sqrt_ratio::<Starknet>(0).unwrap(),
+                0,
+                1,
+                ticks(&[(0, 1), (LIMIT_ORDER_TICK_SPACING * 2, -1)]),
+            )
+            .unwrap_err();
+            assert_eq!(err, LimitPoolError::AllTicksMustHaveNeighbor);
         }
 
         #[test]
-        fn test_neighbor_ticks_validation_skipping_netted_tick() {
-            assert_eq!(
-                LimitOrderPool::new(
-                    TOKEN0,
-                    TOKEN1,
-                    EXTENSION,
-                    to_sqrt_ratio::<Starknet>(0).unwrap(),
-                    0,
-                    1,
-                    vec![
-                        Tick {
-                            index: LIMIT_ORDER_TICK_SPACING * -1,
-                            liquidity_delta: 1,
-                        },
-                        Tick {
-                            index: LIMIT_ORDER_TICK_SPACING,
-                            liquidity_delta: -1,
-                        },
-                    ],
-                )
-                .unwrap_err(),
-                LimitPoolError::AllTicksMustHaveNeighbor
-            );
+        fn neighbor_ticks_validation_skipping_netted_tick() {
+            let err = LimitOrderPool::new(
+                TOKEN0,
+                TOKEN1,
+                EXTENSION,
+                to_sqrt_ratio::<Starknet>(0).unwrap(),
+                0,
+                1,
+                ticks(&[
+                    (LIMIT_ORDER_TICK_SPACING * -1, 1),
+                    (LIMIT_ORDER_TICK_SPACING, -1),
+                ]),
+            )
+            .unwrap_err();
+            assert_eq!(err, LimitPoolError::AllTicksMustHaveNeighbor);
         }
 
         #[test]
-        fn test_neighbor_ticks_validation_no_neighbor_last_tick() {
-            assert_eq!(
-                LimitOrderPool::new(
-                    TOKEN0,
-                    TOKEN1,
-                    EXTENSION,
-                    to_sqrt_ratio::<Starknet>(0).unwrap(),
-                    0,
-                    2,
-                    vec![
-                        Tick {
-                            index: 0,
-                            liquidity_delta: 2,
-                        },
-                        Tick {
-                            index: LIMIT_ORDER_TICK_SPACING,
-                            liquidity_delta: -1,
-                        },
-                        Tick {
-                            index: LIMIT_ORDER_TICK_SPACING * 3,
-                            liquidity_delta: -1,
-                        },
-                    ],
-                )
-                .unwrap_err(),
-                LimitPoolError::LastTickHasNoNeighbor
-            );
+        fn neighbor_ticks_validation_no_neighbor_last_tick() {
+            let err = LimitOrderPool::new(
+                TOKEN0,
+                TOKEN1,
+                EXTENSION,
+                to_sqrt_ratio::<Starknet>(0).unwrap(),
+                0,
+                2,
+                ticks(&[
+                    (0, 2),
+                    (LIMIT_ORDER_TICK_SPACING, -1),
+                    (LIMIT_ORDER_TICK_SPACING * 3, -1),
+                ]),
+            )
+            .unwrap_err();
+            assert_eq!(err, LimitPoolError::LastTickHasNoNeighbor);
         }
     }
 
     #[test]
-    fn test_swap_one_for_zero_partial() {
-        let liquidity: i128 = 10000000;
-        let pool = LimitOrderPool::new(
-            TOKEN0,
-            TOKEN1,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            0,
-            liquidity.unsigned_abs(),
-            vec![
-                Tick {
-                    index: 0,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-            ],
-        )
-        .unwrap();
-
-        let quote = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: None,
-                override_state: None,
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 10000,
-                },
-            })
-            .expect("Quote failed");
-
-        assert_eq!(quote.fees_paid, 0);
+    fn swap_one_for_zero_partial() {
+        let pool = default_pool(&[
+            (0, DEFAULT_LIQUIDITY),
+            (LIMIT_ORDER_TICK_SPACING, -DEFAULT_LIQUIDITY),
+        ]);
+        let quote = quote_amount(&pool, TOKEN1, 10_000, None, None);
         assert_eq!(
             quote.state_after.tick_indices_reached,
             Some((Some(0), Some(1)))
         );
-        assert_eq!(quote.consumed_amount, 641);
-        assert_eq!(quote.calculated_amount, 639);
-        assert_eq!(quote.execution_resources.orders_pulled, 1);
         assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            1
-        );
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .no_override_price_change,
-            1
-        );
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .tick_spacings_crossed,
-            693147
+            (
+                quote.consumed_amount,
+                quote.calculated_amount,
+                quote.execution_resources.orders_pulled,
+            ),
+            (641, 639, 1)
         );
     }
 
     #[test]
-    fn test_swap_one_for_zero_cross_multiple() {
-        let liquidity: i128 = 10000000;
-        let pool = LimitOrderPool::new(
-            TOKEN0,
-            TOKEN1,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            0,
-            liquidity.unsigned_abs(),
-            vec![
-                Tick {
-                    index: 0,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING * 2,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING * 3,
-                    liquidity_delta: -liquidity,
-                },
-            ],
-        )
-        .unwrap();
+    fn swap_one_for_zero_cross_multiple() {
+        let pool = default_pool(&[
+            (0, DEFAULT_LIQUIDITY),
+            (LIMIT_ORDER_TICK_SPACING, -DEFAULT_LIQUIDITY),
+            (LIMIT_ORDER_TICK_SPACING * 2, DEFAULT_LIQUIDITY),
+            (LIMIT_ORDER_TICK_SPACING * 3, -DEFAULT_LIQUIDITY),
+        ]);
 
-        let quote = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: None,
-                override_state: None,
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000,
-                },
-            })
-            .expect("Quote failed");
-
+        let quote = quote_amount(&pool, TOKEN1, 1000, None, None);
         assert_eq!(quote.fees_paid, 0);
         assert_eq!(
             quote.state_after.tick_indices_reached,
             Some((Some(0), Some(2)))
         );
-        assert_eq!(quote.consumed_amount, 1000);
-        assert_eq!(quote.calculated_amount, 997);
-        assert_eq!(quote.execution_resources.orders_pulled, 1);
         assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .initialized_ticks_crossed,
-            2
+            (
+                quote.consumed_amount,
+                quote.calculated_amount,
+                quote.execution_resources.orders_pulled,
+            ),
+            (1000, 997, 1)
         );
         assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .no_override_price_change,
-            1
-        );
-        assert_eq!(
-            quote
-                .execution_resources
-                .base_pool_resources
-                .tick_spacings_crossed,
-            2
+            (
+                quote
+                    .execution_resources
+                    .base_pool_resources
+                    .initialized_ticks_crossed,
+                quote
+                    .execution_resources
+                    .base_pool_resources
+                    .no_override_price_change,
+                quote
+                    .execution_resources
+                    .base_pool_resources
+                    .tick_spacings_crossed,
+            ),
+            (2, 1, 2)
         );
     }
 
     #[test]
-    fn test_order_sell_token0_for_token1_can_only_be_executed_once() {
-        let liquidity: i128 = 10000000;
-        let pool = LimitOrderPool::new(
-            TOKEN0,
+    fn order_sell_token0_for_token1_can_only_be_executed_once() {
+        let pool = default_pool(&[
+            (0, DEFAULT_LIQUIDITY),
+            (LIMIT_ORDER_TICK_SPACING, -DEFAULT_LIQUIDITY),
+        ]);
+
+        let quote0 = quote_amount(
+            &pool,
             TOKEN1,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            0,
-            liquidity.unsigned_abs(),
-            vec![
-                Tick {
-                    index: 0,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-            ],
-        )
-        .unwrap();
-
-        // trade all the way through the order
-        let quote0 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING),
-                override_state: None,
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000,
-                },
-            })
-            .expect("quote0 failed");
-
-        assert_eq!(
-            quote0.state_after.base_pool_state.active_tick_index,
-            Some(1)
+            1000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING),
+            None,
         );
         assert_eq!(
-            quote0.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING).unwrap()
+            (
+                quote0.state_after.base_pool_state.active_tick_index,
+                quote0.state_after.tick_indices_reached,
+                quote0.execution_resources.orders_pulled,
+            ),
+            (Some(1), Some((Some(0), Some(1))), 1)
         );
-        assert_eq!(
-            quote0.state_after.tick_indices_reached,
-            Some((Some(0), Some(1)))
+
+        let quote1 = quote_amount(
+            &pool,
+            TOKEN0,
+            1000,
+            to_sqrt_ratio::<Starknet>(0),
+            Some(quote0.state_after),
         );
-        assert_eq!(quote0.execution_resources.orders_pulled, 1);
-
-        // swap back through the order which should be pulled
-        let quote1 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(0),
-                override_state: Some(quote0.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN0,
-                    amount: 1000,
-                },
-            })
-            .expect("quote1 failed");
-
-        let quote2 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING),
-                override_state: Some(quote1.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000,
-                },
-            })
-            .expect("quote2 failed");
-
-        assert_eq!(quote1.consumed_amount, 0);
-        assert_eq!(quote1.calculated_amount, 0);
-        assert_eq!(quote2.consumed_amount, 0);
-        assert_eq!(quote2.calculated_amount, 0);
+        let quote2 = quote_amount(
+            &pool,
+            TOKEN1,
+            1000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING),
+            Some(quote1.state_after),
+        );
+        assert_eq!((quote1.consumed_amount, quote2.consumed_amount), (0, 0));
     }
 
     #[test]
-    fn test_order_sell_token1_for_token0_can_only_be_executed_once() {
-        let liquidity: i128 = 10000000;
-        let pool = LimitOrderPool::new(
-            TOKEN0,
-            TOKEN1,
-            EXTENSION,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 2).unwrap(),
+    fn order_sell_token1_for_token0_can_only_be_executed_once() {
+        let pool = pool_at(
+            LIMIT_ORDER_TICK_SPACING * 2,
             LIMIT_ORDER_TICK_SPACING * 2,
             0,
-            vec![
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: LIMIT_ORDER_TICK_SPACING * 2,
-                    liquidity_delta: -liquidity,
-                },
+            &[
+                (LIMIT_ORDER_TICK_SPACING, DEFAULT_LIQUIDITY),
+                (LIMIT_ORDER_TICK_SPACING * 2, -DEFAULT_LIQUIDITY),
             ],
-        )
-        .unwrap();
+        );
 
-        // trade all the way through the order
-        let quote0 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING),
-                override_state: None,
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN0,
-                    amount: 1000,
-                },
-            })
-            .expect("quote0 failed");
-
-        assert_eq!(
-            quote0.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING).unwrap()
+        let quote0 = quote_amount(
+            &pool,
+            TOKEN0,
+            1000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING),
+            None,
         );
         assert_eq!(quote0.state_after.base_pool_state.active_tick_index, None);
         assert_eq!(
             quote0.state_after.tick_indices_reached,
             Some((None, Some(1)))
         );
-        assert_eq!(
-            quote0.state_after.tick_indices_reached,
-            Some((None, Some(1)))
+
+        let quote1 = quote_amount(
+            &pool,
+            TOKEN1,
+            1000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * 2),
+            Some(quote0.state_after),
         );
-
-        // swap back through the order which should be pulled
-        let quote1 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 2),
-                override_state: Some(quote0.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000,
-                },
-            })
-            .expect("quote1 failed");
-
-        let quote2 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING),
-                override_state: Some(quote1.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN0,
-                    amount: 1000,
-                },
-            })
-            .expect("quote2 failed");
-
-        assert_eq!(quote1.consumed_amount, 0);
-        assert_eq!(quote1.calculated_amount, 0);
-        assert_eq!(
-            quote1.state_after.tick_indices_reached,
-            Some((None, Some(1)))
+        let quote2 = quote_amount(
+            &pool,
+            TOKEN0,
+            1000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING),
+            Some(quote1.state_after),
         );
+        assert_eq!((quote1.consumed_amount, quote2.consumed_amount), (0, 0));
         assert_eq!(quote1.state_after.base_pool_state.liquidity, 0);
-        assert_eq!(
-            quote1.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 2).unwrap()
-        );
-        assert_eq!(quote2.consumed_amount, 0);
-        assert_eq!(quote2.calculated_amount, 0);
+    }
+
+    fn complex_pool() -> LimitOrderPool {
+        default_pool(&[
+            (-3 * LIMIT_ORDER_TICK_SPACING, DEFAULT_LIQUIDITY),
+            (-2 * LIMIT_ORDER_TICK_SPACING, -DEFAULT_LIQUIDITY),
+            (-1 * LIMIT_ORDER_TICK_SPACING, DEFAULT_LIQUIDITY),
+            (0, 0),
+            (1 * LIMIT_ORDER_TICK_SPACING, -DEFAULT_LIQUIDITY),
+            (4 * LIMIT_ORDER_TICK_SPACING, DEFAULT_LIQUIDITY),
+            (5 * LIMIT_ORDER_TICK_SPACING, -DEFAULT_LIQUIDITY),
+        ])
     }
 
     #[test]
-    fn test_complex_pool_scenario() {
-        let liquidity: i128 = 10000000;
-        let pool = LimitOrderPool::new(
-            TOKEN0,
+    fn complex_pool_scenario() {
+        let pool = complex_pool();
+
+        let quote0 = quote_amount(
+            &pool,
             TOKEN1,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            0,
-            liquidity.unsigned_abs(),
-            vec![
-                // order to sell token1 at tick -3
-                Tick {
-                    index: -3 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: -2 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-                // order to sell token1 at tick -1
-                Tick {
-                    index: -1 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                // -1 to 0 is canceled out with 0 to 1
-                Tick {
-                    index: 0,
-                    liquidity_delta: 0,
-                },
-                Tick {
-                    index: 1 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-                Tick {
-                    index: 4 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: 5 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-            ],
-        )
-        .unwrap();
-
-        // trade to tick 4.5
-        let quote0 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 9 / 2),
-                override_state: None,
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000000,
-                },
-            })
-            .expect("quote0 failed");
-
-        assert_eq!(
-            quote0.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 9 / 2).unwrap()
-        );
-        // gets through the first order and then halfway through the second order
-        assert_eq!(
-            (quote0.consumed_amount, quote0.calculated_amount),
-            (962, 958)
+            1_000_000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * 9 / 2),
+            None,
         );
         assert_eq!(
             quote0.state_after.base_pool_state.active_tick_index,
             Some(5)
         );
         assert_eq!(
-            quote0.state_after.tick_indices_reached,
-            Some((Some(3), Some(5)))
+            (
+                quote0.consumed_amount,
+                quote0.calculated_amount,
+                quote0.state_after.tick_indices_reached,
+            ),
+            (962, 958, Some((Some(3), Some(5))))
         );
 
-        // now trade back the other way to tick -2.5, which should execute half of tick 4 to 5, and all of tick -1 to -0, and half of tick -3 to -2
-        // total should be at least 1k
-        let quote1 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * -5 / 2),
-                override_state: Some(quote0.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN0,
-                    amount: 1000000,
-                },
-            })
-            .expect("quote1 failed");
-
+        let quote1 = quote_amount(
+            &pool,
+            TOKEN0,
+            1_000_000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * -5 / 2),
+            Some(quote0.state_after),
+        );
         assert_eq!(
-            quote1.state_after.tick_indices_reached,
-            Some((Some(0), Some(5)))
+            (
+                quote1.consumed_amount,
+                quote1.calculated_amount,
+                quote1.state_after.tick_indices_reached,
+            ),
+            (1_282, 1_278, Some((Some(0), Some(5))))
         );
         assert_eq!(
             quote1.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * -5 / 2).unwrap()
-        );
-        assert_eq!(
-            (quote1.consumed_amount, quote1.calculated_amount),
-            (1282, 1278)
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * -5 / 2).unwrap()
         );
 
-        let quote2 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 9 / 2),
-                override_state: Some(quote1.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000000,
-                },
-            })
-            .expect("quote2 failed");
-
-        assert_eq!(
-            quote2.state_after.tick_indices_reached,
-            Some((Some(0), Some(5)))
+        let quote2 = quote_amount(
+            &pool,
+            TOKEN1,
+            1_000_000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * 9 / 2),
+            Some(quote1.state_after),
         );
         assert_eq!(
-            quote2.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 9 / 2).unwrap()
-        );
-
-        assert_eq!(
-            (quote2.consumed_amount, quote2.calculated_amount),
-            // this should be ~1 order, half from -2.5 to -2 and half from 4 to 4.5
-            (641, 639)
+            (
+                quote2.consumed_amount,
+                quote2.calculated_amount,
+                quote2.state_after.tick_indices_reached,
+            ),
+            (641, 639, Some((Some(0), Some(5))))
         );
     }
 
     #[test]
-    fn test_complex_pool_scenario_reverse_order() {
-        let liquidity: i128 = 10000000;
-        let pool = LimitOrderPool::new(
+    fn complex_pool_scenario_reverse_order() {
+        let pool = complex_pool();
+
+        let quote0 = quote_amount(
+            &pool,
             TOKEN0,
+            1_000_000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * -5 / 2),
+            None,
+        );
+        assert_eq!(
+            (
+                quote0.consumed_amount,
+                quote0.calculated_amount,
+                quote0.state_after.tick_indices_reached,
+            ),
+            (962, 958, Some((Some(0), Some(3))))
+        );
+
+        let quote1 = quote_amount(
+            &pool,
             TOKEN1,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            0,
-            liquidity.unsigned_abs(),
-            vec![
-                // order to sell token1 at tick -3
-                Tick {
-                    index: -3 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: -2 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-                // order to sell token1 at tick -1
-                Tick {
-                    index: -1 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                // -1 to 0 is canceled out with 0 to 1
-                Tick {
-                    index: 0,
-                    liquidity_delta: 0,
-                },
-                Tick {
-                    index: 1 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-                Tick {
-                    index: 4 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: liquidity,
-                },
-                Tick {
-                    index: 5 * LIMIT_ORDER_TICK_SPACING,
-                    liquidity_delta: -liquidity,
-                },
-            ],
-        )
-        .unwrap();
-
-        // trade to tick -2.5, through 1.5 orders
-        let quote0 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * -5 / 2),
-                override_state: None,
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN0,
-                    amount: 1000000,
-                },
-            })
-            .expect("quote0 failed");
-
-        assert_eq!(
-            quote0.state_after.tick_indices_reached,
-            Some((Some(0), Some(3)))
+            1_000_000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * 9 / 2),
+            Some(quote0.state_after),
         );
         assert_eq!(
-            quote0.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * -5 / 2).unwrap()
-        );
-        assert_eq!(
-            (quote0.consumed_amount, quote0.calculated_amount),
-            (962, 958)
+            (
+                quote1.consumed_amount,
+                quote1.calculated_amount,
+                quote1.state_after.tick_indices_reached,
+            ),
+            (1282, 1278, Some((Some(0), Some(5))))
         );
 
-        // then trade to tick 4.5, through 2.5 orders
-        let quote1 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 9 / 2),
-                override_state: Some(quote0.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN1,
-                    amount: 1000000,
-                },
-            })
-            .expect("quote1 failed");
-
-        assert_eq!(
-            quote1.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * 9 / 2).unwrap()
+        let quote2 = quote_amount(
+            &pool,
+            TOKEN0,
+            1_000_000,
+            to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * -5 / 2),
+            Some(quote1.state_after),
         );
         assert_eq!(
-            (quote1.consumed_amount, quote1.calculated_amount),
-            (1282, 1278)
-        );
-        assert_eq!(
-            quote1.state_after.base_pool_state.active_tick_index,
-            Some(5)
-        );
-        assert_eq!(
-            quote1.state_after.tick_indices_reached,
-            Some((Some(0), Some(5)))
-        );
-
-        // trade back to tick -2.5, which should only cross 0.5 orders on one side and another 0.5 orders on the other
-        let quote2 = pool
-            .quote(QuoteParams {
-                sqrt_ratio_limit: to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * -5 / 2),
-                override_state: Some(quote1.state_after),
-                meta: (),
-                token_amount: TokenAmount {
-                    token: TOKEN0,
-                    amount: 1000000,
-                },
-            })
-            .expect("quote2 failed");
-
-        assert_eq!(
-            quote2.state_after.base_pool_state.sqrt_ratio,
-            to_sqrt_ratio(LIMIT_ORDER_TICK_SPACING * -5 / 2).unwrap()
-        );
-        assert_eq!(
-            (quote2.consumed_amount, quote2.calculated_amount),
-            (641, 639)
-        );
-        assert_eq!(
-            quote2.state_after.base_pool_state.active_tick_index,
-            Some(0)
+            (
+                quote2.consumed_amount,
+                quote2.calculated_amount,
+                quote2.state_after.base_pool_state.active_tick_index,
+            ),
+            (641, 639, Some(0))
         );
         assert_eq!(
             quote2.state_after.tick_indices_reached,

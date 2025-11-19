@@ -1,46 +1,19 @@
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams};
+use crate::{
+    chain::Chain,
+    quoting::types::{Pool, PoolKey, Quote, QuoteParams},
+};
 use crate::{
     chain::Evm,
     math::swap::{compute_step, is_price_increasing, ComputeStepError},
 };
 use crate::{math::uint::U256, quoting::types::PoolState};
-use core::ops::{Add, AddAssign, Sub, SubAssign};
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 
 // Resources consumed during any swap execution in a full range pool.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Add, AddAssign, Sub, SubAssign)]
 pub struct FullRangePoolResources {
     pub no_override_price_change: u32,
-}
-
-impl AddAssign for FullRangePoolResources {
-    fn add_assign(&mut self, rhs: Self) {
-        self.no_override_price_change += rhs.no_override_price_change;
-    }
-}
-
-impl Add for FullRangePoolResources {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl SubAssign for FullRangePoolResources {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.no_override_price_change -= rhs.no_override_price_change;
-    }
-}
-
-impl Sub for FullRangePoolResources {
-    type Output = Self;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -58,10 +31,15 @@ pub struct FullRangePoolState {
     pub liquidity: u128,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePoolTypeConfig;
+pub type FullRangePoolKey<C> = PoolKey<<C as Chain>::Fee, FullRangePoolTypeConfig>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FullRangePool {
-    key: NodeKey<Evm>,
+    key: FullRangePoolKey<Evm>,
     state: FullRangePoolState,
 }
 
@@ -74,7 +52,10 @@ pub enum FullRangePoolError {
 }
 
 impl FullRangePool {
-    pub fn new(key: NodeKey<Evm>, state: FullRangePoolState) -> Result<Self, FullRangePoolError> {
+    pub fn new(
+        key: FullRangePoolKey<Evm>,
+        state: FullRangePoolState,
+    ) -> Result<Self, FullRangePoolError> {
         if !(key.token0 < key.token1) {
             return Err(FullRangePoolError::TokenOrderInvalid);
         }
@@ -98,12 +79,13 @@ impl Pool<Evm> for FullRangePool {
     type State = FullRangePoolState;
     type QuoteError = FullRangePoolQuoteError;
     type Meta = ();
+    type PoolTypeConfig = FullRangePoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey<Evm> {
-        &self.key
+    fn key(&self) -> PoolKey<<Evm as Chain>::Fee, Self::PoolTypeConfig> {
+        self.key
     }
 
-    fn get_state(&self) -> Self::State {
+    fn state(&self) -> Self::State {
         self.state
     }
 
@@ -255,12 +237,12 @@ mod tests {
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
 
-    fn node_key(fee: u64) -> NodeKey {
-        NodeKey {
+    fn pool_key(fee: u64) -> FullRangePoolKey<Evm> {
+        PoolKey {
             token0: TOKEN0,
             token1: TOKEN1,
             config: Config {
-                tick_spacing: 0,
+                pool_type_config: FullRangePoolTypeConfig,
                 fee,
                 extension: U256::zero(),
             },
@@ -272,13 +254,13 @@ mod tests {
     #[test]
     fn test_token0_lt_token1() {
         let result = FullRangePool::new(
-            NodeKey {
+            PoolKey {
                 token0: U256::zero(),
                 token1: U256::zero(),
                 config: Config {
                     extension: U256::zero(),
                     fee: 0,
-                    tick_spacing: 0,
+                    pool_type_config: FullRangePoolTypeConfig,
                 },
             },
             FullRangePoolState {
@@ -292,7 +274,7 @@ mod tests {
     #[test]
     fn test_quote_zero_liquidity() {
         let pool = FullRangePool::new(
-            node_key(0),
+            pool_key(0),
             FullRangePoolState {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 0,
@@ -320,7 +302,7 @@ mod tests {
     #[test]
     fn test_quote_with_liquidity_token0_input() {
         let pool = FullRangePool::new(
-            node_key(0),
+            pool_key(0),
             FullRangePoolState {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
@@ -348,7 +330,7 @@ mod tests {
     #[test]
     fn test_quote_with_liquidity_token1_input() {
         let pool = FullRangePool::new(
-            node_key(0),
+            pool_key(0),
             FullRangePoolState {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,
@@ -376,7 +358,7 @@ mod tests {
     #[test]
     fn test_with_fee() {
         let pool = FullRangePool::new(
-            node_key(1 << 32), // 0.01% fee
+            pool_key(1 << 32), // 0.01% fee
             FullRangePoolState {
                 sqrt_ratio: U256::one() << 128,
                 liquidity: 1_000_000,

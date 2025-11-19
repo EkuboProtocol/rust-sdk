@@ -173,16 +173,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_exp2_cases() {
+    fn zero() {
         assert_eq!(exp2(0), 1 << 64);
+    }
+
+    #[test]
+    fn one() {
         assert_eq!(exp2(1 << 64), 2 << 64);
+    }
+
+    #[test]
+    fn one_point_five() {
         assert_eq!(exp2((3 << 64) / 2), 52175271301331128849);
+    }
+
+    #[test]
+    fn two() {
+        assert_eq!(exp2(2 << 64), 4 << 64);
+    }
+
+    #[test]
+    fn three() {
+        assert_eq!(exp2(3 << 64), 8 << 64);
+    }
+
+    #[test]
+    fn sixty_three() {
+        assert_eq!(exp2(63 << 64), 9223372036854775808 << 64);
+    }
+
+    #[test]
+    fn sixty_three_point_five() {
         assert_eq!(
             exp2((62 << 64) + (3 << 64) / 2),
             240615969168004511545033772477625056927
         );
-        assert_eq!(exp2(2 << 64), 4 << 64);
-        assert_eq!(exp2(3 << 64), 8 << 64);
-        assert_eq!(exp2(63 << 64), 9223372036854775808 << 64);
     }
 }

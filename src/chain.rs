@@ -1,21 +1,26 @@
 use core::fmt::Debug;
 
 use alloc::vec;
+use derive_more::From;
 use num_traits::{ToPrimitive as _, Zero};
 
 use crate::{
     math::uint::U256,
     quoting::{
-        base_pool::{BasePool, BasePoolError, BasePoolState},
-        full_range_pool::{FullRangePool, FullRangePoolError, FullRangePoolState},
-        types::{Config, NodeKey, Pool, Tick},
+        base_pool::{BasePool, BasePoolError, BasePoolState, BasePoolTypeConfig, TickSpacing},
+        full_range_pool::{
+            FullRangePool, FullRangePoolError, FullRangePoolState, FullRangePoolTypeConfig,
+        },
+        types::{Config, Pool, PoolKey, Tick},
     },
 };
 
 pub trait Chain: Sized + Clone + PartialEq + Eq + Debug {
     type Fee: Clone + Copy + PartialEq + Eq + Debug + Into<U256> + Zero + Send + Sync;
+    type PoolTypeConfig;
+
     type FullRangePool: Pool<Self, Meta = ()>;
-    type FullRangePoolError;
+    type FullRangePoolError: Debug;
 
     fn max_tick_spacing() -> u32;
 
@@ -76,11 +81,12 @@ impl Starknet {
 }
 
 impl Evm {
-    // This token is used to represent the native token in Ekubo on any EVM chain
-    pub const NATIVE_TOKEN_ADDRESS: U256 = U256([0, 0, 0, 0]);
+    pub const NATIVE_TOKEN_ADDRESS: U256 = U256::zero();
 
     pub const MAX_TICK_SPACING: u32 = 698605;
     pub const FULL_RANGE_TICK_SPACING: u32 = 0;
+
+    pub const MAX_STABLESWAP_AMPLIFICATION_FACTOR: u8 = 26;
 
     pub const MIN_TICK: i32 = -88722835;
     pub const MAX_TICK: i32 = 88722835;
@@ -99,8 +105,14 @@ pub enum StarknetFullRangePoolError {
     ActiveLiquidityDoesNotFitSignedInteger,
 }
 
+#[derive(From)]
+pub enum StarknetPoolTypeConfig {
+    Base(BasePoolTypeConfig),
+}
+
 impl Chain for Starknet {
     type Fee = u128;
+    type PoolTypeConfig = StarknetPoolTypeConfig;
     type FullRangePool = BasePool<Self>;
     type FullRangePoolError = StarknetFullRangePoolError;
 
@@ -184,12 +196,12 @@ impl Chain for Starknet {
         };
 
         BasePool::new(
-            NodeKey {
+            PoolKey {
                 token0,
                 token1,
                 config: Config {
                     fee,
-                    tick_spacing: Starknet::MAX_TICK_SPACING,
+                    pool_type_config: TickSpacing(Starknet::MAX_TICK_SPACING),
                     extension,
                 },
             },
@@ -208,10 +220,17 @@ const TWO_POW_160: U256 = U256([0, 0, 0x100000000, 0]);
 const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
 const TWO_POW_96: U256 = U256([0, 0x0100000000, 0, 0]);
 
+#[derive(From)]
+pub enum EvmPoolTypeConfig {
+    Base(BasePoolTypeConfig),
+    FullRange(FullRangePoolTypeConfig),
+}
+
 impl Chain for Evm {
     type Fee = u64;
     type FullRangePool = FullRangePool;
     type FullRangePoolError = FullRangePoolError;
+    type PoolTypeConfig = EvmPoolTypeConfig;
 
     fn max_tick_spacing() -> u32 {
         Self::MAX_TICK_SPACING
@@ -270,12 +289,12 @@ impl Chain for Evm {
         active_liquidity: u128,
     ) -> Result<Self::FullRangePool, Self::FullRangePoolError> {
         FullRangePool::new(
-            NodeKey {
+            PoolKey {
                 token0,
                 token1,
                 config: Config {
                     fee,
-                    tick_spacing: 0,
+                    pool_type_config: FullRangePoolTypeConfig,
                     extension,
                 },
             },
@@ -285,4 +304,58 @@ impl Chain for Evm {
             },
         )
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    pub trait NamedChain: Chain {
+        fn name() -> &'static str;
+    }
+
+    impl NamedChain for Starknet {
+        fn name() -> &'static str {
+            "starknet"
+        }
+    }
+
+    impl NamedChain for Evm {
+        fn name() -> &'static str {
+            "evm"
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    pub enum ChainEnum {
+        Starknet,
+        Evm,
+    }
+
+    pub const CHAINS: [ChainEnum; 2] = [ChainEnum::Starknet, ChainEnum::Evm];
+
+    macro_rules! run_for_all_chains {
+        ($chain_ty:ident, $chain_enum:ident => $body:block) => {{
+            type $chain_ty = crate::chain::Starknet;
+            let $chain_enum = crate::chain::tests::ChainEnum::Starknet;
+            $body
+        }
+        {
+            type $chain_ty = crate::chain::Evm;
+            let $chain_enum = crate::chain::tests::ChainEnum::Evm;
+            $body
+        }};
+    }
+
+    macro_rules! chain_test {
+        ($name:ident, $body:block) => {
+            #[test]
+            fn $name() {
+                crate::chain::tests::run_for_all_chains!(ChainTy, _chain => $body);
+            }
+        };
+    }
+
+    pub(crate) use chain_test;
+    pub(crate) use run_for_all_chains;
 }

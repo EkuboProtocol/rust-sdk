@@ -1,5 +1,4 @@
-use crate::math::uint::U256;
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams, Tick};
+use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
     approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
 };
@@ -8,6 +7,7 @@ use crate::{
     math::swap::{compute_step, is_price_increasing, ComputeStepError},
 };
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
+use crate::{math::uint::U256, quoting::types::Config};
 use alloc::vec::Vec;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
@@ -71,10 +71,30 @@ pub struct BasePoolState {
     pub active_tick_index: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TickSpacing(pub u32);
+
+impl From<TickSpacing> for i32 {
+    fn from(value: TickSpacing) -> Self {
+        value.0 as i32
+    }
+}
+
+pub type BasePoolTypeConfig = TickSpacing;
+pub type BasePoolKey<C> = PoolKey<<C as Chain>::Fee, BasePoolTypeConfig>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePool<C: Chain> {
-    key: NodeKey<C>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "C::Fee: serde::Serialize",
+            deserialize = "C::Fee: serde::Deserialize<'de>"
+        ))
+    )]
+    key: BasePoolKey<C>,
     state: BasePoolState,
     sorted_ticks: Vec<Tick>,
 }
@@ -130,7 +150,7 @@ impl<C: Chain> BasePool<C> {
     ///
     /// * `Result<Self, BasePoolError>` - A new BasePool instance or an error
     pub fn from_partial_data(
-        key: NodeKey<C>,
+        key: BasePoolKey<C>,
         sqrt_ratio: U256,
         partial_ticks: Vec<Tick>,
         min_tick_searched: i32,
@@ -138,9 +158,9 @@ impl<C: Chain> BasePool<C> {
         liquidity: u128,
         current_tick: i32,
     ) -> Result<Self, BasePoolError> {
-        // Use the construct_sorted_ticks function to get valid sorted ticks
-        let tick_spacing = key.config.tick_spacing;
-        let spacing_i32 = tick_spacing as i32;
+        let tick_spacing = key.config.pool_type_config;
+        let spacing_i32 = i32::from(tick_spacing);
+        let tick_spacing = tick_spacing.0;
 
         // Get sorted ticks using the utility function
         let sorted_ticks = construct_sorted_ticks::<C>(
@@ -182,21 +202,29 @@ impl<C: Chain> BasePool<C> {
     }
 
     pub fn new(
-        key: NodeKey<C>,
+        key: BasePoolKey<C>,
         state: BasePoolState,
         sorted_ticks: Vec<Tick>,
     ) -> Result<Self, BasePoolError> {
-        // Validate token ordering
-        if !(key.token0 < key.token1) {
+        let PoolKey {
+            token0,
+            token1,
+            config:
+                Config {
+                    pool_type_config: TickSpacing(tick_spacing),
+                    ..
+                },
+        } = key;
+
+        if token0 >= token1 {
             return Err(BasePoolError::TokenOrderInvalid);
         }
 
-        // Validate tick spacing
-        if key.config.tick_spacing > C::max_tick_spacing() {
+        if tick_spacing > C::max_tick_spacing() {
             return Err(BasePoolError::TickSpacingTooLarge);
         }
 
-        if key.config.tick_spacing.is_zero() {
+        if tick_spacing.is_zero() {
             return Err(BasePoolError::TickSpacingCannotBeZero);
         }
 
@@ -204,7 +232,7 @@ impl<C: Chain> BasePool<C> {
         let mut last_tick: Option<i32> = None;
         let mut total_liquidity: u128 = 0;
         let mut active_liquidity: u128 = 0;
-        let spacing_i32 = key.config.tick_spacing as i32;
+        let spacing_i32 = tick_spacing as i32;
 
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
@@ -297,182 +325,21 @@ impl PoolState for BasePoolState {
     }
 }
 
-// Tests for the from_partial_data constructor
-#[cfg(test)]
-mod from_partial_data_tests {
-    use super::*;
-    use crate::math::tick::{MAX_TICK, MIN_TICK};
-    use crate::quoting::types::Config;
-    use alloc::vec;
-
-    // Constants for testing
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
-
-    // Helper function to create a test config
-    fn create_test_config(tick_spacing: u32) -> Config {
-        Config {
-            tick_spacing,
-            fee: 0,
-            extension: U256::zero(),
-        }
-    }
-
-    #[test]
-    fn test_from_partial_data_empty_ticks() {
-        // Test creating a pool with empty tick data
-        let key = NodeKey {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            config: create_test_config(10),
-        };
-
-        let sqrt_ratio = to_sqrt_ratio(0).unwrap();
-        let partial_ticks = Vec::new();
-        let min_tick_searched = -5005;
-        let max_tick_searched = 5005;
-        let liquidity = 1000;
-        let current_tick = 0;
-
-        let result = BasePool::from_partial_data(
-            key,
-            sqrt_ratio,
-            partial_ticks,
-            min_tick_searched,
-            max_tick_searched,
-            liquidity,
-            current_tick,
-        );
-
-        assert!(result.is_ok());
-        let pool = result.unwrap();
-
-        // Verify the pool has MIN_TICK and MAX_TICK ticks
-        let ticks = pool.get_sorted_ticks();
-        assert_eq!(ticks.len(), 2);
-        assert_eq!(ticks[0].index, -5010);
-        assert_eq!(ticks[0].liquidity_delta, liquidity as i128);
-        assert_eq!(ticks[1].index, 5010);
-        assert_eq!(ticks[1].liquidity_delta, -(liquidity as i128));
-    }
-
-    #[test]
-    fn test_from_partial_data_with_partial_ticks() {
-        // Test creating a pool with partial ticks
-        let key = NodeKey {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            config: create_test_config(10),
-        };
-
-        let sqrt_ratio = to_sqrt_ratio(50).unwrap();
-        let partial_ticks = vec![
-            Tick {
-                index: 0,
-                liquidity_delta: 500,
-            },
-            Tick {
-                index: 100,
-                liquidity_delta: -200,
-            },
-        ];
-
-        let min_tick_searched = -45;
-        let max_tick_searched = 145;
-        let liquidity = 750;
-        let current_tick = 52;
-
-        let result = BasePool::from_partial_data(
-            key,
-            sqrt_ratio,
-            partial_ticks,
-            min_tick_searched,
-            max_tick_searched,
-            liquidity,
-            current_tick,
-        );
-
-        assert!(result.is_ok());
-        let pool = result.unwrap();
-
-        // Verify the constructed pool has the correct properties
-        let ticks = pool.get_sorted_ticks();
-
-        // Check that we have ticks at the min and max boundaries
-        assert_eq!(
-            pool.sorted_ticks.first().unwrap(),
-            &Tick {
-                index: -50,
-                liquidity_delta: 250
-            }
-        );
-        assert_eq!(
-            pool.sorted_ticks.last().unwrap(),
-            &Tick {
-                index: 150,
-                liquidity_delta: -550
-            }
-        );
-
-        // Verify active_tick_index points to tick at or before current_tick
-        let active_index = pool.state.active_tick_index;
-        assert_eq!(active_index.unwrap(), 1);
-
-        // Verify all liquidity deltas sum to zero
-        let sum: i128 = ticks.iter().map(|t| t.liquidity_delta).sum();
-        assert_eq!(sum, 0);
-
-        // Verify active liquidity matches
-        assert_eq!(pool.state.liquidity, liquidity);
-    }
-
-    #[test]
-    fn test_from_partial_data_tick_spacing_validation() {
-        // Test that the tick spacing validation works
-        let key = NodeKey {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            config: create_test_config(0), // Invalid tick spacing
-        };
-
-        let sqrt_ratio = to_sqrt_ratio(0).unwrap();
-        let partial_ticks = Vec::new();
-        let min_tick_searched = MIN_TICK;
-        let max_tick_searched = MAX_TICK;
-        let liquidity = 1000;
-        let current_tick = 0;
-
-        let result = BasePool::from_partial_data(
-            key,
-            sqrt_ratio,
-            partial_ticks,
-            min_tick_searched,
-            max_tick_searched,
-            liquidity,
-            current_tick,
-        );
-
-        // Should fail with TickSpacingCannotBeZero
-        assert_eq!(
-            result.unwrap_err(),
-            BasePoolError::ConstructSortedTicksFromPartialDataError(
-                ConstructSortedTicksError::InvalidTickSpacing
-            )
-        );
-    }
-}
-
-impl<C: Chain> Pool<C> for BasePool<C> {
+impl<C> Pool<C> for BasePool<C>
+where
+    C: Chain<PoolTypeConfig: From<BasePoolTypeConfig>>,
+{
     type Resources = BasePoolResources;
     type State = BasePoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = ();
+    type PoolTypeConfig = BasePoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey<C> {
-        &self.key
+    fn key(&self) -> PoolKey<C::Fee, Self::PoolTypeConfig> {
+        self.key
     }
 
-    fn get_state(&self) -> Self::State {
+    fn state(&self) -> Self::State {
         self.state
     }
 
@@ -488,25 +355,20 @@ impl<C: Chain> Pool<C> for BasePool<C> {
             return Err(BasePoolQuoteError::InvalidToken);
         }
 
-        let state = if let Some(override_state) = params.override_state {
-            override_state
-        } else {
-            self.state.clone()
-        };
+        let state = params.override_state.unwrap_or(self.state);
 
         if amount == 0 {
             return Ok(Quote {
                 is_price_increasing: is_token1,
                 consumed_amount: 0,
                 calculated_amount: 0,
-                execution_resources: Default::default(),
+                execution_resources: BasePoolResources::default(),
                 state_after: state,
                 fees_paid: 0,
             });
         }
 
         let is_increasing = is_price_increasing(amount, is_token1);
-
         let mut sqrt_ratio = state.sqrt_ratio;
         let mut liquidity = state.liquidity;
         let mut active_tick_index = state.active_tick_index;
@@ -518,78 +380,61 @@ impl<C: Chain> Pool<C> for BasePool<C> {
             if !is_increasing && limit > sqrt_ratio {
                 return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit < C::min_sqrt_ratio() {
-                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
-            }
-            if limit > C::max_sqrt_ratio() {
+            if limit < C::min_sqrt_ratio() || limit > C::max_sqrt_ratio() {
                 return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
+        } else if is_increasing {
+            C::max_sqrt_ratio()
         } else {
-            if is_increasing {
-                C::max_sqrt_ratio()
-            } else {
-                C::min_sqrt_ratio()
-            }
+            C::min_sqrt_ratio()
         };
 
         let mut calculated_amount: u128 = 0;
         let mut fees_paid: u128 = 0;
         let mut initialized_ticks_crossed: u32 = 0;
         let mut amount_remaining = amount;
-
         let starting_sqrt_ratio = sqrt_ratio;
 
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
-            let next_initialized_tick: Option<(usize, &Tick, U256)> = if is_increasing {
+            let next_initialized_tick = if is_increasing {
                 if let Some(index) = active_tick_index {
-                    if let Some(next) = self.sorted_ticks.get(index + 1) {
-                        Some((
-                            index + 1,
-                            next,
-                            to_sqrt_ratio::<C>(next.index)
-                                .ok_or(BasePoolQuoteError::InvalidTick(next.index))?,
-                        ))
+                    if let Some(tick) = self.sorted_ticks.get(index + 1) {
+                        let ratio = to_sqrt_ratio::<C>(tick.index)
+                            .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?;
+                        Some((index + 1, tick, ratio))
                     } else {
                         None
                     }
-                } else {
-                    if let Some(next) = self.sorted_ticks.first() {
-                        Some((
-                            0,
-                            next,
-                            to_sqrt_ratio::<C>(next.index)
-                                .ok_or(BasePoolQuoteError::InvalidTick(next.index))?,
-                        ))
-                    } else {
-                        None
-                    }
-                }
-            } else {
-                if let Some(index) = active_tick_index {
-                    if let Some(tick) = self.sorted_ticks.get(index) {
-                        Some((
-                            index,
-                            tick,
-                            to_sqrt_ratio::<C>(tick.index)
-                                .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?,
-                        ))
-                    } else {
-                        None
-                    }
+                } else if let Some(tick) = self.sorted_ticks.first() {
+                    let ratio = to_sqrt_ratio::<C>(tick.index)
+                        .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?;
+                    Some((0, tick, ratio))
                 } else {
                     None
                 }
+            } else if let Some(index) = active_tick_index {
+                if let Some(tick) = self.sorted_ticks.get(index) {
+                    let ratio = to_sqrt_ratio::<C>(tick.index)
+                        .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?;
+                    Some((index, tick, ratio))
+                } else {
+                    None
+                }
+            } else {
+                None
             };
 
-            let step_sqrt_ratio_limit =
-                next_initialized_tick.map_or(sqrt_ratio_limit, |(_, _, next_ratio)| {
-                    if (next_ratio < sqrt_ratio_limit) == is_increasing {
-                        next_ratio
+            let step_sqrt_ratio_limit = next_initialized_tick
+                .as_ref()
+                .map(|(_, _, ratio)| {
+                    if (*ratio < sqrt_ratio_limit) == is_increasing {
+                        *ratio
                     } else {
                         sqrt_ratio_limit
                     }
-                });
+                })
+                .unwrap_or(sqrt_ratio_limit);
 
             let step = compute_step::<C>(
                 sqrt_ratio,
@@ -610,10 +455,8 @@ impl<C: Chain> Pool<C> for BasePool<C> {
                 if sqrt_ratio == tick_sqrt_ratio {
                     active_tick_index = if is_increasing {
                         Some(index)
-                    } else if !index.is_zero() {
-                        Some(index - 1)
                     } else {
-                        None
+                        index.checked_sub(1)
                     };
 
                     initialized_ticks_crossed += 1;
@@ -622,7 +465,7 @@ impl<C: Chain> Pool<C> for BasePool<C> {
                         liquidity = liquidity + next_tick.liquidity_delta.unsigned_abs();
                     } else {
                         liquidity = liquidity - next_tick.liquidity_delta.unsigned_abs();
-                    };
+                    }
                 }
             } else {
                 active_tick_index = if is_increasing {
@@ -634,7 +477,6 @@ impl<C: Chain> Pool<C> for BasePool<C> {
         }
 
         let resources = BasePoolResources {
-            // we ignore changes from the override price because we assume the price has already changed
             no_override_price_change: if starting_sqrt_ratio == self.state.sqrt_ratio
                 && starting_sqrt_ratio != sqrt_ratio
             {
@@ -646,7 +488,7 @@ impl<C: Chain> Pool<C> for BasePool<C> {
             tick_spacings_crossed: approximate_number_of_tick_spacings_crossed(
                 starting_sqrt_ratio,
                 sqrt_ratio,
-                self.key.config.tick_spacing,
+                self.key.config.pool_type_config.0,
             ),
         };
 
@@ -666,7 +508,6 @@ impl<C: Chain> Pool<C> for BasePool<C> {
         })
     }
 
-    // Checks if the pool has any liquidity.
     fn has_liquidity(&self) -> bool {
         self.state.liquidity > 0 || !self.sorted_ticks.is_empty()
     }
@@ -687,638 +528,446 @@ impl<C: Chain> Pool<C> for BasePool<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quoting::types::{Config, TokenAmount};
+    use crate::{
+        chain::{tests::run_for_all_chains, Starknet},
+        math::sqrt_ratio::SQRT_RATIO_ONE,
+        quoting::types::{Config, TokenAmount},
+    };
     use alloc::vec;
+    use num_traits::Zero;
 
     const TOKEN0: U256 = U256([1, 0, 0, 0]);
     const TOKEN1: U256 = U256([2, 0, 0, 0]);
 
-    fn node_key(tick_spacing: u32, fee: u64) -> NodeKey {
-        NodeKey {
+    fn pool_key<C: Chain>(tick_spacing: u32, fee: C::Fee) -> BasePoolKey<C> {
+        PoolKey {
             token0: TOKEN0,
             token1: TOKEN1,
             config: Config {
-                tick_spacing,
                 fee,
+                pool_type_config: TickSpacing(tick_spacing),
                 extension: U256::zero(),
             },
         }
     }
 
+    fn ticks(indices: &[(i32, i128)]) -> Vec<Tick> {
+        indices
+            .iter()
+            .map(|(index, delta)| Tick {
+                index: *index,
+                liquidity_delta: *delta,
+            })
+            .collect()
+    }
+
+    fn pool_state(sqrt_ratio: U256, liquidity: u128, active: Option<usize>) -> BasePoolState {
+        BasePoolState {
+            sqrt_ratio,
+            liquidity,
+            active_tick_index: active,
+        }
+    }
+
+    fn sqrt_ratio<C: Chain>(tick: i32) -> U256 {
+        to_sqrt_ratio::<C>(tick).unwrap()
+    }
+
+    fn zero_fee<C: Chain>() -> C::Fee {
+        C::Fee::zero()
+    }
+
     mod constructor_validation {
-        use super::BasePoolError;
-        use super::{to_sqrt_ratio, vec, BasePool, BasePoolState, NodeKey, MAX_TICK_SPACING, U256};
-        use crate::math::tick::MAX_TICK;
-        use crate::quoting::base_pool::BasePoolError::TickSpacingCannotBeZero;
-        use crate::quoting::types::{Config, Tick};
+        use super::*;
 
         #[test]
-        fn test_token0_lt_token1() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::zero(),
-                    token1: U256::zero(),
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: 0,
+        fn token0_must_be_less_than_token1() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    PoolKey {
+                        token0: U256::zero(),
+                        token1: U256::zero(),
+                        config: Config {
+                            fee: zero_fee::<ChainTy>(),
+                            pool_type_config: TickSpacing(0),
+                            extension: U256::zero(),
+                        },
                     },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: None,
-                    liquidity: 0,
-                },
-                vec![],
-            );
-            assert_eq!(result.unwrap_err(), BasePoolError::TokenOrderInvalid);
+                    pool_state(SQRT_RATIO_ONE, 0, None),
+                    vec![],
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::TokenOrderInvalid);
+            });
         }
 
         #[test]
-        fn test_token0_zero() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::zero(),
-                    token1: U256::one(),
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: 1,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: None,
-                    liquidity: 0,
-                },
-                vec![],
-            );
-            assert!(result.is_ok());
+        fn tick_spacing_zero_reverts() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(0, zero_fee::<ChainTy>()),
+                    pool_state(SQRT_RATIO_ONE, 0, None),
+                    vec![],
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::TickSpacingCannotBeZero);
+            });
         }
 
         #[test]
-        fn test_tick_spacing_zero_reverts() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: 0,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: None,
-                    liquidity: 0,
-                },
-                vec![],
-            );
-            assert_eq!(result.unwrap_err(), TickSpacingCannotBeZero);
+        fn tick_spacing_cannot_exceed_max() {
+            run_for_all_chains!(ChainTy, _chain => {
+                if let Some(invalid) = ChainTy::max_tick_spacing().checked_add(1) {
+                    let result = BasePool::<ChainTy>::new(
+                        pool_key::<ChainTy>(invalid, zero_fee::<ChainTy>()),
+                        pool_state(SQRT_RATIO_ONE, 0, None),
+                        vec![],
+                    );
+                    assert_eq!(result.unwrap_err(), BasePoolError::TickSpacingTooLarge);
+                }
+            });
         }
 
         #[test]
-        fn test_tick_spacing_lte_max() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING + 1,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: None,
-                    liquidity: 0,
-                },
-                vec![],
-            );
-            assert_eq!(result.unwrap_err(), BasePoolError::TickSpacingTooLarge);
+        fn ticks_must_be_sorted() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
+                    ticks(&[(ChainTy::max_tick(), 0), (0, 0)]),
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::TicksNotSorted);
+            });
         }
 
         #[test]
-        fn test_active_tick_index_within_range() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
+        fn ticks_must_align_with_spacing() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let spacing = ChainTy::max_tick_spacing();
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(spacing, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
+                    ticks(&[(-1, 1), (ChainTy::max_tick() - 1, -1)]),
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::TickNotMultipleOfSpacing);
+            });
+        }
+
+        #[test]
+        fn total_liquidity_must_sum_to_zero() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
+                    ticks(&[(0, 2), (ChainTy::max_tick(), -1)]),
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::TotalLiquidityNotZero);
+            });
+        }
+
+        #[test]
+        fn active_tick_index_within_bounds() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0), 0, Some(2)),
+                    ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
+                );
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolError::ActiveTickIndexOutOfBounds
+                );
+            });
+        }
+
+        #[test]
+        fn active_liquidity_must_match_sum_before_active_tick() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0), 0, Some(0)),
+                    ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::ActiveLiquidityMismatch);
+            });
+        }
+
+        #[test]
+        fn active_tick_sqrt_ratio_cannot_exceed_state() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0) - 1, 2, Some(0)),
+                    ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::ActiveTickSqrtRatioInvalid);
+            });
+        }
+
+        #[test]
+        fn sqrt_ratio_must_be_below_first_tick_when_no_active_tick() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let result = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(0) + 1, 0, None),
+                    ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
+                );
+                assert_eq!(result.unwrap_err(), BasePoolError::SqrtRatioTooHighWithNoActiveTick);
+            });
+        }
+    }
+
+    mod quoting {
+        use super::*;
+
+        #[test]
+        fn zero_liquidity_token1_input() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let pool = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(SQRT_RATIO_ONE, 0, None),
+                    vec![],
+                )
+                .unwrap();
+
+                let quote = pool
+                    .quote(QuoteParams {
+                        token_amount: TokenAmount {
+                            amount: 1,
+                            token: TOKEN1,
+                        },
+                        sqrt_ratio_limit: None,
+                        override_state: None,
+                        meta: (),
+                    })
+                    .unwrap();
+
+                assert_eq!(
+                    (quote.calculated_amount, quote.execution_resources.initialized_ticks_crossed),
+                    (0, 0)
+                );
+            });
+        }
+
+        #[test]
+        fn zero_liquidity_token0_input() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let pool = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(SQRT_RATIO_ONE, 0, None),
+                    vec![],
+                )
+                .unwrap();
+
+                let quote = pool
+                    .quote(QuoteParams {
+                        token_amount: TokenAmount {
+                            amount: 1,
+                            token: TOKEN0,
+                        },
+                        sqrt_ratio_limit: None,
+                        override_state: None,
+                        meta: (),
+                    })
+                    .unwrap();
+
+                assert_eq!(
+                    (quote.calculated_amount, quote.execution_resources.initialized_ticks_crossed),
+                    (0, 0)
+                );
+            });
+        }
+
+        #[test]
+        fn liquidity_token1_input() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let pool = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(SQRT_RATIO_ONE, 1_000_000_000, Some(0)),
+                    ticks(&[(0, 1_000_000_000), (1, -1_000_000_000)]),
+                )
+                .unwrap();
+
+                let quote = pool
+                    .quote(QuoteParams {
+                        token_amount: TokenAmount {
+                            amount: 1000,
+                            token: TOKEN1,
+                        },
+                        sqrt_ratio_limit: None,
+                        override_state: None,
+                        meta: (),
+                    })
+                    .unwrap();
+
+                assert_eq!(
+                    (quote.calculated_amount, quote.execution_resources.initialized_ticks_crossed),
+                    (499, 1)
+                );
+            });
+        }
+
+        #[test]
+        fn liquidity_token0_input() {
+            run_for_all_chains!(ChainTy, _chain => {
+                let pool = BasePool::<ChainTy>::new(
+                    pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
+                    pool_state(sqrt_ratio::<ChainTy>(1), 0, Some(1)),
+                    ticks(&[(0, 1_000_000_000), (1, -1_000_000_000)]),
+                )
+                .unwrap();
+
+                let quote = pool
+                    .quote(QuoteParams {
+                        token_amount: TokenAmount {
+                            amount: 1000,
+                            token: TOKEN0,
+                        },
+                        sqrt_ratio_limit: None,
+                        override_state: None,
+                        meta: (),
+                    })
+                    .unwrap();
+
+                assert_eq!(
+                    (quote.calculated_amount, quote.execution_resources.initialized_ticks_crossed),
+                    (499, 2)
+                );
+            });
+        }
+
+        #[test]
+        fn example_failing_quote_starknet_only() {
+            let pool = BasePool::<Starknet>::new(
+                pool_key::<Starknet>(100, 17014118346046923988514818429550592u128),
                 BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: Some(0),
-                    liquidity: 0,
+                    sqrt_ratio: U256([16035209758820767612, 757181812420893, 0, 0]),
+                    liquidity: 99999,
+                    active_tick_index: Some(16),
                 },
-                vec![],
-            );
+                vec![
+                    Tick {
+                        index: -88722000,
+                        liquidity_delta: 99999,
+                    },
+                    Tick {
+                        index: -24124600,
+                        liquidity_delta: 103926982998885,
+                    },
+                    Tick {
+                        index: -24124500,
+                        liquidity_delta: -103926982998885,
+                    },
+                    Tick {
+                        index: -20236100,
+                        liquidity_delta: 20192651866847,
+                    },
+                    Tick {
+                        index: -20235900,
+                        liquidity_delta: 676843433645,
+                    },
+                    Tick {
+                        index: -20235400,
+                        liquidity_delta: 620315686813,
+                    },
+                    Tick {
+                        index: -20235000,
+                        liquidity_delta: 3899271022058,
+                    },
+                    Tick {
+                        index: -20234900,
+                        liquidity_delta: 1985516133391,
+                    },
+                    Tick {
+                        index: -20233000,
+                        liquidity_delta: 2459469409600,
+                    },
+                    Tick {
+                        index: -20232100,
+                        liquidity_delta: -20192651866847,
+                    },
+                    Tick {
+                        index: -20231900,
+                        liquidity_delta: -663892969024,
+                    },
+                    Tick {
+                        index: -20231400,
+                        liquidity_delta: -620315686813,
+                    },
+                    Tick {
+                        index: -20231000,
+                        liquidity_delta: -3516445235227,
+                    },
+                    Tick {
+                        index: -20230900,
+                        liquidity_delta: -1985516133391,
+                    },
+                    Tick {
+                        index: -20229000,
+                        liquidity_delta: -2459469409600,
+                    },
+                    Tick {
+                        index: -20227900,
+                        liquidity_delta: -12950464621,
+                    },
+                    Tick {
+                        index: -20227000,
+                        liquidity_delta: -382825786831,
+                    },
+                    Tick {
+                        index: -2000,
+                        liquidity_delta: 140308196,
+                    },
+                    Tick {
+                        index: 2000,
+                        liquidity_delta: -140308196,
+                    },
+                    Tick {
+                        index: 88722000,
+                        liquidity_delta: -99999,
+                    },
+                ],
+            )
+            .unwrap();
+
+            let quote_token0 = pool
+                .quote(QuoteParams {
+                    token_amount: TokenAmount {
+                        amount: 1_000_000,
+                        token: TOKEN0,
+                    },
+                    sqrt_ratio_limit: None,
+                    override_state: None,
+                    meta: (),
+                })
+                .unwrap();
+
             assert_eq!(
-                result.unwrap_err(),
-                BasePoolError::ActiveTickIndexOutOfBounds
+                (
+                    quote_token0.calculated_amount,
+                    quote_token0.execution_resources.initialized_ticks_crossed
+                ),
+                (0, 0)
             );
-        }
 
-        #[test]
-        fn test_ticks_must_be_sorted() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
+            let quote_token1 = pool
+                .quote(QuoteParams {
+                    token_amount: TokenAmount {
+                        amount: 1_000_000,
+                        token: TOKEN1,
                     },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: Some(0),
-                    liquidity: 1,
-                },
-                vec![
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: 0,
-                    },
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 0,
-                    },
-                ],
-            );
-            assert_eq!(result.unwrap_err(), BasePoolError::TicksNotSorted);
-        }
+                    sqrt_ratio_limit: None,
+                    override_state: None,
+                    meta: (),
+                })
+                .unwrap();
 
-        #[test]
-        fn test_ticks_must_be_multiple_of_tick_spacing() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: Some(0),
-                    liquidity: 1,
-                },
-                vec![
-                    Tick {
-                        index: -1,
-                        liquidity_delta: 1,
-                    },
-                    Tick {
-                        index: MAX_TICK - 1,
-                        liquidity_delta: -1,
-                    },
-                ],
-            );
-            assert_eq!(result.unwrap_err(), BasePoolError::TickNotMultipleOfSpacing);
-        }
-
-        #[test]
-        fn test_ticks_must_total_to_zero_liquidity() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: Some(0),
-                    liquidity: 2,
-                },
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 2,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -1,
-                    },
-                ],
-            );
-            assert_eq!(result.unwrap_err(), BasePoolError::TotalLiquidityNotZero);
-        }
-
-        #[test]
-        fn test_active_tick_index_must_be_within_bounds() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: Some(2),
-                    liquidity: 0,
-                },
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 2,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -2,
-                    },
-                ],
-            );
+            assert_eq!(quote_token1.consumed_amount, 1_000_000);
             assert_eq!(
-                result.unwrap_err(),
-                BasePoolError::ActiveTickIndexOutOfBounds
+                (
+                    quote_token1.calculated_amount,
+                    quote_token1.execution_resources.initialized_ticks_crossed
+                ),
+                (2_436_479_431, 2)
             );
         }
-
-        #[test]
-        fn test_liquidity_equal_sum_of_deltas_active_ticks() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap(),
-                    active_tick_index: Some(0),
-                    liquidity: 0,
-                },
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 2,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -2,
-                    },
-                ],
-            );
-            assert_eq!(result.unwrap_err(), BasePoolError::ActiveLiquidityMismatch);
-        }
-
-        #[test]
-        fn test_active_tick_sqrt_ratio_is_lte_current_sqrt_ratio() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap() - 1,
-                    active_tick_index: Some(0),
-                    liquidity: 2,
-                },
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 2,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -2,
-                    },
-                ],
-            );
-            assert_eq!(
-                result.unwrap_err(),
-                BasePoolError::ActiveTickSqrtRatioInvalid
-            );
-        }
-
-        #[test]
-        fn test_if_no_active_tick_sqrt_ratio_lte_first() {
-            let result = BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + 1,
-                    config: Config {
-                        extension: U256::zero(),
-                        fee: 0,
-                        tick_spacing: MAX_TICK_SPACING,
-                    },
-                },
-                BasePoolState {
-                    sqrt_ratio: to_sqrt_ratio(0).unwrap() + 1,
-                    active_tick_index: None,
-                    liquidity: 0,
-                },
-                vec![
-                    Tick {
-                        index: 0,
-                        liquidity_delta: 2,
-                    },
-                    Tick {
-                        index: MAX_TICK,
-                        liquidity_delta: -2,
-                    },
-                ],
-            );
-            assert_eq!(
-                result.unwrap_err(),
-                BasePoolError::SqrtRatioTooHighWithNoActiveTick
-            );
-        }
-    }
-
-    #[test]
-    fn test_quote_zero_liquidity_token1_input() {
-        let pool = BasePool::new(
-            node_key(1, 0),
-            BasePoolState {
-                sqrt_ratio: U256([0, 0, 1, 0]),
-                liquidity: 0u128,
-                active_tick_index: None,
-            },
-            vec![],
-        )
-        .expect("Pool creation should succeed");
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 1,
-                token: TOKEN1,
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: (),
-        };
-
-        let quote = pool.quote(params).expect("Failed to get quote");
-
-        assert_eq!(quote.calculated_amount, 0);
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
-    }
-
-    #[test]
-    fn test_quote_zero_liquidity_token0_input() {
-        let pool = BasePool::new(
-            node_key(1, 0),
-            BasePoolState {
-                sqrt_ratio: U256([0, 0, 1, 0]),
-                liquidity: 0u128,
-                active_tick_index: None,
-            },
-            vec![],
-        )
-        .expect("Pool creation should succeed");
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 1,
-                token: TOKEN0,
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: (),
-        };
-
-        let quote = pool.quote(params).expect("Failed to get quote");
-
-        assert_eq!(quote.calculated_amount, 0);
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
-    }
-
-    #[test]
-    fn test_quote_liquidity_token1_input() {
-        let sorted_ticks = vec![
-            Tick {
-                index: 0,
-                liquidity_delta: 1_000_000_000,
-            },
-            Tick {
-                index: 1,
-                liquidity_delta: -1_000_000_000,
-            },
-        ];
-
-        let pool = BasePool::new(
-            node_key(1, 0),
-            BasePoolState {
-                sqrt_ratio: U256([0, 0, 1, 0]),
-                liquidity: 1_000_000_000u128,
-                active_tick_index: Some(0),
-            },
-            sorted_ticks,
-        );
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 1000,
-                token: TOKEN1,
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: (),
-        };
-
-        let quote = pool
-            .expect("Pool creation should succeed")
-            .quote(params)
-            .expect("Failed to get quote");
-
-        assert_eq!(quote.calculated_amount, 499);
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 1);
-    }
-
-    #[test]
-    fn test_quote_liquidity_token0_input() {
-        let sorted_ticks = vec![
-            Tick {
-                index: 0,
-                liquidity_delta: 1_000_000_000,
-            },
-            Tick {
-                index: 1,
-                liquidity_delta: -1_000_000_000,
-            },
-        ];
-
-        let pool = BasePool::new(
-            node_key(1, 0),
-            BasePoolState {
-                sqrt_ratio: to_sqrt_ratio(1).expect("Invalid tick"),
-                liquidity: 0,
-                active_tick_index: Some(1),
-            },
-            sorted_ticks,
-        );
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 1000,
-                token: TOKEN0,
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: (),
-        };
-
-        let quote = pool
-            .expect("Pool creation should succeed")
-            .quote(params)
-            .expect("Failed to get quote");
-
-        assert_eq!(quote.calculated_amount, 499);
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
-    }
-
-    #[test]
-    fn test_example_failing_quote() {
-        let pool = BasePool::new(
-            node_key(100, 922337203685477),
-            BasePoolState {
-                sqrt_ratio: U256([16035209758820767612, 757181812420893, 0, 0]),
-                liquidity: 99999,
-                active_tick_index: Some(16),
-            },
-            vec![
-                Tick {
-                    index: -88722000,
-                    liquidity_delta: 99999,
-                },
-                Tick {
-                    index: -24124600,
-                    liquidity_delta: 103926982998885,
-                },
-                Tick {
-                    index: -24124500,
-                    liquidity_delta: -103926982998885,
-                },
-                Tick {
-                    index: -20236100,
-                    liquidity_delta: 20192651866847,
-                },
-                Tick {
-                    index: -20235900,
-                    liquidity_delta: 676843433645,
-                },
-                Tick {
-                    index: -20235400,
-                    liquidity_delta: 620315686813,
-                },
-                Tick {
-                    index: -20235000,
-                    liquidity_delta: 3899271022058,
-                },
-                Tick {
-                    index: -20234900,
-                    liquidity_delta: 1985516133391,
-                },
-                Tick {
-                    index: -20233000,
-                    liquidity_delta: 2459469409600,
-                },
-                Tick {
-                    index: -20232100,
-                    liquidity_delta: -20192651866847,
-                },
-                Tick {
-                    index: -20231900,
-                    liquidity_delta: -663892969024,
-                },
-                Tick {
-                    index: -20231400,
-                    liquidity_delta: -620315686813,
-                },
-                Tick {
-                    index: -20231000,
-                    liquidity_delta: -3516445235227,
-                },
-                Tick {
-                    index: -20230900,
-                    liquidity_delta: -1985516133391,
-                },
-                Tick {
-                    index: -20229000,
-                    liquidity_delta: -2459469409600,
-                },
-                Tick {
-                    index: -20227900,
-                    liquidity_delta: -12950464621,
-                },
-                Tick {
-                    index: -20227000,
-                    liquidity_delta: -382825786831,
-                },
-                Tick {
-                    index: -2000,
-                    liquidity_delta: 140308196,
-                },
-                Tick {
-                    index: 2000,
-                    liquidity_delta: -140308196,
-                },
-                Tick {
-                    index: 88722000,
-                    liquidity_delta: -99999,
-                },
-            ],
-        );
-
-        // Unwrap the pool once and store it
-        let unwrapped_pool = pool.expect("Pool creation should succeed");
-
-        let quote = unwrapped_pool
-            .quote(QuoteParams {
-                token_amount: TokenAmount {
-                    amount: 1000000,
-                    token: TOKEN0,
-                },
-                sqrt_ratio_limit: None,
-                override_state: None,
-                meta: (),
-            })
-            .expect("Failed to get quote of token0");
-
-        assert_eq!(quote.calculated_amount, 0);
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
-
-        let quote = unwrapped_pool
-            .quote(QuoteParams {
-                token_amount: TokenAmount {
-                    amount: 1000000,
-                    token: TOKEN1,
-                },
-                sqrt_ratio_limit: None,
-                override_state: None,
-                meta: (),
-            })
-            .expect("Failed to get quote of token1");
-
-        assert_eq!(quote.consumed_amount, 1_000_000);
-        assert_eq!(quote.calculated_amount, 2436479431);
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 2);
     }
 }

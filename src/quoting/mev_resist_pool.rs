@@ -1,4 +1,12 @@
-use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams};
+use num_traits::Zero;
+
+use crate::{
+    chain::Chain,
+    quoting::{
+        base_pool::{BasePoolTypeConfig, TickSpacing},
+        types::{BlockTimestamp, Config, Pool, PoolKey, Quote, QuoteParams},
+    },
+};
 use crate::{
     chain::Evm,
     math::swap::{amount_before_fee, compute_fee},
@@ -79,19 +87,24 @@ impl MEVResistPool {
         last_update_time: u32,
         tick: i32,
     ) -> Result<Self, MEVResistPoolError> {
-        let key = base_pool.get_key();
-        if key.config.fee == 0 {
+        let Config {
+            fee,
+            pool_type_config: TickSpacing(tick_spacing),
+            extension,
+        } = base_pool.key().config;
+
+        if fee.is_zero() {
             return Err(MEVResistPoolError::FeeMustBeGreaterThanZero);
         }
-        if key.config.tick_spacing == Evm::FULL_RANGE_TICK_SPACING {
+        if tick_spacing == Evm::FULL_RANGE_TICK_SPACING {
             return Err(MEVResistPoolError::CannotBeFullRange);
         }
-        if key.config.extension.is_zero() {
+        if extension.is_zero() {
             return Err(MEVResistPoolError::MissingExtension);
         }
 
         // validates that the current tick is between the active tick and the active tick index + 1
-        if let Some(i) = base_pool.get_state().active_tick_index {
+        if let Some(i) = base_pool.state().active_tick_index {
             let sorted_ticks = base_pool.get_sorted_ticks();
             if let Some(t) = sorted_ticks.get(i) {
                 if t.index > tick {
@@ -124,14 +137,15 @@ impl Pool<Evm> for MEVResistPool {
     type State = MEVResistPoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = BlockTimestamp;
+    type PoolTypeConfig = BasePoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey<Evm> {
-        self.base_pool.get_key()
+    fn key(&self) -> PoolKey<<Evm as Chain>::Fee, Self::PoolTypeConfig> {
+        self.base_pool.key()
     }
 
-    fn get_state(&self) -> Self::State {
+    fn state(&self) -> Self::State {
         MEVResistPoolState {
-            base_pool_state: self.base_pool.get_state(),
+            base_pool_state: self.base_pool.state(),
             last_update_time: self.last_update_time,
         }
     }
@@ -151,9 +165,9 @@ impl Pool<Evm> for MEVResistPool {
 
                 let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
 
-                let pool_config = self.base_pool.get_key().config;
+                let pool_config = self.base_pool.key().config;
                 let approximate_fee_multiplier = (((tick_after_swap - self.tick).abs() + 1) as f64)
-                    / (pool_config.tick_spacing as f64);
+                    / (pool_config.pool_type_config.0 as f64);
 
                 let fixed_point_additional_fee: u64 =
                     ((approximate_fee_multiplier * pool_config.fee as f64).round() as u128)
@@ -239,273 +253,221 @@ impl PoolState for MEVResistPoolState {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
-
+    use super::*;
     use crate::{
         math::{tick::to_sqrt_ratio, uint::U256},
-        quoting::{
-            base_pool::{BasePool, BasePoolState},
-            mev_resist_pool::MEVResistPool,
-            types::{Config, NodeKey, Pool, QuoteParams, Tick, TokenAmount},
-        },
+        quoting::types::{Config, Pool, PoolKey, QuoteParams, Tick, TokenAmount},
     };
+    use alloc::vec::Vec;
 
-    #[test]
-    fn test_swap_input_amount_token0() {
-        let liquidity: i128 = 28_898_102;
-        let pool = MEVResistPool::new(
+    const TOKEN_A: U256 = U256([1, 0, 0, 0]);
+    const TOKEN_B: U256 = U256([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256::one();
+    const DEFAULT_FEE: u64 = ((1u128 << 64) / 100) as u64;
+    const DEFAULT_TICK_SPACING: u32 = 20_000;
+
+    fn ticks(entries: &[(i32, i128)]) -> Vec<Tick> {
+        entries
+            .iter()
+            .map(|(index, delta)| Tick {
+                index: *index,
+                liquidity_delta: *delta,
+            })
+            .collect()
+    }
+
+    fn build_pool(
+        token0: U256,
+        token1: U256,
+        fee: u64,
+        tick_spacing: u32,
+        sqrt_ratio: U256,
+        liquidity: i128,
+        last_update_time: u32,
+        tick: i32,
+        tick_entries: &[(i32, i128)],
+    ) -> MEVResistPool {
+        MEVResistPool::new(
             BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + U256::one(),
+                PoolKey {
+                    token0,
+                    token1,
                     config: Config {
-                        fee: ((1_u128 << 64) / 100) as u64,
-                        tick_spacing: 20_000,
-                        extension: U256::one(),
+                        fee,
+                        pool_type_config: TickSpacing(tick_spacing),
+                        extension: EXTENSION,
                     },
                 },
                 BasePoolState {
                     active_tick_index: Some(0),
                     liquidity: liquidity as u128,
-                    sqrt_ratio: to_sqrt_ratio(700_000).unwrap(),
+                    sqrt_ratio,
                 },
-                vec![
-                    Tick {
-                        index: 600_000,
-                        liquidity_delta: liquidity,
-                    },
-                    Tick {
-                        index: 800_000,
-                        liquidity_delta: -liquidity,
-                    },
-                ],
+                ticks(tick_entries),
             )
             .unwrap(),
-            1,
-            700_000,
+            last_update_time,
+            tick,
         )
-        .unwrap();
+        .unwrap()
+    }
 
-        let result = pool
+    fn default_pool(liquidity: i128, sqrt_ratio: U256, tick: i32) -> MEVResistPool {
+        build_pool(
+            TOKEN_A,
+            TOKEN_B,
+            DEFAULT_FEE,
+            DEFAULT_TICK_SPACING,
+            sqrt_ratio,
+            liquidity,
+            1,
+            tick,
+            &[(600_000, liquidity), (800_000, -liquidity)],
+        )
+    }
+
+    #[test]
+    fn swap_input_amount_token0() {
+        let liquidity = 28_898_102;
+        let pool = default_pool(liquidity, to_sqrt_ratio::<Evm>(700_000).unwrap(), 700_000);
+
+        let quote = pool
             .quote(QuoteParams {
                 meta: 1,
                 override_state: None,
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: 100_000,
-                    token: U256::one(),
+                    token: TOKEN_A,
                 },
             })
             .unwrap();
 
         assert_eq!(
-            (result.consumed_amount, result.calculated_amount),
-            (100_000, 197_432)
+            (
+                quote.consumed_amount,
+                quote.calculated_amount,
+                quote.state_after.last_update_time
+            ),
+            (100_000, 197_432, 1)
         );
-        assert_eq!(result.state_after.last_update_time, 1);
 
-        // two swaps
-        let mut result = pool
+        let first = pool
             .quote(QuoteParams {
                 meta: 1,
                 override_state: None,
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: 300_000,
-                    token: U256::one(),
+                    token: TOKEN_A,
                 },
             })
             .unwrap();
-        result = pool
+        let second = pool
             .quote(QuoteParams {
                 meta: 1,
-                override_state: Some(result.state_after),
+                override_state: Some(first.state_after),
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: 300_000,
-                    token: U256::one(),
+                    token: TOKEN_A,
                 },
             })
             .unwrap();
+
         assert_eq!(
-            (result.consumed_amount, result.calculated_amount),
+            (second.consumed_amount, second.calculated_amount),
             (300_000, 556_308)
         );
     }
 
     #[test]
-    fn test_swap_output_amount_token0() {
-        let liquidity: i128 = 28_898_102;
-        let pool = MEVResistPool::new(
-            BasePool::new(
-                NodeKey {
-                    token0: U256::one(),
-                    token1: U256::one() + U256::one(),
-                    config: Config {
-                        fee: ((1_u128 << 64) / 100) as u64,
-                        tick_spacing: 20_000,
-                        extension: U256::one(),
-                    },
-                },
-                BasePoolState {
-                    active_tick_index: Some(0),
-                    liquidity: liquidity as u128,
-                    sqrt_ratio: to_sqrt_ratio(700_000).unwrap(),
-                },
-                vec![
-                    Tick {
-                        index: 600_000,
-                        liquidity_delta: liquidity,
-                    },
-                    Tick {
-                        index: 800_000,
-                        liquidity_delta: -liquidity,
-                    },
-                ],
-            )
-            .unwrap(),
-            1,
-            700_000,
-        )
-        .unwrap();
+    fn swap_output_amount_token0() {
+        let liquidity = 28_898_102;
+        let pool = default_pool(liquidity, to_sqrt_ratio::<Evm>(700_000).unwrap(), 700_000);
 
-        let result = pool
+        let quote = pool
             .quote(QuoteParams {
                 meta: 1,
                 override_state: None,
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: -100_000,
-                    token: U256::one(),
+                    token: TOKEN_A,
                 },
             })
             .unwrap();
 
         assert_eq!(
-            (result.consumed_amount, result.calculated_amount),
-            (-100_000, 205_416)
-        );
-        assert_eq!(result.state_after.last_update_time, 1);
-    }
-
-    #[test]
-    fn test_swap_example_mainnet() {
-        let liquidity: i128 = 187957823162863064741;
-        let tick: i32 = 8015514;
-        let fee: u64 = 9223372036854775;
-        let tick_spacing: u32 = 1000;
-
-        let pool = MEVResistPool::new(
-            BasePool::new(
-                NodeKey {
-                    token0: U256::zero(),
-                    token1: U256::one(),
-                    config: Config {
-                        fee: fee,
-                        tick_spacing: tick_spacing,
-                        extension: U256::one(),
-                    },
-                },
-                BasePoolState {
-                    active_tick_index: Some(0),
-                    liquidity: liquidity as u128,
-                    sqrt_ratio: U256::from_dec_str("18723430188006331344089883003460461264896")
-                        .unwrap(),
-                },
-                vec![
-                    Tick {
-                        index: 7755000,
-                        liquidity_delta: liquidity,
-                    },
-                    Tick {
-                        index: 8267000,
-                        liquidity_delta: -liquidity,
-                    },
-                ],
-            )
-            .unwrap(),
-            1,
-            tick,
-        )
-        .unwrap();
-
-        let specified_amount: i128 = 1000000000000000;
-        let result = pool
-            .quote(QuoteParams {
-                meta: 2,
-                override_state: None,
-                sqrt_ratio_limit: None,
-                token_amount: TokenAmount {
-                    amount: specified_amount,
-                    token: U256::zero(),
-                },
-            })
-            .unwrap();
-
-        assert_eq!(
-            (result.consumed_amount, result.calculated_amount),
-            (specified_amount, 3024269006844199936)
-        );
-
-        let specified_amount: i128 = 5000000000000000;
-        let result = pool
-            .quote(QuoteParams {
-                meta: 2,
-                override_state: None,
-                sqrt_ratio_limit: None,
-                token_amount: TokenAmount {
-                    amount: specified_amount,
-                    token: U256::zero(),
-                },
-            })
-            .unwrap();
-
-        assert_eq!(
-            (result.consumed_amount, result.calculated_amount),
-            (specified_amount, 15086011739862955657)
+            (
+                quote.consumed_amount,
+                quote.calculated_amount,
+                quote.state_after.last_update_time
+            ),
+            (-100_000, 205_416, 1)
         );
     }
 
     #[test]
-    fn test_swap_example_mainnet_split_trade() {
-        let liquidity: i128 = 187957823162863064741;
-        let tick: i32 = 8092285;
-        let fee: u64 = 9223372036854775;
-        let tick_spacing: u32 = 1000;
+    fn swap_example_mainnet() {
+        let liquidity = 187_957_823_162_863_064_741;
+        let fee = 9_223_372_036_854_775;
+        let tick_spacing = 1_000;
+        let tick = 8_015_514;
 
-        let pool = MEVResistPool::new(
-            BasePool::new(
-                NodeKey {
-                    token0: U256::zero(),
-                    token1: U256::one(),
-                    config: Config {
-                        fee: fee,
-                        tick_spacing: tick_spacing,
-                        extension: U256::one(),
-                    },
-                },
-                BasePoolState {
-                    active_tick_index: Some(0),
-                    liquidity: liquidity as u128,
-                    sqrt_ratio: U256::from_dec_str("19456111242847136401729567804224169836544")
-                        .unwrap(),
-                },
-                vec![
-                    Tick {
-                        index: 7755000,
-                        liquidity_delta: liquidity,
-                    },
-                    Tick {
-                        index: 8267000,
-                        liquidity_delta: -liquidity,
-                    },
-                ],
-            )
-            .unwrap(),
+        let pool = build_pool(
+            U256::zero(),
+            U256::one(),
+            fee,
+            tick_spacing,
+            U256::from_dec_str("18723430188006331344089883003460461264896").unwrap(),
+            liquidity,
             1,
             tick,
-        )
-        .unwrap();
+            &[(7_755_000, liquidity), (8_267_000, -liquidity)],
+        );
+
+        for (amount, expected) in [
+            (1_000_000_000_000_000, 3_024_269_006_844_199_936),
+            (5_000_000_000_000_000, 15_086_011_739_862_955_657),
+        ] {
+            let quote = pool
+                .quote(QuoteParams {
+                    meta: 2,
+                    override_state: None,
+                    sqrt_ratio_limit: None,
+                    token_amount: TokenAmount {
+                        amount,
+                        token: U256::zero(),
+                    },
+                })
+                .unwrap();
+
+            assert_eq!(
+                (quote.consumed_amount, quote.calculated_amount),
+                (amount, expected)
+            );
+        }
+    }
+
+    #[test]
+    fn swap_example_mainnet_split_trade() {
+        let liquidity = 187_957_823_162_863_064_741;
+        let fee = 9_223_372_036_854_775;
+        let tick_spacing = 1_000;
+        let tick = 8_092_285;
+
+        let pool = build_pool(
+            U256::zero(),
+            U256::one(),
+            fee,
+            tick_spacing,
+            U256::from_dec_str("19456111242847136401729567804224169836544").unwrap(),
+            liquidity,
+            1,
+            tick,
+            &[(7_755_000, liquidity), (8_267_000, -liquidity)],
+        );
 
         let sqrt_ratio_limit = Some(U256::from_dec_str("18447191164202170524").unwrap());
 
@@ -515,7 +477,7 @@ mod tests {
                 override_state: None,
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
-                    amount: 125000000000000000,
+                    amount: 125_000_000_000_000_000,
                     token: U256::zero(),
                 },
             })
@@ -523,7 +485,7 @@ mod tests {
 
         assert_eq!(
             (result0.consumed_amount, result0.calculated_amount),
-            (125000000000000000, 378805738986174441222) // 378805738986174437170 is actual
+            (125_000_000_000_000_000, 378_805_738_986_174_441_222)
         );
 
         let result1 = pool
@@ -532,7 +494,7 @@ mod tests {
                 override_state: Some(result0.state_after),
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
-                    amount: 50000000000000000,
+                    amount: 50_000_000_000_000_000,
                     token: U256::zero(),
                 },
             })
@@ -540,7 +502,7 @@ mod tests {
 
         assert_eq!(
             (result1.consumed_amount, result1.calculated_amount),
-            (50000000000000000, 141694588268248470538) // 141694588268248472157 is actual
+            (50_000_000_000_000_000, 141_694_588_268_248_470_538)
         );
 
         let result2 = pool
@@ -549,7 +511,7 @@ mod tests {
                 override_state: Some(result1.state_after),
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
-                    amount: 12500000000000000,
+                    amount: 12_500_000_000_000_000,
                     token: U256::zero(),
                 },
             })
@@ -557,7 +519,7 @@ mod tests {
 
         assert_eq!(
             (result2.consumed_amount, result2.calculated_amount),
-            (12500000000000000, 34654649033984065500) // 34654649033984065687 is actual
+            (12_500_000_000_000_000, 34_654_649_033_984_065_500)
         );
 
         let result3 = pool
@@ -566,7 +528,7 @@ mod tests {
                 override_state: Some(result2.state_after),
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
-                    amount: 12500000000000000,
+                    amount: 12_500_000_000_000_000,
                     token: U256::zero(),
                 },
             })
@@ -574,7 +536,7 @@ mod tests {
 
         assert_eq!(
             (result3.consumed_amount, result3.calculated_amount),
-            (12500000000000000, 34275601333991479466) // 34275601333991479737 is actual
+            (12_500_000_000_000_000, 34_275_601_333_991_479_466)
         );
     }
 }

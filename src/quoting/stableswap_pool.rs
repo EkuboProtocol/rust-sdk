@@ -1,0 +1,503 @@
+use crate::math::uint::U256;
+use crate::{
+    chain::Chain,
+    math::tick::to_sqrt_ratio,
+    quoting::{
+        full_range_pool::FullRangePoolState,
+        types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount},
+    },
+};
+use crate::{
+    chain::Evm,
+    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+};
+use core::ops::Not;
+use derive_more::{Add, AddAssign, Sub, SubAssign};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StableswapPoolTypeConfig {
+    pub center_tick: i32,
+    pub amplification_factor: u8,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum StableswapPoolQuoteError {
+    InvalidToken,
+    InvalidSqrtRatioLimit,
+    InvalidTick(i32),
+    FailedComputeSwapStep(ComputeStepError),
+}
+
+pub type StableswapPoolKey<C> = PoolKey<<C as Chain>::Fee, StableswapPoolTypeConfig>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StableswapPool {
+    key: PoolKey<<Evm as Chain>::Fee, StableswapPoolTypeConfig>,
+    state: FullRangePoolState,
+
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
+    lower_price: U256,
+    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
+    upper_price: U256,
+}
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Add, AddAssign, Sub, SubAssign)]
+pub struct StableswapPoolResources {
+    pub no_override_price_change: u32,
+    pub initialized_ticks_crossed: u32,
+}
+
+/// Errors that can occur when constructing a FullRangePool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum StableswapPoolError {
+    /// Token0 must be less than token1.
+    TokenOrderInvalid,
+    SqrtRatioInvalid,
+}
+
+impl StableswapPool {
+    pub fn new(
+        key: StableswapPoolKey<Evm>,
+        state: FullRangePoolState,
+    ) -> Result<Self, StableswapPoolError> {
+        let PoolKey {
+            token0,
+            token1,
+            config,
+        } = key;
+
+        let StableswapPoolTypeConfig {
+            center_tick,
+            amplification_factor,
+        } = config.pool_type_config;
+
+        if token0 >= token1 {
+            return Err(StableswapPoolError::TokenOrderInvalid);
+        }
+
+        if state.sqrt_ratio < Evm::MIN_SQRT_RATIO || state.sqrt_ratio > Evm::MAX_SQRT_RATIO {
+            return Err(StableswapPoolError::SqrtRatioInvalid);
+        }
+
+        if center_tick < Evm::MIN_TICK || center_tick > Evm::MAX_TICK {
+            return Err(todo!());
+        }
+
+        if amplification_factor > Evm::MAX_STABLESWAP_AMPLIFICATION_FACTOR {
+            return Err(todo!());
+        }
+
+        let liquidity_width = Evm::MAX_TICK >> amplification_factor;
+
+        Ok(Self {
+            key,
+            state: FullRangePoolState {
+                sqrt_ratio: state.sqrt_ratio,
+                liquidity: state.liquidity,
+            },
+            lower_price: {
+                let lower_tick = center_tick - liquidity_width;
+
+                if lower_tick > Evm::MIN_TICK {
+                    to_sqrt_ratio::<Evm>(lower_tick).unwrap()
+                } else {
+                    Evm::MIN_SQRT_RATIO
+                }
+            },
+            upper_price: {
+                let upper_tick = center_tick + liquidity_width;
+
+                if upper_tick < Evm::MAX_TICK {
+                    to_sqrt_ratio::<Evm>(upper_tick).unwrap()
+                } else {
+                    Evm::MAX_SQRT_RATIO
+                }
+            },
+        })
+    }
+}
+
+impl Pool<Evm> for StableswapPool {
+    type Resources = StableswapPoolResources;
+    type State = FullRangePoolState;
+    type QuoteError = StableswapPoolQuoteError;
+    type Meta = ();
+    type PoolTypeConfig = StableswapPoolTypeConfig;
+
+    fn key(&self) -> PoolKey<<Evm as Chain>::Fee, Self::PoolTypeConfig> {
+        self.key
+    }
+
+    fn state(&self) -> Self::State {
+        self.state
+    }
+
+    fn quote(
+        &self,
+        params: QuoteParams<Self::State, Self::Meta>,
+    ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
+        let TokenAmount { amount, token } = params.token_amount;
+        let is_token1 = token == self.key.token1;
+
+        if !is_token1 && token != self.key.token0 {
+            return Err(StableswapPoolQuoteError::InvalidToken);
+        }
+
+        let FullRangePoolState {
+            mut sqrt_ratio,
+            liquidity,
+        } = params.override_state.unwrap_or(self.state);
+
+        let increasing = is_price_increasing(amount, is_token1);
+
+        let sqrt_ratio_limit = if let Some(limit) = params.sqrt_ratio_limit {
+            if increasing && limit < sqrt_ratio {
+                return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
+            }
+            if !increasing && limit > sqrt_ratio {
+                return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
+            }
+            if limit < Evm::MIN_SQRT_RATIO {
+                return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
+            }
+            if limit > Evm::MAX_SQRT_RATIO {
+                return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
+            }
+            limit
+        } else {
+            if increasing {
+                Evm::MAX_SQRT_RATIO
+            } else {
+                Evm::MIN_SQRT_RATIO
+            }
+        };
+
+        let mut calculated_amount = 0;
+        let mut fees_paid = 0;
+        let mut initialized_ticks_crossed = 0;
+        let mut amount_remaining = amount;
+        let starting_sqrt_ratio = sqrt_ratio;
+
+        while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
+            let mut step_liquidity = liquidity;
+            let in_range = sqrt_ratio < self.upper_price && sqrt_ratio > self.lower_price;
+
+            let next_tick_sqrt_ratio = if in_range {
+                Some(if increasing {
+                    self.upper_price
+                } else {
+                    self.lower_price
+                })
+            } else {
+                step_liquidity = 0;
+
+                if sqrt_ratio <= self.lower_price {
+                    increasing.then_some(self.lower_price)
+                } else {
+                    increasing.not().then_some(self.upper_price)
+                }
+            };
+
+            let step_sqrt_ratio_limit = next_tick_sqrt_ratio
+                .filter(|&next_tick_sqrt_ratio| {
+                    (next_tick_sqrt_ratio < sqrt_ratio_limit) == increasing
+                })
+                .unwrap_or(sqrt_ratio_limit);
+
+            let step = compute_step::<Evm>(
+                sqrt_ratio,
+                step_liquidity,
+                step_sqrt_ratio_limit,
+                amount_remaining,
+                is_token1,
+                self.key.config.fee,
+            )
+            .map_err(StableswapPoolQuoteError::FailedComputeSwapStep)?;
+
+            amount_remaining -= step.consumed_amount;
+            calculated_amount += step.calculated_amount;
+            fees_paid += step.fee_amount;
+            sqrt_ratio = step.sqrt_ratio_next;
+
+            if next_tick_sqrt_ratio
+                .is_some_and(|next_tick_sqrt_ratio| next_tick_sqrt_ratio == sqrt_ratio)
+            {
+                initialized_ticks_crossed += 1;
+            }
+        }
+
+        let resources = StableswapPoolResources {
+            no_override_price_change: u32::from(
+                starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
+            ),
+            initialized_ticks_crossed,
+        };
+
+        Ok(Quote {
+            is_price_increasing: increasing,
+            consumed_amount: amount - amount_remaining,
+            calculated_amount,
+            execution_resources: resources,
+            state_after: FullRangePoolState {
+                sqrt_ratio,
+                liquidity,
+            },
+            fees_paid,
+        })
+    }
+
+    // Checks if the pool has any liquidity
+    fn has_liquidity(&self) -> bool {
+        self.state.liquidity > 0
+    }
+
+    // For full range pools, if there's liquidity, then the max tick is MAX_TICK
+    fn max_tick_with_liquidity(&self) -> Option<i32> {
+        self.has_liquidity().then_some(Evm::MAX_TICK)
+    }
+
+    // For full range pools, if there's liquidity, then the min tick is MIN_TICK
+    fn min_tick_with_liquidity(&self) -> Option<i32> {
+        self.has_liquidity().then_some(Evm::MIN_TICK)
+    }
+
+    fn is_path_dependent(&self) -> bool {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        math::{
+            delta::{amount0_delta, amount1_delta},
+            tick::to_sqrt_ratio,
+            uint::U256,
+        },
+        quoting::types::{Config, Quote, QuoteParams, TokenAmount},
+    };
+
+    const TOKEN0: U256 = U256([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256::zero();
+    const POSITION_AMOUNT: u128 = 1_000_000_000_000_000_000;
+    const SMALL_AMOUNT: i128 = 1_000_000_000_000_000;
+
+    fn key(center_tick: i32, amplification_factor: u8) -> StableswapPoolKey<Evm> {
+        PoolKey {
+            token0: TOKEN0,
+            token1: TOKEN1,
+            config: Config {
+                extension: EXTENSION,
+                fee: 0,
+                pool_type_config: StableswapPoolTypeConfig {
+                    center_tick,
+                    amplification_factor,
+                },
+            },
+        }
+    }
+
+    fn state(tick: i32, liquidity: u128) -> FullRangePoolState {
+        FullRangePoolState {
+            sqrt_ratio: to_sqrt_ratio::<Evm>(tick).unwrap(),
+            liquidity,
+        }
+    }
+
+    fn build_pool(center_tick: i32, amplification: u8, current_tick: i32) -> StableswapPool {
+        let liquidity = minted_liquidity(center_tick, amplification, current_tick);
+        StableswapPool::new(
+            key(center_tick, amplification),
+            state(current_tick, liquidity),
+        )
+        .unwrap()
+    }
+
+    fn active_range(center_tick: i32, amplification: u8) -> (i32, i32) {
+        let width = Evm::MAX_TICK >> amplification;
+        let lower = center_tick.saturating_sub(width).max(Evm::MIN_TICK);
+        let upper = center_tick.saturating_add(width).min(Evm::MAX_TICK);
+        (lower, upper)
+    }
+
+    fn minted_liquidity(center_tick: i32, amplification: u8, current_tick: i32) -> u128 {
+        let (lower_tick, upper_tick) = active_range(center_tick, amplification);
+        let sqrt_lower = to_sqrt_ratio::<Evm>(lower_tick).unwrap();
+        let sqrt_upper = to_sqrt_ratio::<Evm>(upper_tick).unwrap();
+        let sqrt_current = to_sqrt_ratio::<Evm>(current_tick).unwrap();
+
+        let mut low = 0u128;
+        let mut high = u128::MAX;
+        while low < high {
+            let mid = low + (high - low) / 2 + 1;
+            if within_budget(mid, sqrt_lower, sqrt_upper, sqrt_current) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        low
+    }
+
+    fn within_budget(
+        liquidity: u128,
+        sqrt_lower: U256,
+        sqrt_upper: U256,
+        sqrt_current: U256,
+    ) -> bool {
+        if let Some((needed0, needed1)) =
+            required_amounts(liquidity, sqrt_lower, sqrt_upper, sqrt_current)
+        {
+            needed0 <= POSITION_AMOUNT && needed1 <= POSITION_AMOUNT
+        } else {
+            false
+        }
+    }
+
+    fn required_amounts(
+        liquidity: u128,
+        sqrt_lower: U256,
+        sqrt_upper: U256,
+        sqrt_current: U256,
+    ) -> Option<(u128, u128)> {
+        if sqrt_current <= sqrt_lower {
+            let needed0 = amount0_delta(sqrt_lower, sqrt_upper, liquidity, true).ok()?;
+            Some((needed0, 0))
+        } else if sqrt_current >= sqrt_upper {
+            let needed1 = amount1_delta(sqrt_lower, sqrt_upper, liquidity, true).ok()?;
+            Some((0, needed1))
+        } else {
+            let needed0 = amount0_delta(sqrt_current, sqrt_upper, liquidity, true).ok()?;
+            let needed1 = amount1_delta(sqrt_lower, sqrt_current, liquidity, true).ok()?;
+            Some((needed0, needed1))
+        }
+    }
+
+    fn quote_amount(
+        pool: &StableswapPool,
+        token: U256,
+        amount: i128,
+    ) -> Quote<StableswapPoolResources, FullRangePoolState> {
+        pool.quote(QuoteParams {
+            token_amount: TokenAmount { token, amount },
+            sqrt_ratio_limit: None,
+            override_state: None,
+            meta: (),
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn amplification_26_token0_in() {
+        let pool = build_pool(0, 26, 0);
+
+        let quote = quote_amount(&pool, TOKEN0, SMALL_AMOUNT);
+
+        assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
+        assert_eq!(quote.calculated_amount, 999_999_999_500_000);
+    }
+
+    #[test]
+    fn amplification_26_token1_in() {
+        let pool = build_pool(0, 26, 0);
+
+        let quote = quote_amount(&pool, TOKEN1, SMALL_AMOUNT);
+
+        assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
+        assert_eq!(quote.calculated_amount, 999_999_999_500_000);
+    }
+
+    #[test]
+    fn amplification_1_token0_in() {
+        let pool = build_pool(0, 1, 0);
+
+        let quote = quote_amount(&pool, TOKEN0, SMALL_AMOUNT);
+
+        assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
+        assert_eq!(quote.calculated_amount, 999_000_999_001_231);
+    }
+
+    #[test]
+    fn amplification_1_token1_in() {
+        let pool = build_pool(0, 1, 0);
+
+        let quote = quote_amount(&pool, TOKEN1, SMALL_AMOUNT);
+
+        assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
+        assert_eq!(quote.calculated_amount, 999_000_999_001_231);
+    }
+
+    #[test]
+    fn outside_range_has_no_liquidity() {
+        let amplification = 10;
+        let (_, upper) = active_range(0, amplification);
+        let outside_tick = (upper + 1_000).min(Evm::MAX_TICK);
+        let pool = StableswapPool::new(
+            key(0, amplification),
+            state(
+                outside_tick,
+                minted_liquidity(0, amplification, outside_tick),
+            ),
+        )
+        .unwrap();
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    token: TOKEN1,
+                    amount: SMALL_AMOUNT,
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+                meta: (),
+            })
+            .unwrap();
+
+        assert_eq!(quote.consumed_amount, 0);
+        assert_eq!(quote.calculated_amount, 0);
+        assert!(quote.state_after.sqrt_ratio >= pool.upper_price);
+    }
+
+    #[test]
+    fn swap_through_range_boundary() {
+        let amplification = 10;
+        let (lower, upper) = active_range(0, amplification);
+        let start_tick = upper - 100;
+        let pool = build_pool(0, amplification, start_tick);
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    token: TOKEN0,
+                    amount: 1_000_000_000_000_000_000i128,
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+                meta: (),
+            })
+            .unwrap();
+
+        assert!(quote.consumed_amount > 0);
+        assert!(quote.calculated_amount > 0);
+        assert!(quote.state_after.sqrt_ratio <= to_sqrt_ratio::<Evm>(lower + 10).unwrap());
+        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
+    }
+
+    #[test]
+    fn inside_range_has_liquidity() {
+        let amplification = 10;
+        let (lower, upper) = active_range(0, amplification);
+        let mid_tick = (lower + upper) / 2;
+        let pool = build_pool(0, amplification, mid_tick);
+
+        let quote = quote_amount(&pool, TOKEN0, SMALL_AMOUNT);
+
+        assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
+        assert!(quote.calculated_amount > 0);
+        assert!(quote.calculated_amount < SMALL_AMOUNT as u128);
+    }
+}

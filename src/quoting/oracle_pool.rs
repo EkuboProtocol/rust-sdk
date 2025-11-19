@@ -1,15 +1,9 @@
-use crate::quoting::types::Config;
-use crate::quoting::types::{BlockTimestamp, NodeKey, Pool, Quote, QuoteParams, Tick};
-use crate::quoting::{
-    base_pool::{BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState},
-    full_range_pool::FullRangePool,
-};
+use crate::quoting::types::{BlockTimestamp, Pool, PoolKey, Quote, QuoteParams};
 use crate::{math::uint::U256, quoting::types::PoolState};
-use alloc::vec;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
-use num_traits::{ToPrimitive, Zero};
+use num_traits::Zero;
 
-use crate::chain::{Chain, Starknet};
+use crate::chain::Chain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -98,14 +92,15 @@ impl<C: Chain> Pool<C> for OraclePool<C> {
     type State = OraclePoolState<<C::FullRangePool as Pool<C>>::State>;
     type QuoteError = <C::FullRangePool as Pool<C>>::QuoteError;
     type Meta = BlockTimestamp;
+    type PoolTypeConfig = <C::FullRangePool as Pool<C>>::PoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey<C> {
-        self.full_range_pool.get_key()
+    fn key(&self) -> PoolKey<C::Fee, Self::PoolTypeConfig> {
+        self.full_range_pool.key()
     }
 
-    fn get_state(&self) -> Self::State {
+    fn state(&self) -> Self::State {
         OraclePoolState {
-            full_range_pool_state: self.full_range_pool.get_state(),
+            full_range_pool_state: self.full_range_pool.state(),
             last_snapshot_time: self.last_snapshot_time,
         }
     }
@@ -171,125 +166,135 @@ impl<S: PoolState> PoolState for OraclePoolState<S> {
 
 #[cfg(test)]
 mod tests {
-    use crate::math::tick::to_sqrt_ratio;
-    use crate::math::uint::U256;
-    use crate::quoting::constants::NATIVE_TOKEN_ADDRESS;
-    use crate::quoting::oracle_pool::OraclePool;
-    use crate::quoting::types::{Pool, QuoteParams, TokenAmount};
+    use super::*;
+    use crate::{
+        chain::{tests::chain_test, Chain, Starknet},
+        math::{tick::to_sqrt_ratio, uint::U256},
+        quoting::types::{Pool, PoolState, QuoteParams, TokenAmount},
+    };
+
+    const TOKEN0: U256 = U256([1, 0, 0, 0]);
+    const TOKEN1: U256 = U256([2, 0, 0, 0]);
+    const EXTENSION: U256 = U256([3, 0, 0, 0]);
+    const DEFAULT_LIQUIDITY: u128 = 1_000_000_000;
+
+    fn min_ratio<C: Chain>() -> U256 {
+        C::min_sqrt_ratio_full_range()
+    }
+
+    fn max_ratio<C: Chain>() -> U256 {
+        C::max_sqrt_ratio_full_range()
+    }
+
+    fn build_pool<C: Chain>(
+        sqrt_ratio: U256,
+        liquidity: u128,
+        last_snapshot_time: u64,
+    ) -> OraclePool<C> {
+        OraclePool::new(
+            TOKEN0,
+            TOKEN1,
+            EXTENSION,
+            sqrt_ratio,
+            liquidity,
+            last_snapshot_time,
+        )
+        .unwrap()
+    }
+
+    fn default_pool<C: Chain>() -> OraclePool<C> {
+        build_pool::<C>(to_sqrt_ratio::<C>(0).unwrap(), DEFAULT_LIQUIDITY, 1)
+    }
+
+    #[test]
+    fn starknet_max_values() {
+        assert_eq!(
+            to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK_AT_MAX_TICK_SPACING).unwrap(),
+            Starknet::MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
+        );
+        assert_eq!(
+            to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK_AT_MAX_TICK_SPACING).unwrap(),
+            Starknet::MAX_SQRT_RATIO_AT_MAX_TICK_SPACING
+        );
+    }
 
     mod constructor_validation {
-        use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
-        use crate::math::uint::U256;
-        use crate::quoting::oracle_pool::OraclePool;
-        use crate::quoting::types::Pool;
+        use super::*;
+
+        chain_test!(max_price_constructor, {
+            let state = build_pool::<ChainTy>(max_ratio::<ChainTy>(), 1, 0).state();
+            assert_eq!(state.full_range_pool_state.liquidity(), 1);
+        });
+
+        chain_test!(min_price_constructor, {
+            let state = build_pool::<ChainTy>(min_ratio::<ChainTy>(), 1, 0).state();
+            assert_eq!(state.full_range_pool_state.liquidity(), 1);
+        });
 
         #[test]
-        fn test_max_price_constructor() {
-            assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0)
-                    .expect("Pool creation should succeed")
-                    .get_state()
-                    .full_range_pool_state
-                    .liquidity,
-                1
-            );
+        fn starknet_min_sqrt_ratio_at_max_tick_spacing() {
+            let state =
+                build_pool::<Starknet>(Starknet::MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0).state();
+            assert_eq!(state.full_range_pool_state.liquidity(), 1);
         }
 
         #[test]
-        fn test_min_price_constructor() {
-            assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0)
-                    .expect("Pool creation should succeed")
-                    .get_state()
-                    .full_range_pool_state
-                    .liquidity,
-                1
-            );
-        }
-
-        #[test]
-        fn test_min_sqrt_ratio() {
-            assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MIN_SQRT_RATIO, 1, 0)
-                    .expect("Pool creation should succeed")
-                    .get_state()
-                    .full_range_pool_state
-                    .liquidity,
-                1
-            );
-        }
-
-        #[test]
-        fn test_max_sqrt_ratio() {
-            assert_eq!(
-                OraclePool::new(U256::one(), U256::zero(), MAX_SQRT_RATIO, 1, 0)
-                    .expect("Pool creation should succeed")
-                    .get_state()
-                    .full_range_pool_state
-                    .liquidity,
-                1
-            );
+        fn starknet_max_sqrt_ratio_at_max_tick_spacing() {
+            let state =
+                build_pool::<Starknet>(Starknet::MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0).state();
+            assert_eq!(state.full_range_pool_state.liquidity(), 1);
         }
     }
 
-    const TOKEN: U256 = U256([1, 0, 0, 0]);
-    const EXTENSION: U256 = U256([3, 0, 0, 0]);
+    chain_test!(quote_token1_input_update, {
+        let pool = default_pool::<ChainTy>();
 
-    #[test]
-    fn test_quote_token1_input_update() {
-        let pool = OraclePool::new(
-            TOKEN,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            1_000_000_000,
-            1,
-        )
-        .expect("Pool creation should succeed");
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 1000,
+                    token: TOKEN1,
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+                meta: 2,
+            })
+            .unwrap();
 
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 1000,
-                token: TOKEN,
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: 2,
-        };
+        assert_eq!(
+            (
+                quote.calculated_amount,
+                quote.consumed_amount,
+                quote.execution_resources.snapshots_written,
+                quote.state_after.last_snapshot_time
+            ),
+            (999, 1000, 1, 2)
+        );
+    });
 
-        let quote = pool.quote(params).expect("Failed to get quote");
+    chain_test!(quote_token0_input, {
+        let pool = default_pool::<ChainTy>();
 
-        assert_eq!(quote.calculated_amount, 999);
-        assert_eq!(quote.consumed_amount, 1000);
-        assert_eq!(quote.execution_resources.snapshots_written, 1);
-        assert_eq!(quote.state_after.last_snapshot_time, 2);
-    }
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 1000,
+                    token: TOKEN0,
+                },
+                sqrt_ratio_limit: None,
+                override_state: None,
+                meta: 2,
+            })
+            .unwrap();
 
-    #[test]
-    fn test_quote_token0_input() {
-        let pool = OraclePool::new(
-            TOKEN,
-            EXTENSION,
-            to_sqrt_ratio(0).unwrap(),
-            1_000_000_000,
-            1,
-        )
-        .expect("Pool creation should succeed");
-
-        let params = QuoteParams {
-            token_amount: TokenAmount {
-                amount: 1000,
-                token: NATIVE_TOKEN_ADDRESS,
-            },
-            sqrt_ratio_limit: None,
-            override_state: None,
-            meta: 2,
-        };
-
-        let quote = pool.quote(params).expect("Failed to get quote");
-
-        assert_eq!(quote.calculated_amount, 999);
-        assert_eq!(quote.consumed_amount, 1000);
-        assert_eq!(quote.execution_resources.snapshots_written, 1);
-        assert_eq!(quote.state_after.last_snapshot_time, 2);
-    }
+        assert_eq!(
+            (
+                quote.calculated_amount,
+                quote.consumed_amount,
+                quote.execution_resources.snapshots_written,
+                quote.state_after.last_snapshot_time
+            ),
+            (999, 1000, 1, 2)
+        );
+    });
 }

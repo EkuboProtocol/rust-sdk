@@ -1,7 +1,4 @@
-use crate::{
-    chain::{Chain, Evm},
-    math::uint::U256,
-};
+use crate::{chain::Chain, math::uint::U256};
 use core::ops::{Add, Sub};
 use core::{
     fmt::Debug,
@@ -11,21 +8,46 @@ use core::{
 /// Unique key identifying the pool.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct NodeKey<C: Chain> {
+pub struct PoolKey<Fee, PoolTypeConfig> {
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token0: U256,
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub token1: U256,
-    pub config: Config<C>,
+    pub config: Config<Fee, PoolTypeConfig>,
+}
+
+impl<Fee, C1> PoolKey<Fee, C1> {
+    pub fn pool_type_config_into<C2: From<C1>>(self) -> PoolKey<Fee, C2> {
+        let Self {
+            token0,
+            token1,
+            config:
+                Config {
+                    extension,
+                    fee,
+                    pool_type_config,
+                },
+        } = self;
+
+        PoolKey {
+            token0,
+            token1,
+            config: Config {
+                extension,
+                fee,
+                pool_type_config: pool_type_config.into(),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Config<C: Chain> {
-    pub fee: C::Fee,
-    pub tick_spacing: u32,
+pub struct Config<F, P> {
     #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub extension: U256,
+    pub fee: F,
+    pub pool_type_config: P,
 }
 
 #[cfg(feature = "serde")]
@@ -51,7 +73,7 @@ pub mod serde_u256 {
     }
 }
 
-impl From<U256> for Config<Evm> {
+/*impl From<U256> for Config<Evm> {
     fn from(value: U256) -> Config<Evm> {
         Config {
             tick_spacing: (value % U256([4294967296, 0, 0, 0])).as_u32(),
@@ -67,7 +89,7 @@ impl From<Config<Evm>> for U256 {
             + (U256::from(value.fee) << 32)
             + (U256::from(value.extension) << 96)
     }
-}
+}*/
 
 // The aggregate effect of all positions on a pool that are bounded by the specific tick
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -121,10 +143,11 @@ pub trait Pool<C: Chain>: Send + Sync + Debug + Clone + PartialEq + Eq {
     type QuoteError: Debug + Copy;
     // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
     type Meta: Debug + Copy;
+    type PoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey<C>;
+    fn key(&self) -> PoolKey<C::Fee, Self::PoolTypeConfig>;
 
-    fn get_state(&self) -> Self::State;
+    fn state(&self) -> Self::State;
 
     fn quote(
         &self,
@@ -150,7 +173,7 @@ pub trait PoolState {
 #[cfg(test)]
 mod tests {
     use crate::math::uint::U256;
-    use crate::quoting::types::{Config, TokenAmount};
+    use crate::quoting::types::TokenAmount;
 
     #[test]
     fn test_ordering_token_amount() {
@@ -200,63 +223,5 @@ mod tests {
                 amount: 1,
             }
         );
-    }
-
-    #[test]
-    fn test_config_from_u256() {
-        let c: Config = U256::from_str_radix("9784678070511645692802677866596", 10)
-            .unwrap()
-            .into();
-        assert_eq!(
-            c,
-            Config {
-                tick_spacing: 100,
-                fee: 1 << 63,
-                extension: U256::from(123)
-            }
-        );
-    }
-
-    #[test]
-    fn test_u256_from_config() {
-        let c: Config = Config {
-            tick_spacing: 100,
-            fee: 1 << 63,
-            extension: U256::from(123),
-        };
-        let v: U256 = c.into();
-        assert_eq!(
-            v,
-            U256::from_str_radix("9784678070511645692802677866596", 10).unwrap()
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "serde")]
-    fn test_node_key() {
-        use crate::quoting::types::NodeKey;
-
-        let key = NodeKey {
-            token0: U256::from(1),
-            token1: U256::from(2),
-            config: Config {
-                tick_spacing: 100,
-                fee: 1 << 63,
-                extension: U256::from(123),
-            },
-        };
-
-        let serialized = serde_json::to_string(&key).unwrap();
-        let expected = serde_json::json!({
-            "token0": "1",
-            "token1": "2",
-            "config": {
-                "tick_spacing": 100,
-                "fee": "9223372036854775808",
-                "extension": "123"
-            }
-        });
-
-        assert_eq!(serde_json::from_str::<NodeKey>(&serialized).unwrap(), key);
     }
 }

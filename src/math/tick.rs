@@ -1,9 +1,10 @@
 use crate::{
     chain::Chain,
-    math::uint::{u256_to_float_base_x128, U256},
+    math::{
+        sqrt_ratio::SQRT_RATIO_ONE,
+        uint::{u256_to_float_base_x128, U256},
+    },
 };
-
-const ONE_X128: U256 = U256([0, 0, 1, 0]);
 
 const MASKS: [U256; 27] = [
     U256([8987818235631183931, 18446734850344432284, 0, 0]),
@@ -40,7 +41,7 @@ pub fn to_sqrt_ratio<C: Chain>(tick: i32) -> Option<U256> {
         return None;
     }
 
-    let mut ratio = ONE_X128.clone();
+    let mut ratio = SQRT_RATIO_ONE;
 
     let tick_abs = tick.abs();
 
@@ -68,93 +69,243 @@ pub fn approximate_sqrt_ratio_to_tick(sqrt_ratio: U256) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::chain::{
+        tests::{ChainEnum, CHAINS},
+        Evm, Starknet,
+    };
+
     mod to_sqrt_ratio {
-        use super::super::{to_sqrt_ratio, MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
-        use crate::math::uint::U256;
+        use super::*;
 
         #[test]
-        fn test_tick_examples() {
-            assert_eq!(
-                to_sqrt_ratio(1000000).unwrap(),
-                U256::from_str_radix("561030636129153856579134353873645338624", 10).unwrap(),
-            );
-            assert_eq!(
-                to_sqrt_ratio(10000000).unwrap(),
-                U256::from_str_radix("50502254805927926084423855178401471004672", 10).unwrap(),
-            );
-            assert_eq!(
-                to_sqrt_ratio(-1000000).unwrap(),
-                U256::from_str_radix("206391740095027370700312310528859963392", 10).unwrap(),
-            );
-            assert_eq!(
-                to_sqrt_ratio(-10000000).unwrap(),
-                U256::from_str_radix("2292810285051363400276741630355046400", 10).unwrap(),
-            );
+        fn tick_examples() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => {
+                        assert_eq!(
+                            to_sqrt_ratio::<Starknet>(1_000_000).unwrap(),
+                            U256::from_dec_str("561030636129153856592777659729523183729").unwrap()
+                        );
+                        assert_eq!(
+                            to_sqrt_ratio::<Starknet>(10_000_000).unwrap(),
+                            U256::from_dec_str("50502254805927926084427918474025309948677")
+                                .unwrap()
+                        );
+                        assert_eq!(
+                            to_sqrt_ratio::<Starknet>(-1_000_000).unwrap(),
+                            U256::from_dec_str("206391740095027370700312310531588921767").unwrap()
+                        );
+                        assert_eq!(
+                            to_sqrt_ratio::<Starknet>(-10_000_000).unwrap(),
+                            U256::from_dec_str("2292810285051363400276741638672651165").unwrap()
+                        );
+                    }
+                    ChainEnum::Evm => {
+                        assert_eq!(
+                            to_sqrt_ratio::<Evm>(1_000_000).unwrap(),
+                            U256::from_dec_str("561030636129153856579134353873645338624").unwrap()
+                        );
+                        assert_eq!(
+                            to_sqrt_ratio::<Evm>(10_000_000).unwrap(),
+                            U256::from_dec_str("50502254805927926084423855178401471004672")
+                                .unwrap()
+                        );
+                        assert_eq!(
+                            to_sqrt_ratio::<Evm>(-1_000_000).unwrap(),
+                            U256::from_dec_str("206391740095027370700312310528859963392").unwrap()
+                        );
+                        assert_eq!(
+                            to_sqrt_ratio::<Evm>(-10_000_000).unwrap(),
+                            U256::from_dec_str("2292810285051363400276741630355046400").unwrap()
+                        );
+                    }
+                }
+            }
         }
 
         #[test]
-        fn test_tick_too_small() {
-            assert!(to_sqrt_ratio(MIN_TICK - 1).is_none());
-            assert!(to_sqrt_ratio(i32::MIN).is_none());
+        fn tick_too_small() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => {
+                        assert!(to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK - 1).is_none());
+                        assert!(to_sqrt_ratio::<Starknet>(i32::MIN).is_none());
+                    }
+                    ChainEnum::Evm => {
+                        assert!(to_sqrt_ratio::<Evm>(Evm::MIN_TICK - 1).is_none());
+                        assert!(to_sqrt_ratio::<Evm>(i32::MIN).is_none());
+                    }
+                }
+            }
         }
 
         #[test]
-        fn test_min_tick() {
-            assert_eq!(to_sqrt_ratio(MIN_TICK).unwrap(), MIN_SQRT_RATIO,);
+        fn min_tick() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => {
+                        assert_eq!(
+                            to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK).unwrap(),
+                            Starknet::MIN_SQRT_RATIO
+                        );
+                    }
+                    ChainEnum::Evm => {
+                        assert_eq!(
+                            to_sqrt_ratio::<Evm>(Evm::MIN_TICK).unwrap(),
+                            Evm::MIN_SQRT_RATIO
+                        );
+                    }
+                }
+            }
         }
 
         #[test]
-        fn test_max_tick() {
-            assert_eq!(to_sqrt_ratio(MAX_TICK).unwrap(), MAX_SQRT_RATIO,);
+        fn max_tick() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => {
+                        assert_eq!(
+                            to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK).unwrap(),
+                            Starknet::MAX_SQRT_RATIO
+                        );
+                    }
+                    ChainEnum::Evm => {
+                        assert_eq!(
+                            to_sqrt_ratio::<Evm>(Evm::MAX_TICK).unwrap(),
+                            Evm::MAX_SQRT_RATIO
+                        );
+                    }
+                }
+            }
         }
 
         #[test]
-        fn test_tick_too_large() {
-            assert!(to_sqrt_ratio(MAX_TICK + 1).is_none());
-            assert!(to_sqrt_ratio(i32::MAX).is_none());
+        fn tick_too_large() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => {
+                        assert!(to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK + 1).is_none());
+                        assert!(to_sqrt_ratio::<Starknet>(i32::MAX).is_none());
+                    }
+                    ChainEnum::Evm => {
+                        assert!(to_sqrt_ratio::<Evm>(Evm::MAX_TICK + 1).is_none());
+                        assert!(to_sqrt_ratio::<Evm>(i32::MAX).is_none());
+                    }
+                }
+            }
         }
     }
 
     mod approximate_sqrt_ratio_to_tick {
-        use crate::math::tick::{MAX_TICK, MIN_TICK};
-
-        use super::super::{approximate_sqrt_ratio_to_tick, to_sqrt_ratio};
+        use super::*;
 
         #[test]
-        fn test_tick_examples() {
-            assert_eq!(approximate_sqrt_ratio_to_tick(to_sqrt_ratio(0).unwrap()), 0,);
-            assert_eq!(
-                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(1000000).unwrap()),
-                1000000,
-            );
-            assert_eq!(
-                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(10000000).unwrap()),
-                10000000
-            );
-            assert_eq!(
-                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(-1000000).unwrap()),
-                -1000000,
-            );
-            assert_eq!(
-                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(-10000000).unwrap()),
-                -10000000,
-            );
+        fn tick_examples() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => {
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(to_sqrt_ratio::<Starknet>(0).unwrap()),
+                            0
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Starknet>(1_000_000).unwrap()
+                            ),
+                            1_000_000
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Starknet>(10_000_000).unwrap()
+                            ),
+                            10_000_000
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Starknet>(-1_000_000).unwrap()
+                            ),
+                            -1_000_000
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Starknet>(-10_000_000).unwrap()
+                            ),
+                            -10_000_000
+                        );
+                    }
+                    ChainEnum::Evm => {
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(to_sqrt_ratio::<Evm>(0).unwrap()),
+                            0
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Evm>(1_000_000).unwrap()
+                            ),
+                            1_000_000
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Evm>(10_000_000).unwrap()
+                            ),
+                            10_000_000
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Evm>(-1_000_000).unwrap()
+                            ),
+                            -1_000_000
+                        );
+                        assert_eq!(
+                            approximate_sqrt_ratio_to_tick(
+                                to_sqrt_ratio::<Evm>(-10_000_000).unwrap()
+                            ),
+                            -10_000_000
+                        );
+                    }
+                }
+            }
         }
 
         #[test]
-        fn test_min_tick() {
-            assert_eq!(
-                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(MIN_TICK).unwrap()),
-                MIN_TICK,
-            );
+        fn min_tick() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => assert_eq!(
+                        approximate_sqrt_ratio_to_tick(
+                            to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK).unwrap()
+                        ),
+                        Starknet::MIN_TICK
+                    ),
+                    ChainEnum::Evm => assert_eq!(
+                        approximate_sqrt_ratio_to_tick(
+                            to_sqrt_ratio::<Evm>(Evm::MIN_TICK).unwrap()
+                        ),
+                        Evm::MIN_TICK
+                    ),
+                }
+            }
         }
 
         #[test]
-        fn test_max_tick() {
-            assert_eq!(
-                approximate_sqrt_ratio_to_tick(to_sqrt_ratio(MAX_TICK).unwrap()),
-                MAX_TICK,
-            );
+        fn max_tick() {
+            for chain in CHAINS {
+                match chain {
+                    ChainEnum::Starknet => assert_eq!(
+                        approximate_sqrt_ratio_to_tick(
+                            to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK).unwrap()
+                        ),
+                        Starknet::MAX_TICK
+                    ),
+                    ChainEnum::Evm => assert_eq!(
+                        approximate_sqrt_ratio_to_tick(
+                            to_sqrt_ratio::<Evm>(Evm::MAX_TICK).unwrap()
+                        ),
+                        Evm::MAX_TICK
+                    ),
+                }
+            }
         }
     }
 }
