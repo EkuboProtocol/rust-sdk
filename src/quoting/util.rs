@@ -1,10 +1,9 @@
 use crate::quoting::types::Tick;
-use crate::{
-    chain::Chain,
-    math::uint::{u256_to_float_base_x128, U256},
-};
+use crate::{chain::Chain, math::uint::u256_to_float_base_x128};
 use alloc::vec::Vec;
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
 // Function to find the nearest initialized tick index.
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
@@ -45,11 +44,14 @@ pub fn approximate_number_of_tick_spacings_crossed(
     ticks_crossed / tick_spacing
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ConstructSortedTicksError {
+    #[error("current tick is outside of the searched range")]
     CurrentTickOutsideSearchedRange,
+    #[error("minimum tick must be less than the max tick")]
     MinTickLessThanMaxTick,
+    #[error("tick spacing is invalid")]
     InvalidTickSpacing,
 }
 
@@ -82,7 +84,7 @@ pub fn construct_sorted_ticks<C: Chain>(
     if min_tick_searched > max_tick_searched {
         return Err(ConstructSortedTicksError::MinTickLessThanMaxTick);
     }
-    if tick_spacing.is_zero() || tick_spacing > C::max_tick_spacing() {
+    if tick_spacing.is_zero() || tick_spacing > C::max_tick_spacing().0 {
         return Err(ConstructSortedTicksError::InvalidTickSpacing);
     }
 
@@ -160,7 +162,7 @@ mod tests {
     use super::*;
     use crate::{
         chain::{tests::run_for_all_chains, Chain},
-        math::{sqrt_ratio::SQRT_RATIO_ONE, uint::U256},
+        math::sqrt_ratio::SQRT_RATIO_ONE,
         quoting::types::Tick,
     };
     use alloc::vec;

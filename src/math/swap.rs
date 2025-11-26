@@ -1,11 +1,11 @@
 use crate::math::sqrt_ratio::{next_sqrt_ratio_from_amount0, next_sqrt_ratio_from_amount1};
-use crate::math::uint::U256;
 use crate::{
     chain::Chain,
     math::delta::{amount0_delta, amount1_delta, AmountDeltaError},
 };
-use core::num::TryFromIntError;
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
 pub struct SwapResult {
@@ -52,12 +52,16 @@ fn no_op(sqrt_ratio_next: U256) -> SwapResult {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Error, Hash)]
 pub enum ComputeStepError {
+    #[error("wrong direction")]
     WrongDirection,
+    #[error("amount before fee overflow")]
     AmountBeforeFeeOverflow,
-    SignedIntegerOverflow(TryFromIntError),
-    AmountDeltaError(AmountDeltaError),
+    #[error("signed integer overflow")]
+    SignedIntegerOverflow,
+    #[error("amount delta error")]
+    AmountDelta(#[from] AmountDeltaError),
 }
 
 pub fn compute_step<C: Chain>(
@@ -117,7 +121,7 @@ pub fn compute_step<C: Chain>(
             } else {
                 amount1_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount < 0)
             }
-            .map_err(ComputeStepError::AmountDeltaError)?;
+            .map_err(ComputeStepError::AmountDelta)?;
 
             return if amount < 0 {
                 let including_fee = amount_before_fee::<C>(calculated_amount_excluding_fee, fee)
@@ -153,31 +157,28 @@ pub fn compute_step<C: Chain>(
     };
 
     if amount < 0 {
-        let amount_after_fee =
-            calculated_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
+        let amount_after_fee = calculated_amount_delta.map_err(ComputeStepError::AmountDelta)?;
         let before_fee = amount_before_fee::<C>(amount_after_fee, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
         Ok(SwapResult {
             consumed_amount: -specified_amount_delta
-                .map_err(ComputeStepError::AmountDeltaError)?
+                .map_err(ComputeStepError::AmountDelta)?
                 .try_into()
-                .map_err(ComputeStepError::SignedIntegerOverflow)?,
+                .map_err(|_| ComputeStepError::SignedIntegerOverflow)?,
             calculated_amount: before_fee,
             fee_amount: before_fee - amount_after_fee,
             sqrt_ratio_next: sqrt_ratio_limit,
         })
     } else {
-        let specified_amount =
-            specified_amount_delta.map_err(ComputeStepError::AmountDeltaError)?;
+        let specified_amount = specified_amount_delta.map_err(ComputeStepError::AmountDelta)?;
         let before_fee = amount_before_fee::<C>(specified_amount, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
 
         Ok(SwapResult {
             consumed_amount: before_fee
                 .try_into()
-                .map_err(ComputeStepError::SignedIntegerOverflow)?,
-            calculated_amount: calculated_amount_delta
-                .map_err(ComputeStepError::AmountDeltaError)?,
+                .map_err(|_| ComputeStepError::SignedIntegerOverflow)?,
+            calculated_amount: calculated_amount_delta.map_err(ComputeStepError::AmountDelta)?,
             fee_amount: before_fee - specified_amount,
             sqrt_ratio_next: sqrt_ratio_limit,
         })

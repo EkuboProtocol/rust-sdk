@@ -1,17 +1,21 @@
 use core::ops::Not;
 
-use crate::math::uint::U256;
 use crate::math::{
     muldiv::{muldiv, MuldivError},
     sqrt_ratio::SQRT_RATIO_ONE,
 };
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum AmountDeltaError {
+    #[error("ratio is zero")]
     ZeroRatio,
+    #[error("overflow")]
     Overflow,
-    MuldivError(MuldivError),
+    #[error("muldiv error")]
+    MuldivError(#[from] MuldivError),
 }
 
 pub fn amount0_delta(
@@ -83,7 +87,6 @@ mod tests {
         starknet::Starknet,
         tests::{ChainEnum, CHAINS},
     };
-    use crate::math::uint::U256;
     use ruint::uint;
 
     const SMALL_LIQUIDITY: u128 = 1_000_000;

@@ -1,22 +1,30 @@
-use ruint::aliases::U256;
+use alloy_primitives::{aliases::B32, fixed_bytes, Address, FixedBytes, B256, U256};
+use derive_more::From;
+use num_traits::Zero as _;
+use thiserror::Error;
 
 use crate::{
     chain::Chain,
+    private,
     quoting::{
-        full_range_pool::{
-            FullRangePool, FullRangePoolError, FullRangePoolState, FullRangePoolTypeConfig,
+        pools::{
+            base::{BasePoolTypeConfig, TickSpacing},
+            full_range::{
+                FullRangePool, FullRangePoolError, FullRangePoolState, FullRangePoolTypeConfig,
+            },
+            stableswap::StableswapPoolTypeConfig,
         },
-        types::{Config, PoolKey},
+        types::{PoolConfig, PoolKey},
     },
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Evm;
 
 impl Evm {
-    pub const NATIVE_TOKEN_ADDRESS: U256 = U256::ZERO;
+    pub const NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
 
-    pub const MAX_TICK_SPACING: u32 = 698605;
+    pub const MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
     pub const FULL_RANGE_TICK_SPACING: u32 = 0;
 
     pub const MAX_STABLESWAP_AMPLIFICATION_FACTOR: u8 = 26;
@@ -36,12 +44,102 @@ const TWO_POW_160: U256 = U256::from_limbs([0, 0, 0x100000000, 0]);
 const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 const TWO_POW_96: U256 = U256::from_limbs([0, 0x0100000000, 0, 0]);
 
+#[derive(From, Debug, PartialEq, Eq, Hash)]
+pub enum PoolTypeConfig {
+    FullRange(FullRangePoolTypeConfig),
+    Stableswap(StableswapPoolTypeConfig),
+    Concentrated(BasePoolTypeConfig),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Error)]
+pub enum PoolTypeConfigParseError {
+    #[error("stableswap center tick is not between min and max tick")]
+    InvalidCenterTick,
+    #[error("stableswap amplification factor exceeds the maximum allowed value")]
+    InvalidStableswapAmplification,
+    #[error("tick spacing exceeds the maximum allowed value")]
+    InvalidTickSpacing,
+}
+
+impl TryFrom<B32> for PoolTypeConfig {
+    type Error = PoolTypeConfigParseError;
+
+    fn try_from(value: B32) -> Result<Self, Self::Error> {
+        if value == B32::ZERO {
+            return Ok(Self::FullRange(FullRangePoolTypeConfig));
+        }
+
+        if value.bit_and(fixed_bytes!("0x80000000")) == B32::ZERO {
+            let center_tick = i32::from_be_bytes((value.bit_and(fixed_bytes!("0x00ffffff"))).0);
+
+            if center_tick < Evm::MIN_TICK || center_tick > Evm::MAX_TICK {
+                return Err(PoolTypeConfigParseError::InvalidCenterTick);
+            }
+
+            let amplification_factor = value.0[0];
+
+            if amplification_factor > Evm::MAX_STABLESWAP_AMPLIFICATION_FACTOR {
+                return Err(PoolTypeConfigParseError::InvalidStableswapAmplification);
+            }
+
+            Ok(Self::Stableswap(StableswapPoolTypeConfig {
+                center_tick,
+                amplification_factor,
+            }))
+        } else {
+            let tick_spacing = u32::from_be_bytes(value.bit_and(fixed_bytes!("0x7fffffff")).0);
+
+            if tick_spacing > Evm::MAX_TICK_SPACING.0 || tick_spacing.is_zero() {
+                return Err(PoolTypeConfigParseError::InvalidTickSpacing);
+            }
+
+            Ok(Self::Concentrated(TickSpacing(tick_spacing)))
+        }
+    }
+}
+
+impl From<PoolTypeConfig> for B32 {
+    fn from(value: PoolTypeConfig) -> Self {
+        match value {
+            PoolTypeConfig::FullRange(_) => Self::ZERO,
+            PoolTypeConfig::Stableswap(StableswapPoolTypeConfig {
+                center_tick,
+                amplification_factor,
+            }) => {
+                let mut compressed = center_tick.to_be_bytes();
+                compressed[0] = amplification_factor;
+
+                Self(compressed)
+            }
+            PoolTypeConfig::Concentrated(TickSpacing(tick_spacing)) => {
+                let mut compressed = tick_spacing.to_be_bytes();
+                compressed[0] |= 0x80;
+
+                Self(compressed)
+            }
+        }
+    }
+}
+
+impl From<PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>> for B256 {
+    fn from(
+        value: PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>,
+    ) -> Self {
+        value
+            .extension
+            .0
+            .concat_const::<_, 28>(FixedBytes(value.fee.to_be_bytes()))
+            .concat_const(value.pool_type_config.into())
+    }
+}
+
 impl Chain for Evm {
+    type Address = Address;
     type Fee = u64;
     type FullRangePool = FullRangePool;
     type FullRangePoolError = FullRangePoolError;
 
-    fn max_tick_spacing() -> u32 {
+    fn max_tick_spacing() -> TickSpacing {
         Self::MAX_TICK_SPACING
     }
 
@@ -90,10 +188,10 @@ impl Chain for Evm {
     }
 
     fn new_full_range_pool(
-        token0: U256,
-        token1: U256,
+        token0: Self::Address,
+        token1: Self::Address,
         fee: Self::Fee,
-        extension: U256,
+        extension: Self::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
     ) -> Result<Self::FullRangePool, Self::FullRangePoolError> {
@@ -101,7 +199,7 @@ impl Chain for Evm {
             PoolKey {
                 token0,
                 token1,
-                config: Config {
+                config: PoolConfig {
                     fee,
                     pool_type_config: FullRangePoolTypeConfig,
                     extension,
@@ -112,5 +210,26 @@ impl Chain for Evm {
                 liquidity: active_liquidity,
             },
         )
+    }
+}
+
+impl private::Sealed for Evm {}
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::address;
+
+    use crate::chain::tests::ChainTest;
+
+    use super::*;
+
+    impl ChainTest for Evm {
+        fn zero_address() -> Self::Address {
+            Address::ZERO
+        }
+
+        fn one_address() -> Self::Address {
+            address!("0x0000000000000000000000000000000000000001")
+        }
     }
 }

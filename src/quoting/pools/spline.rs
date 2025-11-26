@@ -1,6 +1,6 @@
 use crate::{
     chain::starknet::Starknet,
-    quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState},
+    quoting::pools::base::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState},
 };
 
 pub type SplinePool = BasePool<Starknet>;

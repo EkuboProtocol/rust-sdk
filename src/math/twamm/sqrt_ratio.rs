@@ -1,7 +1,7 @@
-use crate::math::{sqrt_ratio::SQRT_RATIO_ONE, twamm::exp2::exp2, uint::U256};
+use crate::math::{sqrt_ratio::SQRT_RATIO_ONE, twamm::exp2::exp2};
 use crate::{chain::Chain, math::muldiv::muldiv};
 use num_traits::Zero;
-use ruint::uint;
+use ruint::{aliases::U256, uint};
 
 pub fn calculate_next_sqrt_ratio<C: Chain>(
     sqrt_ratio: U256,

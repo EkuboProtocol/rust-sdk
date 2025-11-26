@@ -1,20 +1,23 @@
 use alloc::vec;
 use num_traits::{ToPrimitive as _, Zero as _};
 use ruint::aliases::U256;
+use starknet_types_core::felt::Felt;
+use thiserror::Error;
 
 use crate::{
     chain::Chain,
+    private,
     quoting::{
-        base_pool::{BasePool, BasePoolError, BasePoolState, TickSpacing},
-        types::{Config, PoolKey, Tick},
+        pools::base::{BasePool, BasePoolError, BasePoolState, TickSpacing},
+        types::{PoolConfig, PoolKey, Tick},
     },
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Starknet;
 
 impl Starknet {
-    pub const MAX_TICK_SPACING: u32 = 354892;
+    pub const MAX_TICK_SPACING: TickSpacing = TickSpacing(354892);
 
     pub const MIN_TICK: i32 = -88722883;
     pub const MAX_TICK: i32 = 88722883;
@@ -41,10 +44,12 @@ impl Starknet {
     pub const FEE_BITS: u8 = 128;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum StarknetFullRangePoolError {
-    BasePoolError(BasePoolError),
+    #[error("base pool error")]
+    BasePoolError(#[from] BasePoolError),
+    #[error("active liquidity does not fit into signed integer")]
     ActiveLiquidityDoesNotFitSignedInteger,
 }
 
@@ -54,7 +59,7 @@ impl Chain for Starknet {
     type FullRangePool = BasePool<Self>;
     type FullRangePoolError = StarknetFullRangePoolError;
 
-    fn max_tick_spacing() -> u32 {
+    fn max_tick_spacing() -> TickSpacing {
         Self::MAX_TICK_SPACING
     }
 
@@ -95,10 +100,10 @@ impl Chain for Starknet {
     }
 
     fn new_full_range_pool(
-        token0: U256,
-        token1: U256,
+        token0: Self::Address,
+        token1: Self::Address,
         fee: Self::Fee,
-        extension: U256,
+        extension: Self::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
     ) -> Result<Self::FullRangePool, Self::FullRangePoolError> {
@@ -137,9 +142,9 @@ impl Chain for Starknet {
             PoolKey {
                 token0,
                 token1,
-                config: Config {
+                config: PoolConfig {
                     fee,
-                    pool_type_config: TickSpacing(Starknet::MAX_TICK_SPACING),
+                    pool_type_config: Starknet::MAX_TICK_SPACING,
                     extension,
                 },
             },
@@ -151,5 +156,26 @@ impl Chain for Starknet {
             sorted_ticks,
         )
         .map_err(StarknetFullRangePoolError::BasePoolError)
+    }
+
+    type Address = Felt;
+}
+
+impl private::Sealed for Starknet {}
+
+#[cfg(test)]
+mod tests {
+    use crate::chain::tests::ChainTest;
+
+    use super::*;
+
+    impl ChainTest for Starknet {
+        fn zero_address() -> Self::Address {
+            Felt::ZERO
+        }
+
+        fn one_address() -> Self::Address {
+            Felt::ONE
+        }
     }
 }

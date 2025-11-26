@@ -7,91 +7,103 @@ use crate::{
     math::swap::{compute_step, is_price_increasing, ComputeStepError},
 };
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
-use crate::{math::uint::U256, quoting::types::Config};
+use crate::{private, quoting::types::PoolConfig};
 use alloc::vec::Vec;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
-// Resources consumed during any swap execution.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Add, AddAssign, Sub, SubAssign)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Hash, Eq, Add, AddAssign, Sub, SubAssign)]
+/// Resources consumed during swap execution
 pub struct BasePoolResources {
     pub no_override_price_change: u32,
     pub initialized_ticks_crossed: u32,
     pub tick_spacings_crossed: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum BasePoolQuoteError {
+    #[error("invalid token")]
     InvalidToken,
+    #[error("invalid price limit")]
     InvalidSqrtRatioLimit,
+    #[error("invalid tick {0}")]
     InvalidTick(i32),
-    FailedComputeSwapStep(ComputeStepError),
+    #[error("failed swap step computation")]
+    FailedComputeSwapStep(#[from] ComputeStepError),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BasePoolState {
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     pub sqrt_ratio: U256,
     pub liquidity: u128,
     pub active_tick_index: Option<usize>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TickSpacing(pub u32);
 
-impl From<TickSpacing> for i32 {
-    fn from(value: TickSpacing) -> Self {
-        value.0 as i32
-    }
-}
-
 pub type BasePoolTypeConfig = TickSpacing;
-pub type BasePoolKey<C> = PoolKey<<C as Chain>::Fee, BasePoolTypeConfig>;
+pub type BasePoolKey<C> = PoolKey<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(bound(
+        serialize = "C::Fee: serde::Serialize, C::Address: serde::Serialize",
+        deserialize = "C::Fee: serde::Deserialize<'de>, C::Address: serde::Deserialize<'de>"
+    ))
+)]
 pub struct BasePool<C: Chain> {
-    #[cfg_attr(
-        feature = "serde",
-        serde(bound(
-            serialize = "C::Fee: serde::Serialize",
-            deserialize = "C::Fee: serde::Deserialize<'de>"
-        ))
-    )]
     key: BasePoolKey<C>,
     state: BasePoolState,
     sorted_ticks: Vec<Tick>,
 }
 
 /// Errors that can occur when constructing a BasePool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BasePoolError {
-    ConstructSortedTicksFromPartialDataError(ConstructSortedTicksError),
+    #[error("constructing ticks from partial data")]
+    ConstructSortedTicksFromPartialDataError(#[from] ConstructSortedTicksError),
+    #[error("token0 must be less than token1")]
     /// Token0 must be less than token1.
     TokenOrderInvalid,
+    #[error("tick spacing too large")]
     /// Tick spacing must be less than or equal to max tick spacing.
     TickSpacingTooLarge,
+    #[error("tick spacing must be non-zero")]
     /// Tick spacing must be greater than zero. Use the `FullRangePool` instead if you encounter this error.
     TickSpacingCannotBeZero,
+    #[error("ticks are not sorted in ascending order")]
     /// Ticks must be sorted in ascending order.
     TicksNotSorted,
+    #[error("all ticks must be a multiple of the tick spacing")]
     /// All ticks must be a multiple of tick_spacing.
     TickNotMultipleOfSpacing,
+    #[error("total liquidity is non-zero")]
     /// The total liquidity across all ticks must sum to zero.
     TotalLiquidityNotZero,
+    #[error("active liquidity mismatch")]
     /// Active liquidity doesn't match the sum of liquidity deltas before the active tick.
     ActiveLiquidityMismatch,
+    #[error("active tick price is invalid")]
     /// The sqrt_ratio of active tick is not less than or equal to current sqrt_ratio.
     ActiveTickSqrtRatioInvalid,
+    #[error("active price is higher than lowest initialized tick's price")]
     /// current sqrt_ratio must be lower than the first tick's sqrt_ratio when active_tick_index is none.
     SqrtRatioTooHighWithNoActiveTick,
+    #[error("active tick index out of bounds")]
     /// The active tick index is out of bounds.
     ActiveTickIndexOutOfBounds,
+    #[error("invalid tick index {0}")]
     /// Invalid tick index.
     InvalidTickIndex(i32),
+    #[error("active liquidity overflow")]
     /// The application of all tick liquidity deltas must result in a valid intermediate active liqudity.
     ActiveLiquidityOverflow,
 }
@@ -125,7 +137,7 @@ impl<C: Chain> BasePool<C> {
         current_tick: i32,
     ) -> Result<Self, BasePoolError> {
         let tick_spacing = key.config.pool_type_config;
-        let spacing_i32 = i32::from(tick_spacing);
+        let spacing_i32 = tick_spacing.0 as i32;
         let tick_spacing = tick_spacing.0;
 
         // Get sorted ticks using the utility function
@@ -176,8 +188,8 @@ impl<C: Chain> BasePool<C> {
             token0,
             token1,
             config:
-                Config {
-                    pool_type_config: TickSpacing(tick_spacing),
+                PoolConfig {
+                    pool_type_config: tick_spacing,
                     ..
                 },
         } = key;
@@ -190,7 +202,7 @@ impl<C: Chain> BasePool<C> {
             return Err(BasePoolError::TickSpacingTooLarge);
         }
 
-        if tick_spacing.is_zero() {
+        if tick_spacing.0.is_zero() {
             return Err(BasePoolError::TickSpacingCannotBeZero);
         }
 
@@ -198,7 +210,7 @@ impl<C: Chain> BasePool<C> {
         let mut last_tick: Option<i32> = None;
         let mut total_liquidity: u128 = 0;
         let mut active_liquidity: u128 = 0;
-        let spacing_i32 = tick_spacing as i32;
+        let spacing_i32 = tick_spacing.0 as i32;
 
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
@@ -276,7 +288,7 @@ impl<C: Chain> BasePool<C> {
         })
     }
 
-    pub fn get_sorted_ticks(&self) -> &Vec<Tick> {
+    pub fn ticks(&self) -> &[Tick] {
         &self.sorted_ticks
     }
 }
@@ -291,14 +303,16 @@ impl PoolState for BasePoolState {
     }
 }
 
-impl<C: Chain> Pool<C> for BasePool<C> {
+impl<C: Chain> Pool for BasePool<C> {
+    type Address = C::Address;
+    type Fee = C::Fee;
     type Resources = BasePoolResources;
     type State = BasePoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = ();
     type PoolTypeConfig = BasePoolTypeConfig;
 
-    fn key(&self) -> PoolKey<C::Fee, Self::PoolTypeConfig> {
+    fn key(&self) -> PoolKey<C::Address, C::Fee, Self::PoolTypeConfig> {
         self.key
     }
 
@@ -308,7 +322,7 @@ impl<C: Chain> Pool<C> for BasePool<C> {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<C::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
@@ -488,28 +502,31 @@ impl<C: Chain> Pool<C> for BasePool<C> {
     }
 }
 
+impl<C: Chain> private::Sealed for BasePool<C> {}
+impl private::Sealed for BasePoolState {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        chain::{starknet::Starknet, tests::run_for_all_chains},
+        chain::{
+            starknet::Starknet,
+            tests::{run_for_all_chains, ChainTest},
+        },
         math::sqrt_ratio::SQRT_RATIO_ONE,
-        quoting::types::{Config, TokenAmount},
+        quoting::types::{PoolConfig, TokenAmount},
     };
     use alloc::vec;
     use num_traits::Zero;
 
-    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
-
-    fn pool_key<C: Chain>(tick_spacing: u32, fee: C::Fee) -> BasePoolKey<C> {
+    fn pool_key<C: ChainTest>(tick_spacing: u32, fee: C::Fee) -> BasePoolKey<C> {
         PoolKey {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            config: Config {
+            token0: C::zero_address(),
+            token1: C::one_address(),
+            config: PoolConfig {
                 fee,
                 pool_type_config: TickSpacing(tick_spacing),
-                extension: U256::ZERO,
+                extension: C::zero_address(),
             },
         }
     }
@@ -548,12 +565,12 @@ mod tests {
             run_for_all_chains!(ChainTy, _chain => {
                 let result = BasePool::<ChainTy>::new(
                     PoolKey {
-                        token0: U256::ZERO,
-                        token1: U256::ZERO,
-                        config: Config {
+                        token0: ChainTy::zero_address(),
+                        token1: ChainTy::zero_address(),
+                        config: PoolConfig {
                             fee: zero_fee::<ChainTy>(),
                             pool_type_config: TickSpacing(0),
-                            extension: U256::ZERO,
+                            extension: ChainTy::zero_address(),
                         },
                     },
                     pool_state(SQRT_RATIO_ONE, 0, None),
@@ -578,7 +595,7 @@ mod tests {
         #[test]
         fn tick_spacing_cannot_exceed_max() {
             run_for_all_chains!(ChainTy, _chain => {
-                if let Some(invalid) = ChainTy::max_tick_spacing().checked_add(1) {
+                if let Some(invalid) = ChainTy::max_tick_spacing().0.checked_add(1) {
                     let result = BasePool::<ChainTy>::new(
                         pool_key::<ChainTy>(invalid, zero_fee::<ChainTy>()),
                         pool_state(SQRT_RATIO_ONE, 0, None),
@@ -606,7 +623,7 @@ mod tests {
             run_for_all_chains!(ChainTy, _chain => {
                 let spacing = ChainTy::max_tick_spacing();
                 let result = BasePool::<ChainTy>::new(
-                    pool_key::<ChainTy>(spacing, zero_fee::<ChainTy>()),
+                    pool_key::<ChainTy>(spacing.0, zero_fee::<ChainTy>()),
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(-1, 1), (ChainTy::max_tick() - 1, -1)]),
                 );
@@ -695,7 +712,7 @@ mod tests {
                     .quote(QuoteParams {
                         token_amount: TokenAmount {
                             amount: 1,
-                            token: TOKEN1,
+                            token: ChainTy::one_address(),
                         },
                         sqrt_ratio_limit: None,
                         override_state: None,
@@ -724,7 +741,7 @@ mod tests {
                     .quote(QuoteParams {
                         token_amount: TokenAmount {
                             amount: 1,
-                            token: TOKEN0,
+                            token: ChainTy::zero_address(),
                         },
                         sqrt_ratio_limit: None,
                         override_state: None,
@@ -753,7 +770,7 @@ mod tests {
                     .quote(QuoteParams {
                         token_amount: TokenAmount {
                             amount: 1000,
-                            token: TOKEN1,
+                            token: ChainTy::one_address(),
                         },
                         sqrt_ratio_limit: None,
                         override_state: None,
@@ -782,7 +799,7 @@ mod tests {
                     .quote(QuoteParams {
                         token_amount: TokenAmount {
                             amount: 1000,
-                            token: TOKEN0,
+                            token: ChainTy::zero_address(),
                         },
                         sqrt_ratio_limit: None,
                         override_state: None,
@@ -895,7 +912,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1_000_000,
-                        token: TOKEN0,
+                        token: Starknet::zero_address(),
                     },
                     sqrt_ratio_limit: None,
                     override_state: None,
@@ -915,7 +932,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1_000_000,
-                        token: TOKEN1,
+                        token: Starknet::one_address(),
                     },
                     sqrt_ratio_limit: None,
                     override_state: None,

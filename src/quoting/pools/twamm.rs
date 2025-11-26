@@ -1,14 +1,15 @@
-use crate::math::uint::U256;
-use crate::quoting::types::PoolState;
-use crate::quoting::types::{BlockTimestamp, Config};
+use crate::quoting::types::{BlockTimestamp, PoolConfig};
 use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount};
 use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
+use crate::{private, quoting::types::PoolState};
 
 use alloc::vec::Vec;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
+use ruint::aliases::U256;
+use thiserror::Error;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPool<C: Chain> {
     full_range_pool: C::FullRangePool,
@@ -19,10 +20,13 @@ pub struct TwammPool<C: Chain> {
     virtual_order_deltas: Vec<TwammSaleRateDelta>,
 }
 
-pub type TwammPoolKey<C> =
-    PoolKey<<C as Chain>::Fee, <<C as Chain>::FullRangePool as Pool<C>>::PoolTypeConfig>;
+pub type TwammPoolKey<C> = PoolKey<
+    <C as Chain>::Address,
+    <C as Chain>::Fee,
+    <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig,
+>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPoolState<S> {
     pub full_range_pool_state: S,
@@ -31,7 +35,7 @@ pub struct TwammPoolState<S> {
     pub last_execution_time: u64,
 }
 
-#[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Add, AddAssign, Sub, SubAssign)]
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammPoolResources<R> {
     pub full_range_pool_resources: R,
@@ -43,7 +47,7 @@ pub struct TwammPoolResources<R> {
     pub virtual_orders_executed: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammSaleRateDelta {
     pub time: u64,
@@ -51,25 +55,29 @@ pub struct TwammSaleRateDelta {
     pub sale_rate_delta1: i128,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TwammPoolError<E> {
+    #[error("full range pool error")]
     /// Errors from the underlying full range pool constructor.
-    FullRangePoolError(E),
+    FullRangePoolError(#[from] E),
+    #[error("sale rate deltas not ordered or not greater than last execution time")]
     /// Sale rate deltas are not ordered or not greater than last_execution_time.
     SaleRateDeltasInvalid,
+    #[error("sale rate delta overflow or underflow")]
     /// Sale rate deltas overflow or underflow at some point
     SaleRateDeltasOverflowOrUnderflow,
+    #[error("sale rate delta sum non-zero")]
     /// Sum of current sale rate and sale rate deltas must be zero.
     SaleRateDeltaSumNonZero,
 }
 
 impl<C: Chain> TwammPool<C> {
     pub fn new(
-        token0: U256,
-        token1: U256,
+        token0: C::Address,
+        token1: C::Address,
         fee: C::Fee,
-        extension: U256,
+        extension: C::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
         last_execution_time: u64,
@@ -138,21 +146,28 @@ impl<C: Chain> TwammPool<C> {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum TwammPoolQuoteError<E> {
+    #[error("execution time exceeds block time")]
     ExecutionTimeExceedsBlockTime,
+    #[error("next price calculation failed")]
     FailedCalculateNextSqrtRatio,
+    #[error("sale amount overflow")]
     SaleAmountOverflow,
+    #[error("too much time passed since last execution")]
     TooMuchTimePassedSinceLastExecution,
-    FullRangeQuoteError(E),
+    #[error("full range quote error")]
+    FullRangeQuoteError(#[from] E),
 }
 
-impl<C: Chain> Pool<C> for TwammPool<C> {
-    type PoolTypeConfig = <C::FullRangePool as Pool<C>>::PoolTypeConfig;
-    type State = TwammPoolState<<C::FullRangePool as Pool<C>>::State>;
-    type Resources = TwammPoolResources<<C::FullRangePool as Pool<C>>::Resources>;
+impl<C: Chain> Pool for TwammPool<C> {
+    type Address = C::Address;
+    type Fee = C::Fee;
+    type PoolTypeConfig = <C::FullRangePool as Pool>::PoolTypeConfig;
+    type State = TwammPoolState<<C::FullRangePool as Pool>::State>;
+    type Resources = TwammPoolResources<<C::FullRangePool as Pool>::Resources>;
 
-    type QuoteError = TwammPoolQuoteError<<C::FullRangePool as Pool<C>>::QuoteError>;
+    type QuoteError = TwammPoolQuoteError<<C::FullRangePool as Pool>::QuoteError>;
     type Meta = BlockTimestamp;
 
     fn key(&self) -> TwammPoolKey<C> {
@@ -170,7 +185,7 @@ impl<C: Chain> Pool<C> for TwammPool<C> {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let QuoteParams {
             token_amount,
@@ -200,12 +215,12 @@ impl<C: Chain> Pool<C> for TwammPool<C> {
 
         let mut full_range_pool_state_override = override_state.map(|s| s.full_range_pool_state);
         let mut full_range_pool_execution_resources =
-            <C::FullRangePool as Pool<C>>::Resources::default();
+            <C::FullRangePool as Pool>::Resources::default();
 
         let PoolKey {
             token0,
             token1,
-            config: Config { fee, .. },
+            config: PoolConfig { fee, .. },
         } = self.full_range_pool.key();
 
         while last_execution_time != current_time {
@@ -384,52 +399,28 @@ impl<S: PoolState> PoolState for TwammPoolState<S> {
     }
 }
 
+impl<C: Chain> private::Sealed for TwammPool<C> {}
+impl<S: PoolState> private::Sealed for TwammPoolState<S> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         chain::{
             evm::Evm,
-            tests::{run_for_all_chains, ChainEnum},
+            tests::{run_for_all_chains, ChainEnum, ChainTest},
         },
-        math::{tick::to_sqrt_ratio, uint::U256},
+        math::tick::to_sqrt_ratio,
         quoting::types::{Pool, QuoteParams, TokenAmount},
     };
     use alloc::vec;
     use num_traits::Zero;
 
-    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::ONE;
-
     fn zero_fee<C: Chain>() -> C::Fee {
         C::Fee::zero()
     }
 
-    fn build_pool<C: Chain>(
-        sqrt_ratio: U256,
-        liquidity: u128,
-        last_execution_time: u64,
-        token0_sale_rate: u128,
-        token1_sale_rate: u128,
-        deltas: Vec<TwammSaleRateDelta>,
-    ) -> TwammPool<C> {
-        TwammPool::new(
-            TOKEN0,
-            TOKEN1,
-            zero_fee::<C>(),
-            EXTENSION,
-            sqrt_ratio,
-            liquidity,
-            last_execution_time,
-            token0_sale_rate,
-            token1_sale_rate,
-            deltas,
-        )
-        .unwrap()
-    }
-
-    fn try_build_pool<C: Chain>(
+    fn try_build_pool<C: ChainTest>(
         sqrt_ratio: U256,
         liquidity: u128,
         last_execution_time: u64,
@@ -438,10 +429,10 @@ mod tests {
         deltas: Vec<TwammSaleRateDelta>,
     ) -> Result<TwammPool<C>, TwammPoolError<C::FullRangePoolError>> {
         TwammPool::new(
-            TOKEN0,
-            TOKEN1,
+            C::zero_address(),
+            C::one_address(),
             zero_fee::<C>(),
-            EXTENSION,
+            C::one_address(),
             sqrt_ratio,
             liquidity,
             last_execution_time,
@@ -449,6 +440,25 @@ mod tests {
             token1_sale_rate,
             deltas,
         )
+    }
+
+    fn build_pool<C: ChainTest>(
+        sqrt_ratio: U256,
+        liquidity: u128,
+        last_execution_time: u64,
+        token0_sale_rate: u128,
+        token1_sale_rate: u128,
+        deltas: Vec<TwammSaleRateDelta>,
+    ) -> TwammPool<C> {
+        try_build_pool(
+            sqrt_ratio,
+            liquidity,
+            last_execution_time,
+            token0_sale_rate,
+            token1_sale_rate,
+            deltas,
+        )
+        .unwrap()
     }
 
     fn min_ratio<C: Chain>() -> U256 {
@@ -598,7 +608,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000.into(),
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 sqrt_ratio_limit: Some(min_ratio::<ChainTy>()),
                 meta: 32,
@@ -630,7 +640,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000,
-                    token: TOKEN1,
+                    token: ChainTy::one_address(),
                 },
                 sqrt_ratio_limit: None,
                 meta: 32,
@@ -666,7 +676,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000.into(),
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 sqrt_ratio_limit: None,
                 meta: 32,
@@ -702,7 +712,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000.into(),
-                    token: TOKEN1,
+                    token: ChainTy::one_address(),
                 },
                 sqrt_ratio_limit: Some(max_ratio::<ChainTy>()),
                 meta: 32,
@@ -738,7 +748,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000.into(),
-                    token: TOKEN1,
+                    token: ChainTy::one_address(),
                 },
                 sqrt_ratio_limit: Some(max_ratio::<ChainTy>()),
                 meta: 32,
@@ -782,7 +792,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN1,
+                        token: ChainTy::one_address(),
                     },
                     meta: 32,
                     sqrt_ratio_limit: None,
@@ -828,7 +838,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN1,
+                        token: ChainTy::one_address(),
                     },
                     meta: 32,
                     sqrt_ratio_limit: None,
@@ -874,7 +884,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                     },
                     meta: 32,
                     sqrt_ratio_limit: None,
@@ -920,7 +930,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                     },
                     meta: 32,
                     sqrt_ratio_limit: None,
@@ -957,7 +967,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000,
-                    token: TOKEN1,
+                    token: ChainTy::one_address(),
                 },
                 sqrt_ratio_limit: None,
                 meta: 32,
@@ -993,7 +1003,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 sqrt_ratio_limit: None,
                 meta: 32,
@@ -1031,7 +1041,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN1,
+                        token: ChainTy::one_address(),
                     },
                     sqrt_ratio_limit: None,
                     meta: 32,
@@ -1070,7 +1080,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN1,
+                        token: ChainTy::one_address(),
                     },
                     sqrt_ratio_limit: None,
                     meta: 32,
@@ -1109,7 +1119,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                     },
                     sqrt_ratio_limit: None,
                     meta: 32,
@@ -1148,7 +1158,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                     },
                     sqrt_ratio_limit: None,
                     meta: 32,
@@ -1187,7 +1197,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                     },
                     sqrt_ratio_limit: None,
                     meta: 32,
@@ -1233,7 +1243,7 @@ mod tests {
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
                         amount: 1000,
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                     },
                     sqrt_ratio_limit: None,
                     meta: 32,
@@ -1270,7 +1280,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 0,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 sqrt_ratio_limit: Some(to_sqrt_ratio::<ChainTy>(693_147).unwrap()),
                 meta: 43_200,
@@ -1281,7 +1291,7 @@ mod tests {
         pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: 0,
-                token: TOKEN0,
+                token: ChainTy::zero_address(),
             },
             sqrt_ratio_limit: Some(to_sqrt_ratio::<ChainTy>(693_147).unwrap()),
             meta: 86_400,
@@ -1292,7 +1302,7 @@ mod tests {
         pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: 0,
-                token: TOKEN0,
+                token: ChainTy::zero_address(),
             },
             sqrt_ratio_limit: Some(to_sqrt_ratio::<ChainTy>(693_147).unwrap()),
             meta: 86_400,
@@ -1319,7 +1329,7 @@ mod tests {
         pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: 0,
-                token: TOKEN0,
+                token: ChainTy::zero_address(),
             },
             meta: 60,
             sqrt_ratio_limit: None,
@@ -1330,7 +1340,7 @@ mod tests {
         pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: 0,
-                token: TOKEN0,
+                token: ChainTy::zero_address(),
             },
             meta: 90,
             sqrt_ratio_limit: None,
@@ -1342,7 +1352,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 0,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 meta: 120,
                 sqrt_ratio_limit: None,
@@ -1356,7 +1366,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 10u128.pow(18) as i128,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 meta: 120,
                 sqrt_ratio_limit: None,
@@ -1369,7 +1379,7 @@ mod tests {
             pool.full_range_pool
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
-                        token: TOKEN0,
+                        token: ChainTy::zero_address(),
                         amount: 10u128.pow(18) as i128,
                     },
                     meta: (),
@@ -1384,7 +1394,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 10u128.pow(18) as i128,
-                    token: TOKEN1,
+                    token: ChainTy::one_address(),
                 },
                 sqrt_ratio_limit: Some(to_sqrt_ratio::<ChainTy>(693_147).unwrap()),
                 meta: 120,
@@ -1397,7 +1407,7 @@ mod tests {
             pool.full_range_pool
                 .quote(QuoteParams {
                     token_amount: TokenAmount {
-                        token: TOKEN1,
+                        token: ChainTy::one_address(),
                         amount: 10u128.pow(18) as i128,
                     },
                     meta: (),
@@ -1427,7 +1437,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 meta: 2_040,
                 sqrt_ratio_limit: None,
@@ -1461,7 +1471,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 meta: 2_100,
                 sqrt_ratio_limit: None,
@@ -1510,7 +1520,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: (10_000u128 * 10u128.pow(18)) as i128,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 sqrt_ratio_limit: None,
                 meta: 2_040,
@@ -1521,7 +1531,7 @@ mod tests {
         pool.quote(QuoteParams {
             token_amount: TokenAmount {
                 amount: (10_000u128 * 10u128.pow(18)) as i128,
-                token: TOKEN1,
+                token: ChainTy::one_address(),
             },
             sqrt_ratio_limit: None,
             meta: 2_100,
@@ -1533,10 +1543,10 @@ mod tests {
     #[test]
     fn example_from_production_sepolia() {
         let pool = TwammPool::<Evm>::new(
-            TOKEN0,
-            TOKEN1,
+            Evm::zero_address(),
+            Evm::one_address(),
             9_223_372_036_854_775,
-            U256::ONE,
+            Evm::one_address(),
             U256::from_limbs([4182607738901102592, 148436996701757, 0, 0]),
             4_472_135_213_867,
             1_743_726_720,
@@ -1570,7 +1580,7 @@ mod tests {
         let result = pool
             .quote(QuoteParams {
                 token_amount: TokenAmount {
-                    token: TOKEN0,
+                    token: Evm::zero_address(),
                     amount: 50_000_000_000_000_000,
                 },
                 meta: 1_743_783_660,

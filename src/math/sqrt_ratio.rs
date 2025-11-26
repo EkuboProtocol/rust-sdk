@@ -1,15 +1,20 @@
 use crate::math::muldiv::{muldiv, MuldivError};
-use crate::math::uint::U256;
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
 pub const SQRT_RATIO_ONE: U256 = U256::from_limbs([0, 0, 1, 0]);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum PriceMathError {
+    #[error("no liquidity")]
     NoLiquidity,
+    #[error("overflow")]
     Overflow,
+    #[error("underflow")]
     Underflow,
-    MuldivError(MuldivError),
+    #[error("muldiv error")]
+    MuldivError(#[from] MuldivError),
 }
 
 pub fn next_sqrt_ratio_from_amount0(

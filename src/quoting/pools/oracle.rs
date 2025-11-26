@@ -1,54 +1,29 @@
 use crate::quoting::types::{BlockTimestamp, Pool, PoolKey, Quote, QuoteParams};
-use crate::{math::uint::U256, quoting::types::PoolState};
-use core::ops::{Add, AddAssign, Sub, SubAssign};
+use crate::{private, quoting::types::PoolState};
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
 use crate::chain::Chain;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePoolState<S> {
     pub full_range_pool_state: S,
     pub last_snapshot_time: u64,
 }
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePoolResources<R> {
-    pub underlying_pool_resources: R,
+    pub full_range_pool_resources: R,
     pub snapshots_written: u32,
 }
 
-impl<R: AddAssign> AddAssign for OraclePoolResources<R> {
-    fn add_assign(&mut self, rhs: Self) {
-        self.underlying_pool_resources += rhs.underlying_pool_resources;
-        self.snapshots_written += rhs.snapshots_written;
-    }
-}
-
-impl<R: AddAssign> Add for OraclePoolResources<R> {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl<R: SubAssign> SubAssign for OraclePoolResources<R> {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.underlying_pool_resources -= rhs.underlying_pool_resources;
-        self.snapshots_written -= rhs.snapshots_written;
-    }
-}
-
-impl<R: SubAssign> Sub for OraclePoolResources<R> {
-    type Output = Self;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
-}
+pub type OraclePoolTypeConfig<C> = <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig;
+pub type OraclePoolKey<C> =
+    PoolKey<<C as Chain>::Address, <C as Chain>::Fee, OraclePoolTypeConfig<C>>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -57,17 +32,18 @@ pub struct OraclePool<C: Chain> {
     last_snapshot_time: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OraclePoolError<E> {
-    FullRangePoolError(E),
+    #[error("full range pool error")]
+    FullRangePoolError(#[from] E),
 }
 
 impl<C: Chain> OraclePool<C> {
     pub fn new(
-        token0: U256,
-        token1: U256,
-        extension: U256,
+        token0: C::Address,
+        token1: C::Address,
+        extension: C::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
         last_snapshot_time: u64,
@@ -87,14 +63,16 @@ impl<C: Chain> OraclePool<C> {
     }
 }
 
-impl<C: Chain> Pool<C> for OraclePool<C> {
-    type Resources = OraclePoolResources<<C::FullRangePool as Pool<C>>::Resources>;
-    type State = OraclePoolState<<C::FullRangePool as Pool<C>>::State>;
-    type QuoteError = <C::FullRangePool as Pool<C>>::QuoteError;
+impl<C: Chain> Pool for OraclePool<C> {
+    type Address = C::Address;
+    type Fee = C::Fee;
+    type Resources = OraclePoolResources<<C::FullRangePool as Pool>::Resources>;
+    type State = OraclePoolState<<C::FullRangePool as Pool>::State>;
+    type QuoteError = <C::FullRangePool as Pool>::QuoteError;
     type Meta = BlockTimestamp;
-    type PoolTypeConfig = <C::FullRangePool as Pool<C>>::PoolTypeConfig;
+    type PoolTypeConfig = OraclePoolTypeConfig<C>;
 
-    fn key(&self) -> PoolKey<C::Fee, Self::PoolTypeConfig> {
+    fn key(&self) -> OraclePoolKey<C> {
         self.full_range_pool.key()
     }
 
@@ -107,7 +85,7 @@ impl<C: Chain> Pool<C> for OraclePool<C> {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let block_time = params.meta;
         let pool_time = params
@@ -126,7 +104,7 @@ impl<C: Chain> Pool<C> for OraclePool<C> {
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
                 snapshots_written: if pool_time != block_time { 1 } else { 0 },
-                underlying_pool_resources: result.execution_resources,
+                full_range_pool_resources: result.execution_resources,
             },
             fees_paid: result.fees_paid,
             is_price_increasing: result.is_price_increasing,
@@ -164,18 +142,22 @@ impl<S: PoolState> PoolState for OraclePoolState<S> {
     }
 }
 
+impl<S: PoolState> private::Sealed for OraclePoolState<S> {}
+impl<C: Chain> private::Sealed for OraclePool<C> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        chain::{starknet::Starknet, tests::chain_test, Chain},
-        math::{tick::to_sqrt_ratio, uint::U256},
+        chain::{
+            starknet::Starknet,
+            tests::{chain_test, ChainTest},
+            Chain,
+        },
+        math::tick::to_sqrt_ratio,
         quoting::types::{Pool, PoolState, QuoteParams, TokenAmount},
     };
 
-    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::from_limbs([3, 0, 0, 0]);
     const DEFAULT_LIQUIDITY: u128 = 1_000_000_000;
 
     fn min_ratio<C: Chain>() -> U256 {
@@ -186,15 +168,15 @@ mod tests {
         C::max_sqrt_ratio_full_range()
     }
 
-    fn build_pool<C: Chain>(
+    fn build_pool<C: ChainTest>(
         sqrt_ratio: U256,
         liquidity: u128,
         last_snapshot_time: u64,
     ) -> OraclePool<C> {
         OraclePool::new(
-            TOKEN0,
-            TOKEN1,
-            EXTENSION,
+            C::zero_address(),
+            C::one_address(),
+            C::one_address(),
             sqrt_ratio,
             liquidity,
             last_snapshot_time,
@@ -202,7 +184,7 @@ mod tests {
         .unwrap()
     }
 
-    fn default_pool<C: Chain>() -> OraclePool<C> {
+    fn default_pool<C: ChainTest>() -> OraclePool<C> {
         build_pool::<C>(to_sqrt_ratio::<C>(0).unwrap(), DEFAULT_LIQUIDITY, 1)
     }
 
@@ -253,7 +235,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000,
-                    token: TOKEN1,
+                    token: ChainTy::one_address(),
                 },
                 sqrt_ratio_limit: None,
                 override_state: None,
@@ -279,7 +261,7 @@ mod tests {
             .quote(QuoteParams {
                 token_amount: TokenAmount {
                     amount: 1000,
-                    token: TOKEN0,
+                    token: ChainTy::zero_address(),
                 },
                 sqrt_ratio_limit: None,
                 override_state: None,

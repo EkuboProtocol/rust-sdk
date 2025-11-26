@@ -1,65 +1,72 @@
-use crate::math::uint::U256;
 use crate::{
     chain::evm::Evm,
     math::swap::{compute_step, is_price_increasing, ComputeStepError},
+    private,
+    quoting::pools::full_range::FullRangePoolState,
 };
 use crate::{
     chain::Chain,
     math::tick::to_sqrt_ratio,
-    quoting::{
-        full_range_pool::FullRangePoolState,
-        types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount},
-    },
+    quoting::types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount},
 };
 use core::ops::Not;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
+use ruint::aliases::U256;
+use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StableswapPoolTypeConfig {
     pub center_tick: i32,
     pub amplification_factor: u8,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum StableswapPoolQuoteError {
+    #[error("specified token not part of the pool")]
     InvalidToken,
+    #[error("price limit invalid")]
     InvalidSqrtRatioLimit,
-    InvalidTick(i32),
-    FailedComputeSwapStep(ComputeStepError),
+    #[error("failed swap computation step")]
+    FailedComputeSwapStep(#[from] ComputeStepError),
 }
 
-pub type StableswapPoolKey<C> = PoolKey<<C as Chain>::Fee, StableswapPoolTypeConfig>;
+pub type StableswapPoolKey =
+    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StableswapPool {
-    key: PoolKey<<Evm as Chain>::Fee, StableswapPoolTypeConfig>,
+    key: PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>,
     state: FullRangePoolState,
 
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     lower_price: U256,
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
     upper_price: U256,
 }
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Add, AddAssign, Sub, SubAssign)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 pub struct StableswapPoolResources {
     pub no_override_price_change: u32,
     pub initialized_ticks_crossed: u32,
 }
 
-/// Errors that can occur when constructing a FullRangePool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// Errors that can occur when constructing a StableswapPool.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum StableswapPoolError {
+    #[error("token0 must be less than token1")]
     /// Token0 must be less than token1.
     TokenOrderInvalid,
+    #[error("sqrt ratio out of bounds")]
     SqrtRatioInvalid,
+    #[error("stableswap center tick is not between min and max tick")]
+    InvalidCenterTick,
+    #[error("stableswap amplification factor exceeds the maximum allowed value")]
+    InvalidStableswapAmplification,
 }
 
 impl StableswapPool {
     pub fn new(
-        key: StableswapPoolKey<Evm>,
+        key: StableswapPoolKey,
         state: FullRangePoolState,
     ) -> Result<Self, StableswapPoolError> {
         let PoolKey {
@@ -82,11 +89,11 @@ impl StableswapPool {
         }
 
         if center_tick < Evm::MIN_TICK || center_tick > Evm::MAX_TICK {
-            return Err(todo!());
+            return Err(StableswapPoolError::InvalidCenterTick);
         }
 
         if amplification_factor > Evm::MAX_STABLESWAP_AMPLIFICATION_FACTOR {
-            return Err(todo!());
+            return Err(StableswapPoolError::InvalidStableswapAmplification);
         }
 
         let liquidity_width = Evm::MAX_TICK >> amplification_factor;
@@ -119,14 +126,16 @@ impl StableswapPool {
     }
 }
 
-impl Pool<Evm> for StableswapPool {
+impl Pool for StableswapPool {
+    type Address = <Evm as Chain>::Address;
+    type Fee = <Evm as Chain>::Fee;
     type Resources = StableswapPoolResources;
     type State = FullRangePoolState;
     type QuoteError = StableswapPoolQuoteError;
     type Meta = ();
     type PoolTypeConfig = StableswapPoolTypeConfig;
 
-    fn key(&self) -> PoolKey<<Evm as Chain>::Fee, Self::PoolTypeConfig> {
+    fn key(&self) -> StableswapPoolKey {
         self.key
     }
 
@@ -136,7 +145,7 @@ impl Pool<Evm> for StableswapPool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let TokenAmount { amount, token } = params.token_amount;
         let is_token1 = token == self.key.token1;
@@ -268,30 +277,31 @@ impl Pool<Evm> for StableswapPool {
     }
 }
 
+impl private::Sealed for StableswapPool {}
+
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::Address;
+
     use super::*;
     use crate::{
+        chain::tests::ChainTest,
         math::{
             delta::{amount0_delta, amount1_delta},
             tick::to_sqrt_ratio,
-            uint::U256,
         },
-        quoting::types::{Config, Quote, QuoteParams, TokenAmount},
+        quoting::types::{PoolConfig, Quote, QuoteParams, TokenAmount},
     };
 
-    const TOKEN0: U256 = U256::from_limbs([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256::from_limbs([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::ZERO;
     const POSITION_AMOUNT: u128 = 1_000_000_000_000_000_000;
     const SMALL_AMOUNT: i128 = 1_000_000_000_000_000;
 
-    fn key(center_tick: i32, amplification_factor: u8) -> StableswapPoolKey<Evm> {
+    fn key(center_tick: i32, amplification_factor: u8) -> StableswapPoolKey {
         PoolKey {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            config: Config {
-                extension: EXTENSION,
+            token0: Evm::zero_address(),
+            token1: Evm::one_address(),
+            config: PoolConfig {
+                extension: Evm::zero_address(),
                 fee: 0,
                 pool_type_config: StableswapPoolTypeConfig {
                     center_tick,
@@ -379,7 +389,7 @@ mod tests {
 
     fn quote_amount(
         pool: &StableswapPool,
-        token: U256,
+        token: Address,
         amount: i128,
     ) -> Quote<StableswapPoolResources, FullRangePoolState> {
         pool.quote(QuoteParams {
@@ -395,7 +405,7 @@ mod tests {
     fn amplification_26_token0_in() {
         let pool = build_pool(0, 26, 0);
 
-        let quote = quote_amount(&pool, TOKEN0, SMALL_AMOUNT);
+        let quote = quote_amount(&pool, Evm::zero_address(), SMALL_AMOUNT);
 
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
         assert_eq!(quote.calculated_amount, 999_999_999_500_000);
@@ -405,7 +415,7 @@ mod tests {
     fn amplification_26_token1_in() {
         let pool = build_pool(0, 26, 0);
 
-        let quote = quote_amount(&pool, TOKEN1, SMALL_AMOUNT);
+        let quote = quote_amount(&pool, Evm::one_address(), SMALL_AMOUNT);
 
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
         assert_eq!(quote.calculated_amount, 999_999_999_500_000);
@@ -415,7 +425,7 @@ mod tests {
     fn amplification_1_token0_in() {
         let pool = build_pool(0, 1, 0);
 
-        let quote = quote_amount(&pool, TOKEN0, SMALL_AMOUNT);
+        let quote = quote_amount(&pool, Evm::zero_address(), SMALL_AMOUNT);
 
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
         assert_eq!(quote.calculated_amount, 999_000_999_001_231);
@@ -425,7 +435,7 @@ mod tests {
     fn amplification_1_token1_in() {
         let pool = build_pool(0, 1, 0);
 
-        let quote = quote_amount(&pool, TOKEN1, SMALL_AMOUNT);
+        let quote = quote_amount(&pool, Evm::one_address(), SMALL_AMOUNT);
 
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
         assert_eq!(quote.calculated_amount, 999_000_999_001_231);
@@ -448,7 +458,7 @@ mod tests {
         let quote = pool
             .quote(QuoteParams {
                 token_amount: TokenAmount {
-                    token: TOKEN1,
+                    token: Evm::one_address(),
                     amount: SMALL_AMOUNT,
                 },
                 sqrt_ratio_limit: None,
@@ -472,7 +482,7 @@ mod tests {
         let quote = pool
             .quote(QuoteParams {
                 token_amount: TokenAmount {
-                    token: TOKEN0,
+                    token: Evm::zero_address(),
                     amount: 1_000_000_000_000_000_000i128,
                 },
                 sqrt_ratio_limit: None,
@@ -494,7 +504,7 @@ mod tests {
         let mid_tick = (lower + upper) / 2;
         let pool = build_pool(0, amplification, mid_tick);
 
-        let quote = quote_amount(&pool, TOKEN0, SMALL_AMOUNT);
+        let quote = quote_amount(&pool, Evm::zero_address(), SMALL_AMOUNT);
 
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
         assert!(quote.calculated_amount > 0);

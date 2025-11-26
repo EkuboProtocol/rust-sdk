@@ -1,76 +1,32 @@
-use crate::{chain::Chain, math::uint::U256};
-use core::ops::{Add, Sub};
+use num_traits::Zero;
+use ruint::aliases::U256;
+
+use crate::private;
 use core::{
+    error::Error,
     fmt::Debug,
     ops::{AddAssign, SubAssign},
 };
+use core::{
+    hash::Hash,
+    ops::{Add, Sub},
+};
 
 /// Unique key identifying the pool.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PoolKey<F, P> {
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
-    pub token0: U256,
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
-    pub token1: U256,
-    pub config: Config<F, P>,
+pub struct PoolKey<A, F, C> {
+    pub token0: A,
+    pub token1: A,
+    pub config: PoolConfig<A, F, C>,
 }
 
-impl<Fee, C1> PoolKey<Fee, C1> {
-    pub fn pool_type_config_into<C2: From<C1>>(self) -> PoolKey<Fee, C2> {
-        let Self {
-            token0,
-            token1,
-            config:
-                Config {
-                    extension,
-                    fee,
-                    pool_type_config,
-                },
-        } = self;
-
-        PoolKey {
-            token0,
-            token1,
-            config: Config {
-                extension,
-                fee,
-                pool_type_config: pool_type_config.into(),
-            },
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Config<F, P> {
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
-    pub extension: U256,
+pub struct PoolConfig<A, F, C> {
+    pub extension: A,
     pub fee: F,
-    pub pool_type_config: P,
-}
-
-#[cfg(feature = "serde")]
-pub mod serde_u256 {
-    use super::*;
-    use serde::Serializer;
-
-    pub fn serialize<S>(value: &U256, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let hex_str = alloc::format!("{:x}", value);
-        serializer.serialize_str(&hex_str)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let hex_str: alloc::borrow::Cow<'static, str> =
-            serde::Deserialize::deserialize(deserializer)?;
-        U256::from_str_radix(&hex_str, 16).map_err(serde::de::Error::custom)
-    }
+    pub pool_type_config: C,
 }
 
 /*impl From<U256> for Config<Evm> {
@@ -91,32 +47,32 @@ impl From<Config<Evm>> for U256 {
     }
 }*/
 
-// The aggregate effect of all positions on a pool that are bounded by the specific tick
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// The aggregate effect of all positions on a pool that are bounded by the specific tick
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tick {
     pub index: i32,
     pub liquidity_delta: i128,
 }
 
-// Amount and token information.
-#[derive(Clone, Copy, PartialEq, Debug, Ord, PartialOrd, Eq)]
-pub struct TokenAmount {
-    pub token: U256,
+/// Amount and token information.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TokenAmount<A> {
+    pub token: A,
     pub amount: i128,
 }
 
-// Parameters for a quote operation.
-#[derive(Clone, Copy, Debug)]
-pub struct QuoteParams<S, M> {
-    pub token_amount: TokenAmount,
+/// Parameters for a quote operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct QuoteParams<A, S, M> {
+    pub token_amount: TokenAmount<A>,
     pub sqrt_ratio_limit: Option<U256>,
     pub override_state: Option<S>,
     pub meta: M,
 }
 
-// The result of all pool swaps is some input and output delta
-#[derive(Clone, Copy, Debug)]
+/// The simulated outcome of a swap
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Quote<R, S> {
     pub is_price_increasing: bool,
     pub consumed_amount: i128,
@@ -126,102 +82,51 @@ pub struct Quote<R, S> {
     pub fees_paid: u128,
 }
 
-// Commonly used as meta
+/// Commonly used as [`Pool::Meta`]
 pub type BlockTimestamp = u64;
 
-pub trait Pool<C: Chain>: Send + Sync + Debug + Clone + PartialEq + Eq {
-    type Resources: Add<Output = Self::Resources>
-        + AddAssign
-        + Sub<Output = Self::Resources>
-        + SubAssign
-        + Debug
+pub trait Pool: private::Sealed + Debug {
+    type Address;
+    type Fee;
+    type Resources: Debug
         + Default
         + Copy
-        + PartialEq
-        + Eq;
-    type State: Debug + Copy + PartialEq + Eq + PoolState;
-    type QuoteError: Debug + Copy;
-    // Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
-    type Meta: Debug + Copy;
-    type PoolTypeConfig;
+        + Eq
+        + Hash
+        + Add<Output = Self::Resources>
+        + AddAssign
+        + Sub<Output = Self::Resources>
+        + SubAssign;
+    type State: PoolState + Debug + Copy + Eq + Hash;
+    type QuoteError: Error + Copy + Eq + Hash + 'static;
+    /// Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
+    type Meta: Debug + Copy + Eq + Hash;
+    type PoolTypeConfig; // TODO Bounds
 
-    fn key(&self) -> PoolKey<C::Fee, Self::PoolTypeConfig>;
-
+    fn key(&self) -> PoolKey<Self::Address, Self::Fee, Self::PoolTypeConfig>;
     fn state(&self) -> Self::State;
 
+    /// Quotes the pool with the given parameters
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError>;
 
-    fn has_liquidity(&self) -> bool;
+    /// A quick check on whether the pool has any liquidity
+    fn has_liquidity(&self) -> bool {
+        !self.state().liquidity().is_zero()
+    }
 
-    // Returns the greatest tick with non-zero liquidity in the pool
+    /// Returns the greatest tick with non-zero liquidity in the pool
     fn max_tick_with_liquidity(&self) -> Option<i32>;
-    // Returns the smallest tick with non-zero liquidity in the pool
+    /// Returns the smallest tick with non-zero liquidity in the pool
     fn min_tick_with_liquidity(&self) -> Option<i32>;
 
-    // Returns false if a swap of x followed by a swap of y will have the same output as a swap of x + y
+    /// Returns false if a swap of x followed by a swap of y will have the same output as a swap of x + y
     fn is_path_dependent(&self) -> bool;
 }
 
-pub trait PoolState {
+pub trait PoolState: private::Sealed {
     fn sqrt_ratio(&self) -> U256;
     fn liquidity(&self) -> u128;
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::math::uint::U256;
-    use crate::quoting::types::TokenAmount;
-
-    #[test]
-    fn test_ordering_token_amount() {
-        assert!(
-            TokenAmount {
-                token: U256::ONE,
-                amount: 0,
-            } > TokenAmount {
-                token: U256::ZERO,
-                amount: 1,
-            }
-        );
-        assert_eq!(
-            TokenAmount {
-                token: U256::ZERO,
-                amount: 0,
-            },
-            TokenAmount {
-                token: U256::ZERO,
-                amount: 0,
-            }
-        );
-        assert!(
-            TokenAmount {
-                token: U256::ZERO,
-                amount: 0,
-            } > TokenAmount {
-                token: U256::ZERO,
-                amount: -1,
-            }
-        );
-        assert!(
-            TokenAmount {
-                token: U256::ZERO,
-                amount: 0,
-            } < TokenAmount {
-                token: U256::ONE,
-                amount: -1,
-            }
-        );
-        assert!(
-            TokenAmount {
-                token: U256::ZERO,
-                amount: 0,
-            } < TokenAmount {
-                token: U256::ZERO,
-                amount: 1,
-            }
-        );
-    }
 }

@@ -1,9 +1,14 @@
-use crate::math::uint::U256;
-use ruint::{aliases::U512, UintTryFrom};
+use ruint::{
+    aliases::{U256, U512},
+    UintTryFrom,
+};
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum MuldivError {
+    #[error("overflow")]
     Overflow,
+    #[error("division by zero")]
     DenominatorZero,
 }
 
@@ -27,7 +32,6 @@ pub fn muldiv(x: U256, y: U256, d: U256, round_up: bool) -> Result<U256, MuldivE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::uint::U256;
     use ruint::uint;
 
     #[test]

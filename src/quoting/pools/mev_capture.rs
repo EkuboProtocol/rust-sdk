@@ -1,93 +1,69 @@
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
 use crate::{
     chain::evm::Evm,
     math::swap::{amount_before_fee, compute_fee},
+    private,
+    quoting::pools::base::{
+        BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState, BasePoolTypeConfig,
+        TickSpacing,
+    },
 };
 use crate::{
     chain::Chain,
-    quoting::{
-        base_pool::{BasePoolTypeConfig, TickSpacing},
-        types::{BlockTimestamp, Config, Pool, PoolKey, Quote, QuoteParams},
-    },
+    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams},
 };
 use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
-use crate::{
-    math::uint::U256,
-    quoting::base_pool::{BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState},
-};
-use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 // Resources consumed during any swap execution in a full range pool.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
-pub struct MEVResistPoolResources {
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+pub struct MevCapturePoolResources {
     pub state_update_count: u32,
     pub base_pool_resources: BasePoolResources,
 }
 
-impl AddAssign for MEVResistPoolResources {
-    fn add_assign(&mut self, rhs: Self) {
-        self.state_update_count += rhs.state_update_count;
-        self.base_pool_resources += rhs.base_pool_resources;
-    }
-}
-
-impl Add for MEVResistPoolResources {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl SubAssign for MEVResistPoolResources {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.state_update_count -= rhs.state_update_count;
-        self.base_pool_resources -= rhs.base_pool_resources;
-    }
-}
-
-impl Sub for MEVResistPoolResources {
-    type Output = Self;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct MEVResistPool {
+pub struct MevCapturePool {
     base_pool: BasePool<Evm>,
     last_update_time: u32,
     tick: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Copy)]
-pub struct MEVResistPoolState {
+#[derive(Clone, Debug, PartialEq, Eq, Copy, Hash)]
+pub struct MevCapturePoolState {
     pub last_update_time: u32,
     pub base_pool_state: BasePoolState,
 }
 
 /// Errors that can occur when constructing a MEVResistPool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum MEVResistPoolError {
+    #[error("fee must be non-zero")]
     FeeMustBeGreaterThanZero,
+    #[error("underlying pool must not be full range")]
     CannotBeFullRange,
+    #[error("extension must be non-zero")]
     MissingExtension,
+    #[error("current tick is invalid")]
     InvalidCurrentTick,
 }
 
-impl MEVResistPool {
+pub type MevCapturePoolTypeConfig = BasePoolTypeConfig;
+pub type MevCapturePoolKey =
+    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, MevCapturePoolTypeConfig>;
+
+impl MevCapturePool {
     // An MEV resist pool just wraps a base pool with some additional logic
     pub fn new(
         base_pool: BasePool<Evm>,
         last_update_time: u32,
         tick: i32,
     ) -> Result<Self, MEVResistPoolError> {
-        let Config {
+        let PoolConfig {
             fee,
             pool_type_config: TickSpacing(tick_spacing),
             extension,
@@ -105,7 +81,7 @@ impl MEVResistPool {
 
         // validates that the current tick is between the active tick and the active tick index + 1
         if let Some(i) = base_pool.state().active_tick_index {
-            let sorted_ticks = base_pool.get_sorted_ticks();
+            let sorted_ticks = base_pool.ticks();
             if let Some(t) = sorted_ticks.get(i) {
                 if t.index > tick {
                     return Err(MEVResistPoolError::InvalidCurrentTick);
@@ -117,7 +93,7 @@ impl MEVResistPool {
                 }
             }
         } else {
-            if let Some(t) = base_pool.get_sorted_ticks().first() {
+            if let Some(t) = base_pool.ticks().first() {
                 if t.index <= tick {
                     return Err(MEVResistPoolError::InvalidCurrentTick);
                 }
@@ -132,19 +108,21 @@ impl MEVResistPool {
     }
 }
 
-impl Pool<Evm> for MEVResistPool {
-    type Resources = MEVResistPoolResources;
-    type State = MEVResistPoolState;
+impl Pool for MevCapturePool {
+    type Address = <Evm as Chain>::Address;
+    type Fee = <Evm as Chain>::Fee;
+    type Resources = MevCapturePoolResources;
+    type State = MevCapturePoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = BlockTimestamp;
-    type PoolTypeConfig = BasePoolTypeConfig;
+    type PoolTypeConfig = MevCapturePoolTypeConfig;
 
-    fn key(&self) -> PoolKey<<Evm as Chain>::Fee, Self::PoolTypeConfig> {
+    fn key(&self) -> MevCapturePoolKey {
         self.base_pool.key()
     }
 
     fn state(&self) -> Self::State {
-        MEVResistPoolState {
+        MevCapturePoolState {
             base_pool_state: self.base_pool.state(),
             last_update_time: self.last_update_time,
         }
@@ -152,7 +130,7 @@ impl Pool<Evm> for MEVResistPool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         match self.base_pool.quote(QuoteParams {
             token_amount: params.token_amount,
@@ -208,13 +186,13 @@ impl Pool<Evm> for MEVResistPool {
                 Ok(Quote {
                     calculated_amount: calculated_amount,
                     consumed_amount: quote.consumed_amount,
-                    execution_resources: MEVResistPoolResources {
+                    execution_resources: MevCapturePoolResources {
                         state_update_count: state_update_count,
                         base_pool_resources: quote.execution_resources,
                     },
                     fees_paid: quote.fees_paid,
                     is_price_increasing: quote.is_price_increasing,
-                    state_after: MEVResistPoolState {
+                    state_after: MevCapturePoolState {
                         last_update_time: current_time,
                         base_pool_state: quote.state_after,
                     },
@@ -241,7 +219,7 @@ impl Pool<Evm> for MEVResistPool {
     }
 }
 
-impl PoolState for MEVResistPoolState {
+impl PoolState for MevCapturePoolState {
     fn sqrt_ratio(&self) -> U256 {
         self.base_pool_state.sqrt_ratio()
     }
@@ -251,19 +229,21 @@ impl PoolState for MEVResistPoolState {
     }
 }
 
+impl private::Sealed for MevCapturePoolState {}
+impl private::Sealed for MevCapturePool {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        math::{tick::to_sqrt_ratio, uint::U256},
-        quoting::types::{Config, Pool, PoolKey, QuoteParams, Tick, TokenAmount},
+        chain::tests::ChainTest,
+        math::tick::to_sqrt_ratio,
+        quoting::types::{Pool, PoolConfig, PoolKey, QuoteParams, Tick, TokenAmount},
     };
     use alloc::vec::Vec;
+    use alloy_primitives::Address;
     use ruint::uint;
 
-    const TOKEN_A: U256 = U256::from_limbs([1, 0, 0, 0]);
-    const TOKEN_B: U256 = U256::from_limbs([2, 0, 0, 0]);
-    const EXTENSION: U256 = U256::ONE;
     const DEFAULT_FEE: u64 = ((1u128 << 64) / 100) as u64;
     const DEFAULT_TICK_SPACING: u32 = 20_000;
 
@@ -278,8 +258,8 @@ mod tests {
     }
 
     fn build_pool(
-        token0: U256,
-        token1: U256,
+        token0: Address,
+        token1: Address,
         fee: u64,
         tick_spacing: u32,
         sqrt_ratio: U256,
@@ -287,16 +267,16 @@ mod tests {
         last_update_time: u32,
         tick: i32,
         tick_entries: &[(i32, i128)],
-    ) -> MEVResistPool {
-        MEVResistPool::new(
+    ) -> MevCapturePool {
+        MevCapturePool::new(
             BasePool::new(
                 PoolKey {
                     token0,
                     token1,
-                    config: Config {
+                    config: PoolConfig {
                         fee,
                         pool_type_config: TickSpacing(tick_spacing),
-                        extension: EXTENSION,
+                        extension: Evm::one_address(),
                     },
                 },
                 BasePoolState {
@@ -313,10 +293,10 @@ mod tests {
         .unwrap()
     }
 
-    fn default_pool(liquidity: i128, sqrt_ratio: U256, tick: i32) -> MEVResistPool {
+    fn default_pool(liquidity: i128, sqrt_ratio: U256, tick: i32) -> MevCapturePool {
         build_pool(
-            TOKEN_A,
-            TOKEN_B,
+            Evm::zero_address(),
+            Evm::one_address(),
             DEFAULT_FEE,
             DEFAULT_TICK_SPACING,
             sqrt_ratio,
@@ -339,7 +319,7 @@ mod tests {
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: 100_000,
-                    token: TOKEN_A,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -360,7 +340,7 @@ mod tests {
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: 300_000,
-                    token: TOKEN_A,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -371,7 +351,7 @@ mod tests {
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: 300_000,
-                    token: TOKEN_A,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -394,7 +374,7 @@ mod tests {
                 sqrt_ratio_limit: None,
                 token_amount: TokenAmount {
                     amount: -100_000,
-                    token: TOKEN_A,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -417,8 +397,8 @@ mod tests {
         let tick = 8_015_514;
 
         let pool = build_pool(
-            U256::ZERO,
-            U256::ONE,
+            Evm::zero_address(),
+            Evm::one_address(),
             fee,
             tick_spacing,
             uint!(18723430188006331344089883003460461264896_U256),
@@ -439,7 +419,7 @@ mod tests {
                     sqrt_ratio_limit: None,
                     token_amount: TokenAmount {
                         amount,
-                        token: U256::ZERO,
+                        token: Evm::zero_address(),
                     },
                 })
                 .unwrap();
@@ -459,8 +439,8 @@ mod tests {
         let tick = 8_092_285;
 
         let pool = build_pool(
-            U256::ZERO,
-            U256::ONE,
+            Evm::zero_address(),
+            Evm::one_address(),
             fee,
             tick_spacing,
             uint!(19456111242847136401729567804224169836544_U256),
@@ -479,7 +459,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 125_000_000_000_000_000,
-                    token: U256::ZERO,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -496,7 +476,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 50_000_000_000_000_000,
-                    token: U256::ZERO,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -513,7 +493,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 12_500_000_000_000_000,
-                    token: U256::ZERO,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();
@@ -530,7 +510,7 @@ mod tests {
                 sqrt_ratio_limit,
                 token_amount: TokenAmount {
                     amount: 12_500_000_000_000_000,
-                    token: U256::ZERO,
+                    token: Evm::zero_address(),
                 },
             })
             .unwrap();

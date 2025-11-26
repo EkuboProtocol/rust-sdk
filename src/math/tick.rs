@@ -1,9 +1,8 @@
+use ruint::aliases::U256;
+
 use crate::{
     chain::Chain,
-    math::{
-        sqrt_ratio::SQRT_RATIO_ONE,
-        uint::{u256_to_float_base_x128, U256},
-    },
+    math::{sqrt_ratio::SQRT_RATIO_ONE, uint::u256_to_float_base_x128},
 };
 
 const MASKS: [U256; 27] = [

@@ -1,19 +1,30 @@
-use crate::{math::uint::U256, quoting::types::Pool};
-use core::fmt::Debug;
+use crate::{
+    private,
+    quoting::{pools::base::TickSpacing, types::Pool},
+};
+use core::hash::Hash;
+use core::{
+    error::Error,
+    fmt::{Debug, Display},
+};
 use num_traits::Zero;
+use ruint::aliases::U256;
 
 #[cfg(feature = "evm")]
 pub mod evm;
 #[cfg(feature = "starknet")]
 pub mod starknet;
 
-pub trait Chain: Sized + Clone + PartialEq + Eq + Debug {
-    type Fee: Clone + Copy + PartialEq + Eq + Debug + Into<u128> + Zero + Send + Sync;
+pub trait Chain:
+    private::Sealed + Sized + Send + Sync + Clone + Debug + PartialEq + Eq + Hash
+{
+    type Address: Debug + Display + Copy + Ord + Send + Sync + Hash;
+    type Fee: Debug + Display + Copy + Eq + Send + Sync + Into<u128> + Zero + Hash;
 
-    type FullRangePool: Pool<Self, Meta = ()>;
-    type FullRangePoolError: Debug;
+    type FullRangePool: Pool<Address = Self::Address, Fee = Self::Fee, Meta = ()>;
+    type FullRangePoolError: Error;
 
-    fn max_tick_spacing() -> u32;
+    fn max_tick_spacing() -> TickSpacing;
 
     fn min_tick() -> i32;
     fn max_tick() -> i32;
@@ -30,10 +41,10 @@ pub trait Chain: Sized + Clone + PartialEq + Eq + Debug {
     fn fee_bits() -> u8;
 
     fn new_full_range_pool(
-        token0: U256,
-        token1: U256,
+        token0: Self::Address,
+        token1: Self::Address,
         fee: Self::Fee,
-        extension: U256,
+        extension: Self::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
     ) -> Result<Self::FullRangePool, Self::FullRangePoolError>;
@@ -41,13 +52,7 @@ pub trait Chain: Sized + Clone + PartialEq + Eq + Debug {
 
 #[cfg(test)]
 pub mod tests {
-    #[derive(Clone, Copy)]
-    pub enum ChainEnum {
-        Starknet,
-        Evm,
-    }
-
-    pub const CHAINS: [ChainEnum; 2] = [ChainEnum::Starknet, ChainEnum::Evm];
+    use super::*;
 
     macro_rules! run_for_all_chains {
         ($chain_ty:ident, $chain_enum:ident => $body:block) => {{
@@ -73,4 +78,17 @@ pub mod tests {
 
     pub(crate) use chain_test;
     pub(crate) use run_for_all_chains;
+
+    pub const CHAINS: [ChainEnum; 2] = [ChainEnum::Starknet, ChainEnum::Evm];
+
+    #[derive(Clone, Copy)]
+    pub enum ChainEnum {
+        Starknet,
+        Evm,
+    }
+
+    pub trait ChainTest: Chain {
+        fn zero_address() -> Self::Address;
+        fn one_address() -> Self::Address;
+    }
 }

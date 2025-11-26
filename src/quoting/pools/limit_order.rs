@@ -1,23 +1,29 @@
-use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, Tick};
-use crate::quoting::util::find_nearest_initialized_tick_index;
+use crate::quoting::{
+    pools::base::{BasePoolError, BasePoolQuoteError},
+    types::TokenAmount,
+    util::{approximate_number_of_tick_spacings_crossed, find_nearest_initialized_tick_index},
+};
+use crate::quoting::{
+    pools::base::{BasePoolResources, BasePoolTypeConfig},
+    types::PoolState,
+};
 use crate::{chain::starknet::Starknet, math::swap::is_price_increasing};
+use crate::{chain::Chain, quoting::pools::base::BasePoolState};
+use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolConfig};
 use crate::{
-    chain::Chain,
-    quoting::base_pool::{
-        BasePool, BasePoolError, BasePoolQuoteError, BasePoolResources, BasePoolState,
-        BasePoolTypeConfig, TickSpacing,
+    private,
+    quoting::{
+        pools::base::{BasePool, TickSpacing},
+        types::{Pool, PoolKey, Quote, QuoteParams, Tick},
     },
 };
-use crate::{math::tick::to_sqrt_ratio, quoting::types::Config};
-use crate::{math::uint::U256, quoting::types::PoolState};
 use alloc::vec::Vec;
-use core::ops::{Add, AddAssign, Sub, SubAssign};
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
+use ruint::aliases::U256;
+use starknet_types_core::felt::Felt;
 
-use super::types::TokenAmount;
-use super::util::approximate_number_of_tick_spacings_crossed;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPoolState {
     pub base_pool_state: BasePoolState,
@@ -29,7 +35,7 @@ pub struct LimitOrderPoolState {
     pub tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
 }
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 pub struct LimitOrderPoolResources {
     pub base_pool_resources: BasePoolResources,
     // the number of orders that were pulled, i.e. the number of times we crossed active ticks
@@ -37,39 +43,7 @@ pub struct LimitOrderPoolResources {
     pub orders_pulled: u32,
 }
 
-impl AddAssign for LimitOrderPoolResources {
-    fn add_assign(&mut self, rhs: Self) {
-        self.base_pool_resources += rhs.base_pool_resources;
-        self.orders_pulled += rhs.orders_pulled;
-    }
-}
-
-impl Add for LimitOrderPoolResources {
-    type Output = LimitOrderPoolResources;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl SubAssign for LimitOrderPoolResources {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.base_pool_resources -= rhs.base_pool_resources;
-        self.orders_pulled -= rhs.orders_pulled;
-    }
-}
-
-impl Sub for LimitOrderPoolResources {
-    type Output = LimitOrderPoolResources;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPool {
     base_pool: BasePool<Starknet>,
@@ -89,9 +63,9 @@ pub enum LimitPoolError {
 
 impl LimitOrderPool {
     pub fn new(
-        token0: U256,
-        token1: U256,
-        extension: U256,
+        token0: Felt,
+        token1: Felt,
+        extension: Felt,
         sqrt_ratio: U256,
         tick: i32,
         liquidity: u128,
@@ -123,7 +97,7 @@ impl LimitOrderPool {
                 PoolKey {
                     token0,
                     token1,
-                    config: Config {
+                    config: PoolConfig {
                         fee: 0,
                         pool_type_config: TickSpacing(LIMIT_ORDER_TICK_SPACING.unsigned_abs()),
                         extension,
@@ -141,14 +115,16 @@ impl LimitOrderPool {
     }
 }
 
-impl Pool<Starknet> for LimitOrderPool {
+impl Pool for LimitOrderPool {
+    type Address = <Starknet as Chain>::Address;
+    type Fee = <Starknet as Chain>::Fee;
     type Resources = LimitOrderPoolResources;
     type State = LimitOrderPoolState;
     type QuoteError = BasePoolQuoteError;
     type Meta = ();
     type PoolTypeConfig = BasePoolTypeConfig;
 
-    fn key(&self) -> PoolKey<<Starknet as Chain>::Fee, Self::PoolTypeConfig> {
+    fn key(&self) -> PoolKey<Self::Address, Self::Fee, Self::PoolTypeConfig> {
         self.base_pool.key()
     }
 
@@ -161,10 +137,10 @@ impl Pool<Starknet> for LimitOrderPool {
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let initial_state = params.override_state.unwrap_or_else(|| self.state());
-        let sorted_ticks = self.base_pool.get_sorted_ticks();
+        let sorted_ticks = self.base_pool.ticks();
 
         let is_increasing = is_price_increasing(
             params.token_amount.amount,
@@ -444,11 +420,14 @@ impl PoolState for LimitOrderPoolState {
     }
 }
 
+impl private::Sealed for LimitOrderPool {}
+impl private::Sealed for LimitOrderPoolState {}
+
 fn calculate_orders_pulled(
     from: Option<usize>,
     to: Option<usize>,
     is_increasing: bool,
-    sorted_ticks: &Vec<Tick>,
+    sorted_ticks: &[Tick],
 ) -> u32 {
     let mut current = from;
     let mut orders_pulled = 0;
@@ -477,13 +456,13 @@ mod tests {
     use super::*;
     use crate::{
         chain::starknet::Starknet,
-        math::{tick::to_sqrt_ratio, uint::U256},
+        math::tick::to_sqrt_ratio,
         quoting::types::{Quote, QuoteParams, Tick, TokenAmount},
     };
 
-    const TOKEN0: U256 = U256::from_limbs([0, 0, 0, 1]);
-    const TOKEN1: U256 = U256::from_limbs([0, 0, 0, 2]);
-    const EXTENSION: U256 = U256::from_limbs([0, 0, 0, 3]);
+    const TOKEN0: Felt = Felt::ZERO;
+    const TOKEN1: Felt = Felt::ONE;
+    const EXTENSION: Felt = Felt::TWO;
     const DEFAULT_LIQUIDITY: i128 = 10_000_000;
 
     fn ticks(entries: &[(i32, i128)]) -> Vec<Tick> {
@@ -520,7 +499,7 @@ mod tests {
 
     fn quote_amount(
         pool: &LimitOrderPool,
-        token: U256,
+        token: Felt,
         amount: i128,
         sqrt_ratio_limit: Option<U256>,
         override_state: Option<LimitOrderPoolState>,
