@@ -8,6 +8,7 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SwapResult {
     pub consumed_amount: i128,
     pub calculated_amount: u128,

@@ -8,11 +8,12 @@ use crate::{
     chain::Chain,
     private,
     quoting::{
-        pools::base::{BasePool, BasePoolError, BasePoolState, TickSpacing},
+        pools::base::{BasePool, BasePoolConstructionError, BasePoolState, TickSpacing},
         types::{PoolConfig, PoolKey, Tick},
     },
 };
 
+/// Chain implementation for Starknet.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Starknet;
 
@@ -44,11 +45,11 @@ impl Starknet {
     pub const FEE_BITS: u8 = 128;
 }
 
+/// Errors constructing a Starknet full range pool from inputs.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum StarknetFullRangePoolError {
+pub enum FullRangePoolConstructionError {
     #[error("base pool error")]
-    BasePoolError(#[from] BasePoolError),
+    BasePoolConstructionError(#[from] BasePoolConstructionError),
     #[error("active liquidity does not fit into signed integer")]
     ActiveLiquidityDoesNotFitSignedInteger,
 }
@@ -57,7 +58,7 @@ impl Chain for Starknet {
     type Fee = u128;
 
     type FullRangePool = BasePool<Self>;
-    type FullRangePoolError = StarknetFullRangePoolError;
+    type FullRangePoolConstructionError = FullRangePoolConstructionError;
 
     fn max_tick_spacing() -> TickSpacing {
         Self::MAX_TICK_SPACING
@@ -106,10 +107,10 @@ impl Chain for Starknet {
         extension: Self::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
-    ) -> Result<Self::FullRangePool, Self::FullRangePoolError> {
-        let signed_liquidity: i128 = active_liquidity
+    ) -> Result<Self::FullRangePool, Self::FullRangePoolConstructionError> {
+        let signed_liquidity = active_liquidity
             .to_i128()
-            .ok_or(StarknetFullRangePoolError::ActiveLiquidityDoesNotFitSignedInteger)?;
+            .ok_or(FullRangePoolConstructionError::ActiveLiquidityDoesNotFitSignedInteger)?;
 
         let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
             (None, vec![], 0)
@@ -155,7 +156,7 @@ impl Chain for Starknet {
             },
             sorted_ticks,
         )
-        .map_err(StarknetFullRangePoolError::BasePoolError)
+        .map_err(FullRangePoolConstructionError::BasePoolConstructionError)
     }
 
     type Address = Felt;

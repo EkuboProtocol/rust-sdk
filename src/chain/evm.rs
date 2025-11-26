@@ -10,7 +10,8 @@ use crate::{
         pools::{
             base::{BasePoolTypeConfig, TickSpacing},
             full_range::{
-                FullRangePool, FullRangePoolError, FullRangePoolState, FullRangePoolTypeConfig,
+                FullRangePool, FullRangePoolConstructionError, FullRangePoolState,
+                FullRangePoolTypeConfig,
             },
             stableswap::StableswapPoolTypeConfig,
         },
@@ -18,6 +19,7 @@ use crate::{
     },
 };
 
+/// Chain implementation for EVM-compatible networks.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Evm;
 
@@ -44,13 +46,19 @@ const TWO_POW_160: U256 = U256::from_limbs([0, 0, 0x100000000, 0]);
 const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 const TWO_POW_96: U256 = U256::from_limbs([0, 0x0100000000, 0, 0]);
 
+/// Pool type configuration variants for EVM.
 #[derive(From, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PoolTypeConfig {
+    /// Full range pool config.
     FullRange(FullRangePoolTypeConfig),
+    /// Stableswap config for pegged assets.
     Stableswap(StableswapPoolTypeConfig),
+    /// Concentrated liquidity config (tick spacing).
     Concentrated(BasePoolTypeConfig),
 }
 
+/// Errors when parsing pool type configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Error)]
 pub enum PoolTypeConfigParseError {
     #[error("stableswap center tick is not between min and max tick")]
@@ -137,7 +145,7 @@ impl Chain for Evm {
     type Address = Address;
     type Fee = u64;
     type FullRangePool = FullRangePool;
-    type FullRangePoolError = FullRangePoolError;
+    type FullRangePoolConstructionError = FullRangePoolConstructionError;
 
     fn max_tick_spacing() -> TickSpacing {
         Self::MAX_TICK_SPACING
@@ -194,7 +202,7 @@ impl Chain for Evm {
         extension: Self::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
-    ) -> Result<Self::FullRangePool, Self::FullRangePoolError> {
+    ) -> Result<Self::FullRangePool, Self::FullRangePoolConstructionError> {
         FullRangePool::new(
             PoolKey {
                 token0,

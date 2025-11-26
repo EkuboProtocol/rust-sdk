@@ -7,34 +7,45 @@ use thiserror::Error;
 
 use crate::chain::Chain;
 
+/// State wrapper for an oracle pool with snapshot timestamp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePoolState<S> {
+    /// State of the underlying full range pool.
     pub full_range_pool_state: S,
+    /// Last snapshot timestamp.
     pub last_snapshot_time: u64,
 }
 
+/// Resources consumed during oracle quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePoolResources<R> {
+    /// Resources consumed by the underlying full range pool.
     pub full_range_pool_resources: R,
+    /// Number of snapshots written.
     pub snapshots_written: u32,
 }
 
+/// Unique identifier for an [`OraclePool`].
 pub type OraclePoolTypeConfig<C> = <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig;
 pub type OraclePoolKey<C> =
     PoolKey<<C as Chain>::Address, <C as Chain>::Fee, OraclePoolTypeConfig<C>>;
 
+/// Pool that wraps a full range pool and produces time-based oracle snapshots.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OraclePool<C: Chain> {
+    /// Underlying full range pool.
     full_range_pool: C::FullRangePool,
+    /// Last snapshot timestamp.
     last_snapshot_time: u64,
 }
 
+/// Errors that can occur when constructing an [`OraclePool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum OraclePoolError<E> {
+pub enum OraclePoolConstructionError<E> {
     #[error("full range pool error")]
     FullRangePoolError(#[from] E),
 }
@@ -47,7 +58,7 @@ impl<C: Chain> OraclePool<C> {
         sqrt_ratio: U256,
         active_liquidity: u128,
         last_snapshot_time: u64,
-    ) -> Result<Self, OraclePoolError<C::FullRangePoolError>> {
+    ) -> Result<Self, OraclePoolConstructionError<C::FullRangePoolConstructionError>> {
         Ok(OraclePool {
             full_range_pool: C::new_full_range_pool(
                 token0,
@@ -57,7 +68,7 @@ impl<C: Chain> OraclePool<C> {
                 sqrt_ratio,
                 active_liquidity,
             )
-            .map_err(OraclePoolError::FullRangePoolError)?,
+            .map_err(OraclePoolConstructionError::FullRangePoolError)?,
             last_snapshot_time,
         })
     }

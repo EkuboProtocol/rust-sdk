@@ -12,12 +12,53 @@ use num_traits::Zero;
 use ruint::aliases::U256;
 use thiserror::Error;
 
-// Resources consumed during any swap execution in a full range pool.
+/// Full range pool with constant liquidity across the entire price range.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePool {
+    /// Immutable pool configuration key.
+    key: FullRangePoolKey,
+    /// Current pool state.
+    state: FullRangePoolState,
+}
+
+/// Unique identifier for a [`FullRangePool`].
+pub type FullRangePoolKey =
+    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, FullRangePoolTypeConfig>;
+
+/// Pool type config placeholder for a full range pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePoolTypeConfig;
+
+/// Price/liquidity state for a [`FullRangePool`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePoolState {
+    /// Current square root price ratio.
+    pub sqrt_ratio: U256,
+    /// Current active liquidity.
+    pub liquidity: u128,
+}
+
+/// Resources consumed during full range swap execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FullRangePoolResources {
+    /// Whether price changed when no override was provided.
     pub no_override_price_change: u32,
 }
 
+/// Errors that can occur when constructing a [`FullRangePool`].
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum FullRangePoolConstructionError {
+    #[error("token0 must be less than token1")]
+    TokenOrderInvalid,
+    #[error("sqrt ratio out of bounds")]
+    SqrtRatioInvalid,
+}
+
+/// Errors that can occur when quoting a [`FullRangePool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum FullRangePoolQuoteError {
     #[error("invalid token")]
@@ -28,47 +69,17 @@ pub enum FullRangePoolQuoteError {
     FailedComputeSwapStep(#[from] ComputeStepError),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FullRangePoolState {
-    pub sqrt_ratio: U256,
-    pub liquidity: u128,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FullRangePoolTypeConfig;
-pub type FullRangePoolKey =
-    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, FullRangePoolTypeConfig>;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FullRangePool {
-    key: FullRangePoolKey,
-    state: FullRangePoolState,
-}
-
-/// Errors that can occur when constructing a FullRangePool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-pub enum FullRangePoolError {
-    #[error("token0 must be less than token1")]
-    /// Token0 must be less than token1.
-    TokenOrderInvalid,
-    #[error("sqrt ratio out of bounds")]
-    SqrtRatioInvalid,
-}
-
 impl FullRangePool {
     pub fn new(
         key: FullRangePoolKey,
         state: FullRangePoolState,
-    ) -> Result<Self, FullRangePoolError> {
+    ) -> Result<Self, FullRangePoolConstructionError> {
         if !(key.token0 < key.token1) {
-            return Err(FullRangePoolError::TokenOrderInvalid);
+            return Err(FullRangePoolConstructionError::TokenOrderInvalid);
         }
 
         if state.sqrt_ratio < Evm::min_sqrt_ratio() || state.sqrt_ratio > Evm::max_sqrt_ratio() {
-            return Err(FullRangePoolError::SqrtRatioInvalid);
+            return Err(FullRangePoolConstructionError::SqrtRatioInvalid);
         }
 
         Ok(Self {
@@ -261,7 +272,7 @@ mod tests {
         }
     }
 
-    use super::FullRangePoolError;
+    use super::FullRangePoolConstructionError;
 
     #[test]
     fn test_token0_lt_token1() {
@@ -280,7 +291,10 @@ mod tests {
                 liquidity: 0,
             },
         );
-        assert_eq!(result.unwrap_err(), FullRangePoolError::TokenOrderInvalid);
+        assert_eq!(
+            result.unwrap_err(),
+            FullRangePoolConstructionError::TokenOrderInvalid
+        );
     }
 
     #[test]

@@ -22,7 +22,7 @@ pub trait Chain:
     type Fee: Debug + Display + Copy + Eq + Send + Sync + Into<u128> + Zero + Hash;
 
     type FullRangePool: Pool<Address = Self::Address, Fee = Self::Fee, Meta = ()>;
-    type FullRangePoolError: Error;
+    type FullRangePoolConstructionError: Error;
 
     fn max_tick_spacing() -> TickSpacing;
 
@@ -47,7 +47,7 @@ pub trait Chain:
         extension: Self::Address,
         sqrt_ratio: U256,
         active_liquidity: u128,
-    ) -> Result<Self::FullRangePool, Self::FullRangePoolError>;
+    ) -> Result<Self::FullRangePool, Self::FullRangePoolConstructionError>;
 }
 
 #[cfg(test)]

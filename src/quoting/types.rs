@@ -16,69 +16,75 @@ use core::{
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PoolKey<A, F, C> {
+    /// The smaller token address.
     pub token0: A,
+    /// The larger token address.
     pub token1: A,
+    /// Pool configuration including fee, extension, and pool type specifics.
     pub config: PoolConfig<A, F, C>,
 }
 
+/// Pool configuration shared across pool implementations.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PoolConfig<A, F, C> {
+    /// Extension address.
     pub extension: A,
+    /// Fee tier of the pool.
     pub fee: F,
+    /// Pool-type specific configuration.
     pub pool_type_config: C,
 }
-
-/*impl From<U256> for Config<Evm> {
-    fn from(value: U256) -> Config<Evm> {
-        Config {
-            tick_spacing: (value % U256::from_limbs([4294967296, 0, 0, 0])).as_u32(),
-            fee: ((value >> 32) % U256::from_limbs([0, 1, 0, 0])).as_u64(),
-            extension: value >> 96,
-        }
-    }
-}
-
-impl From<Config<Evm>> for U256 {
-    fn from(value: Config<Evm>) -> U256 {
-        U256::from(value.tick_spacing)
-            + (U256::from(value.fee) << 32)
-            + (U256::from(value.extension) << 96)
-    }
-}*/
 
 /// The aggregate effect of all positions on a pool that are bounded by the specific tick
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tick {
+    /// Tick index where liquidity delta applies.
     pub index: i32,
+    /// Liquidity change applied at this tick.
     pub liquidity_delta: i128,
 }
 
 /// Amount and token information.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TokenAmount<A> {
+    /// Token being swapped.
     pub token: A,
+    /// Signed amount (positive for exact input, negative for exact output).
     pub amount: i128,
 }
 
 /// Parameters for a quote operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuoteParams<A, S, M> {
+    /// Token and amount for the swap.
     pub token_amount: TokenAmount<A>,
+    /// Optional price limit.
     pub sqrt_ratio_limit: Option<U256>,
+    /// Optional override of current pool state.
     pub override_state: Option<S>,
+    /// Pool-specific metadata (e.g., timestamp).
     pub meta: M,
 }
 
 /// The simulated outcome of a swap
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Quote<R, S> {
+    /// Whether price increased during the quote.
     pub is_price_increasing: bool,
+    /// Signed amount of input consumed.
     pub consumed_amount: i128,
+    /// Unsigned amount of output calculated.
     pub calculated_amount: u128,
+    /// Execution resource usage.
     pub execution_resources: R,
+    /// Pool state after the simulated swap.
     pub state_after: S,
+    /// Fees paid during the swap.
     pub fees_paid: u128,
 }
 

@@ -14,13 +14,58 @@ use derive_more::{Add, AddAssign, Sub, SubAssign};
 use ruint::aliases::U256;
 use thiserror::Error;
 
+/// Configuration for a [`StableswapPool`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StableswapPoolTypeConfig {
+    /// Center tick where liquidity is concentrated.
     pub center_tick: i32,
+    /// Amplification factor controlling curve shape.
     pub amplification_factor: u8,
 }
 
+/// Stableswap pool specialized for tightly-pegged assets.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StableswapPool {
+    /// Immutable pool configuration key.
+    key: PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>,
+    /// Current pool state (full range style).
+    state: FullRangePoolState,
+    /// Lower bound for the amplified price range.
+    lower_price: U256,
+    /// Upper bound for the amplified price range.
+    upper_price: U256,
+}
+
+/// Resources consumed during stableswap quote execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StableswapPoolResources {
+    /// Whether price changed when no override was provided.
+    pub no_override_price_change: u32,
+    /// Count of initialized ticks crossed.
+    pub initialized_ticks_crossed: u32,
+}
+
+/// Unique identifier for a [`StableswapPool`].
+pub type StableswapPoolKey =
+    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>;
+
+/// Errors that can occur when constructing a [`StableswapPool`].
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum StableswapPoolConstructionError {
+    #[error("token0 must be less than token1")]
+    TokenOrderInvalid,
+    #[error("sqrt ratio out of bounds")]
+    SqrtRatioInvalid,
+    #[error("stableswap center tick is not between min and max tick")]
+    InvalidCenterTick,
+    #[error("stableswap amplification factor exceeds the maximum allowed value")]
+    InvalidStableswapAmplification,
+}
+
+/// Errors that can occur when quoting a [`StableswapPool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum StableswapPoolQuoteError {
     #[error("specified token not part of the pool")]
@@ -31,44 +76,11 @@ pub enum StableswapPoolQuoteError {
     FailedComputeSwapStep(#[from] ComputeStepError),
 }
 
-pub type StableswapPoolKey =
-    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct StableswapPool {
-    key: PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>,
-    state: FullRangePoolState,
-
-    lower_price: U256,
-    upper_price: U256,
-}
-
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
-pub struct StableswapPoolResources {
-    pub no_override_price_change: u32,
-    pub initialized_ticks_crossed: u32,
-}
-
-/// Errors that can occur when constructing a StableswapPool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-pub enum StableswapPoolError {
-    #[error("token0 must be less than token1")]
-    /// Token0 must be less than token1.
-    TokenOrderInvalid,
-    #[error("sqrt ratio out of bounds")]
-    SqrtRatioInvalid,
-    #[error("stableswap center tick is not between min and max tick")]
-    InvalidCenterTick,
-    #[error("stableswap amplification factor exceeds the maximum allowed value")]
-    InvalidStableswapAmplification,
-}
-
 impl StableswapPool {
     pub fn new(
         key: StableswapPoolKey,
         state: FullRangePoolState,
-    ) -> Result<Self, StableswapPoolError> {
+    ) -> Result<Self, StableswapPoolConstructionError> {
         let PoolKey {
             token0,
             token1,
@@ -81,19 +93,19 @@ impl StableswapPool {
         } = config.pool_type_config;
 
         if token0 >= token1 {
-            return Err(StableswapPoolError::TokenOrderInvalid);
+            return Err(StableswapPoolConstructionError::TokenOrderInvalid);
         }
 
         if state.sqrt_ratio < Evm::MIN_SQRT_RATIO || state.sqrt_ratio > Evm::MAX_SQRT_RATIO {
-            return Err(StableswapPoolError::SqrtRatioInvalid);
+            return Err(StableswapPoolConstructionError::SqrtRatioInvalid);
         }
 
         if center_tick < Evm::MIN_TICK || center_tick > Evm::MAX_TICK {
-            return Err(StableswapPoolError::InvalidCenterTick);
+            return Err(StableswapPoolConstructionError::InvalidCenterTick);
         }
 
         if amplification_factor > Evm::MAX_STABLESWAP_AMPLIFICATION_FACTOR {
-            return Err(StableswapPoolError::InvalidStableswapAmplification);
+            return Err(StableswapPoolConstructionError::InvalidStableswapAmplification);
         }
 
         let liquidity_width = Evm::MAX_TICK >> amplification_factor;

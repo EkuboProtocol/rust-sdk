@@ -14,41 +14,7 @@ use num_traits::Zero;
 use ruint::aliases::U256;
 use thiserror::Error;
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Hash, Eq, Add, AddAssign, Sub, SubAssign)]
-/// Resources consumed during swap execution
-pub struct BasePoolResources {
-    pub no_override_price_change: u32,
-    pub initialized_ticks_crossed: u32,
-    pub tick_spacings_crossed: u32,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-pub enum BasePoolQuoteError {
-    #[error("invalid token")]
-    InvalidToken,
-    #[error("invalid price limit")]
-    InvalidSqrtRatioLimit,
-    #[error("invalid tick {0}")]
-    InvalidTick(i32),
-    #[error("failed swap step computation")]
-    FailedComputeSwapStep(#[from] ComputeStepError),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasePoolState {
-    pub sqrt_ratio: U256,
-    pub liquidity: u128,
-    pub active_tick_index: Option<usize>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TickSpacing(pub u32);
-
-pub type BasePoolTypeConfig = TickSpacing;
-pub type BasePoolKey<C> = PoolKey<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
-
+/// Concentrated liquidity pool defined by sorted ticks and active liquidity state.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -59,15 +25,51 @@ pub type BasePoolKey<C> = PoolKey<<C as Chain>::Address, <C as Chain>::Fee, Base
     ))
 )]
 pub struct BasePool<C: Chain> {
+    /// Immutable pool key identifying tokens and fee config.
     key: BasePoolKey<C>,
+    /// Current pool state (price, liquidity, active tick index).
     state: BasePoolState,
+    /// Sorted ticks defining liquidity changes across price ranges.
     sorted_ticks: Vec<Tick>,
+}
+
+/// Unique identifier for a [`BasePool`].
+pub type BasePoolKey<C> = PoolKey<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
+/// Type configuration for a [`BasePool`], representing the tick spacing.
+pub type BasePoolTypeConfig = TickSpacing;
+
+/// Tick spacing for a concentrated pool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TickSpacing(pub u32);
+
+/// Price/liquidity state for a [`BasePool`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BasePoolState {
+    /// Current square root price ratio.
+    pub sqrt_ratio: U256,
+    /// Active liquidity at the current price.
+    pub liquidity: u128,
+    /// Index of the active initialized tick, if any.
+    pub active_tick_index: Option<usize>,
+}
+
+/// Resources consumed during swap execution
+#[derive(Clone, Copy, Default, Debug, PartialEq, Hash, Eq, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BasePoolResources {
+    /// Whether price changed when no override was provided.
+    pub no_override_price_change: u32,
+    /// Count of initialized ticks crossed during the quote.
+    pub initialized_ticks_crossed: u32,
+    /// Count of tick spacings crossed during the quote.
+    pub tick_spacings_crossed: u32,
 }
 
 /// Errors that can occur when constructing a BasePool.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum BasePoolError {
+pub enum BasePoolConstructionError {
     #[error("constructing ticks from partial data")]
     ConstructSortedTicksFromPartialDataError(#[from] ConstructSortedTicksError),
     #[error("token0 must be less than token1")]
@@ -108,6 +110,18 @@ pub enum BasePoolError {
     ActiveLiquidityOverflow,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum BasePoolQuoteError {
+    #[error("invalid token")]
+    InvalidToken,
+    #[error("invalid price limit")]
+    InvalidSqrtRatioLimit,
+    #[error("invalid tick {0}")]
+    InvalidTick(i32),
+    #[error("failed swap step computation")]
+    FailedComputeSwapStep(#[from] ComputeStepError),
+}
+
 impl<C: Chain> BasePool<C> {
     /// Creates a BasePool from partial tick data retrieved from a quote data fetcher lens contract.
     ///
@@ -126,7 +140,7 @@ impl<C: Chain> BasePool<C> {
     ///
     /// # Returns
     ///
-    /// * `Result<Self, BasePoolError>` - A new BasePool instance or an error
+    /// * `Result<Self, BasePoolConstructionError>` - A new BasePool instance or an error
     pub fn from_partial_data(
         key: BasePoolKey<C>,
         sqrt_ratio: U256,
@@ -135,7 +149,7 @@ impl<C: Chain> BasePool<C> {
         max_tick_searched: i32,
         liquidity: u128,
         current_tick: i32,
-    ) -> Result<Self, BasePoolError> {
+    ) -> Result<Self, BasePoolConstructionError> {
         let tick_spacing = key.config.pool_type_config;
         let spacing_i32 = tick_spacing.0 as i32;
         let tick_spacing = tick_spacing.0;
@@ -149,12 +163,12 @@ impl<C: Chain> BasePool<C> {
             liquidity,
             current_tick,
         )
-        .map_err(BasePoolError::ConstructSortedTicksFromPartialDataError)?;
+        .map_err(BasePoolConstructionError::ConstructSortedTicksFromPartialDataError)?;
 
         // Ensure all ticks are multiples of tick spacing
         for tick in &sorted_ticks {
             if tick.index % spacing_i32 != 0 {
-                return Err(BasePoolError::TickNotMultipleOfSpacing);
+                return Err(BasePoolConstructionError::TickNotMultipleOfSpacing);
             }
         }
 
@@ -183,7 +197,7 @@ impl<C: Chain> BasePool<C> {
         key: BasePoolKey<C>,
         state: BasePoolState,
         sorted_ticks: Vec<Tick>,
-    ) -> Result<Self, BasePoolError> {
+    ) -> Result<Self, BasePoolConstructionError> {
         let PoolKey {
             token0,
             token1,
@@ -195,15 +209,15 @@ impl<C: Chain> BasePool<C> {
         } = key;
 
         if token0 >= token1 {
-            return Err(BasePoolError::TokenOrderInvalid);
+            return Err(BasePoolConstructionError::TokenOrderInvalid);
         }
 
         if tick_spacing > C::max_tick_spacing() {
-            return Err(BasePoolError::TickSpacingTooLarge);
+            return Err(BasePoolConstructionError::TickSpacingTooLarge);
         }
 
         if tick_spacing.0.is_zero() {
-            return Err(BasePoolError::TickSpacingCannotBeZero);
+            return Err(BasePoolConstructionError::TickSpacingCannotBeZero);
         }
 
         // Check ticks are sorted in linear time
@@ -216,13 +230,13 @@ impl<C: Chain> BasePool<C> {
             // Verify ticks are sorted
             if let Some(last) = last_tick {
                 if !(tick.index > last) {
-                    return Err(BasePoolError::TicksNotSorted);
+                    return Err(BasePoolConstructionError::TicksNotSorted);
                 }
             };
 
             // Verify ticks are multiples of tick_spacing
             if !(tick.index % spacing_i32).is_zero() {
-                return Err(BasePoolError::TickNotMultipleOfSpacing);
+                return Err(BasePoolConstructionError::TickNotMultipleOfSpacing);
             }
 
             last_tick = Some(tick.index);
@@ -233,7 +247,7 @@ impl<C: Chain> BasePool<C> {
             } else {
                 total_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
             }
-            .ok_or(BasePoolError::ActiveLiquidityOverflow)?;
+            .ok_or(BasePoolConstructionError::ActiveLiquidityOverflow)?;
 
             // Calculate active liquidity
             if let Some(active_index) = state.active_tick_index {
@@ -243,40 +257,40 @@ impl<C: Chain> BasePool<C> {
                     } else {
                         active_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
                     }
-                    .ok_or(BasePoolError::ActiveLiquidityOverflow)?;
+                    .ok_or(BasePoolConstructionError::ActiveLiquidityOverflow)?;
                 }
             }
         }
 
         // Verify total liquidity is zero
         if !total_liquidity.is_zero() {
-            return Err(BasePoolError::TotalLiquidityNotZero);
+            return Err(BasePoolConstructionError::TotalLiquidityNotZero);
         }
 
         // Verify active liquidity matches state liquidity
         if active_liquidity != state.liquidity {
-            return Err(BasePoolError::ActiveLiquidityMismatch);
+            return Err(BasePoolConstructionError::ActiveLiquidityMismatch);
         }
 
         // Validate sqrt ratio against active or first tick
         if let Some(active) = state.active_tick_index {
             let tick = sorted_ticks
                 .get(active)
-                .ok_or(BasePoolError::ActiveTickIndexOutOfBounds)?;
+                .ok_or(BasePoolConstructionError::ActiveTickIndexOutOfBounds)?;
 
             let active_tick_sqrt_ratio = to_sqrt_ratio::<C>(tick.index)
-                .ok_or(BasePoolError::InvalidTickIndex(tick.index))?;
+                .ok_or(BasePoolConstructionError::InvalidTickIndex(tick.index))?;
 
             if !(active_tick_sqrt_ratio <= state.sqrt_ratio) {
-                return Err(BasePoolError::ActiveTickSqrtRatioInvalid);
+                return Err(BasePoolConstructionError::ActiveTickSqrtRatioInvalid);
             }
         } else {
             if let Some(first) = sorted_ticks.first() {
                 let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index)
-                    .ok_or(BasePoolError::InvalidTickIndex(first.index))?;
+                    .ok_or(BasePoolConstructionError::InvalidTickIndex(first.index))?;
 
                 if !(state.sqrt_ratio <= first_tick_sqrt_ratio) {
-                    return Err(BasePoolError::SqrtRatioTooHighWithNoActiveTick);
+                    return Err(BasePoolConstructionError::SqrtRatioTooHighWithNoActiveTick);
                 }
             }
         }
@@ -576,7 +590,10 @@ mod tests {
                     pool_state(SQRT_RATIO_ONE, 0, None),
                     vec![],
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::TokenOrderInvalid);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::TokenOrderInvalid
+                );
             });
         }
 
@@ -588,7 +605,10 @@ mod tests {
                     pool_state(SQRT_RATIO_ONE, 0, None),
                     vec![],
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::TickSpacingCannotBeZero);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::TickSpacingCannotBeZero
+                );
             });
         }
 
@@ -601,7 +621,10 @@ mod tests {
                         pool_state(SQRT_RATIO_ONE, 0, None),
                         vec![],
                     );
-                    assert_eq!(result.unwrap_err(), BasePoolError::TickSpacingTooLarge);
+                    assert_eq!(
+                        result.unwrap_err(),
+                        BasePoolConstructionError::TickSpacingTooLarge
+                    );
                 }
             });
         }
@@ -614,7 +637,10 @@ mod tests {
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(ChainTy::max_tick(), 0), (0, 0)]),
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::TicksNotSorted);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::TicksNotSorted
+                );
             });
         }
 
@@ -627,7 +653,10 @@ mod tests {
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(-1, 1), (ChainTy::max_tick() - 1, -1)]),
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::TickNotMultipleOfSpacing);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::TickNotMultipleOfSpacing
+                );
             });
         }
 
@@ -639,7 +668,10 @@ mod tests {
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -1)]),
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::TotalLiquidityNotZero);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::TotalLiquidityNotZero
+                );
             });
         }
 
@@ -653,7 +685,7 @@ mod tests {
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolError::ActiveTickIndexOutOfBounds
+                    BasePoolConstructionError::ActiveTickIndexOutOfBounds
                 );
             });
         }
@@ -666,7 +698,10 @@ mod tests {
                     pool_state(SQRT_RATIO_ONE, 0, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::ActiveLiquidityMismatch);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::ActiveLiquidityMismatch
+                );
             });
         }
 
@@ -678,7 +713,10 @@ mod tests {
                     pool_state(SQRT_RATIO_ONE - U256::ONE, 2, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::ActiveTickSqrtRatioInvalid);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::ActiveTickSqrtRatioInvalid
+                );
             });
         }
 
@@ -690,7 +728,10 @@ mod tests {
                     pool_state(SQRT_RATIO_ONE + U256::ONE, 0, None),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
-                assert_eq!(result.unwrap_err(), BasePoolError::SqrtRatioTooHighWithNoActiveTick);
+                assert_eq!(
+                    result.unwrap_err(),
+                    BasePoolConstructionError::SqrtRatioTooHighWithNoActiveTick
+                );
             });
         }
     }

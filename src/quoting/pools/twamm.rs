@@ -56,8 +56,7 @@ pub struct TwammSaleRateDelta {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum TwammPoolError<E> {
+pub enum TwammPoolConstructionError<E> {
     #[error("full range pool error")]
     /// Errors from the underlying full range pool constructor.
     FullRangePoolError(#[from] E),
@@ -84,14 +83,14 @@ impl<C: Chain> TwammPool<C> {
         token0_sale_rate: u128,
         token1_sale_rate: u128,
         virtual_order_deltas: Vec<TwammSaleRateDelta>,
-    ) -> Result<Self, TwammPoolError<C::FullRangePoolError>> {
+    ) -> Result<Self, TwammPoolConstructionError<C::FullRangePoolConstructionError>> {
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
 
         for t in virtual_order_deltas.iter() {
             if t.time <= last_time {
-                return Err(TwammPoolError::SaleRateDeltasInvalid);
+                return Err(TwammPoolConstructionError::SaleRateDeltasInvalid);
             }
             last_time = t.time;
 
@@ -100,18 +99,18 @@ impl<C: Chain> TwammPool<C> {
             } else {
                 sr0.checked_add(t.sale_rate_delta0.unsigned_abs())
             }
-            .ok_or(TwammPoolError::SaleRateDeltasOverflowOrUnderflow)?;
+            .ok_or(TwammPoolConstructionError::SaleRateDeltasOverflowOrUnderflow)?;
 
             sr1 = if t.sale_rate_delta1 < 0 {
                 sr1.checked_sub(t.sale_rate_delta1.unsigned_abs())
             } else {
                 sr1.checked_add(t.sale_rate_delta1.unsigned_abs())
             }
-            .ok_or(TwammPoolError::SaleRateDeltasOverflowOrUnderflow)?;
+            .ok_or(TwammPoolConstructionError::SaleRateDeltasOverflowOrUnderflow)?;
         }
 
         if !(sr0.is_zero() && sr1.is_zero()) {
-            return Err(TwammPoolError::SaleRateDeltaSumNonZero);
+            return Err(TwammPoolConstructionError::SaleRateDeltaSumNonZero);
         }
 
         // we just force the pool state to always be within the bounds of min/max to simplify the state
@@ -132,7 +131,7 @@ impl<C: Chain> TwammPool<C> {
                 sqrt_ratio,
                 active_liquidity,
             )
-            .map_err(TwammPoolError::FullRangePoolError)?,
+            .map_err(TwammPoolConstructionError::FullRangePoolError)?,
             virtual_order_deltas,
             last_execution_time,
             token0_sale_rate,
@@ -427,7 +426,7 @@ mod tests {
         token0_sale_rate: u128,
         token1_sale_rate: u128,
         deltas: Vec<TwammSaleRateDelta>,
-    ) -> Result<TwammPool<C>, TwammPoolError<C::FullRangePoolError>> {
+    ) -> Result<TwammPool<C>, TwammPoolConstructionError<C::FullRangePoolConstructionError>> {
         TwammPool::new(
             C::zero_address(),
             C::one_address(),
@@ -515,7 +514,7 @@ mod tests {
             );
             assert!(matches!(
                 result.unwrap_err(),
-                TwammPoolError::SaleRateDeltasInvalid
+                TwammPoolConstructionError::SaleRateDeltasInvalid
             ));
         });
 
@@ -541,7 +540,7 @@ mod tests {
             );
             assert!(matches!(
                 result.unwrap_err(),
-                TwammPoolError::SaleRateDeltasInvalid
+                TwammPoolConstructionError::SaleRateDeltasInvalid
             ));
         });
 
@@ -567,7 +566,7 @@ mod tests {
             );
             assert!(matches!(
                 result.unwrap_err(),
-                TwammPoolError::SaleRateDeltaSumNonZero
+                TwammPoolConstructionError::SaleRateDeltaSumNonZero
             ));
         });
 

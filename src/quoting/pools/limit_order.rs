@@ -1,5 +1,5 @@
 use crate::quoting::{
-    pools::base::{BasePoolError, BasePoolQuoteError},
+    pools::base::{BasePoolConstructionError, BasePoolQuoteError},
     types::TokenAmount,
     util::{approximate_number_of_tick_spacings_crossed, find_nearest_initialized_tick_index},
 };
@@ -22,42 +22,55 @@ use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 use ruint::aliases::U256;
 use starknet_types_core::felt::Felt;
+use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct LimitOrderPoolState {
-    pub base_pool_state: BasePoolState,
-
-    // the minimum and maximum active tick index we've reached since the sorted ticks were last updated.
-    // if None, then we haven't seen any swap since the last sorted ticks update.
-    // if the minimum active tick index is Some(None), then we have swapped through all the ticks less than the current active tick index
-    // if the maxmimum active tick index is Some(sorted_ticks.len() - 1), then we have swapped through all the ticks greater than the current active tick index
-    pub tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
-}
-
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
-pub struct LimitOrderPoolResources {
-    pub base_pool_resources: BasePoolResources,
-    // the number of orders that were pulled, i.e. the number of times we crossed active ticks
-    //   that were the end boundary of a position
-    pub orders_pulled: u32,
-}
-
+/// Limit order pool built on top of a concentrated pool.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPool {
+    /// Underlying base pool.
     base_pool: BasePool<Starknet>,
 }
 
+/// Unique identifier for a [`LimitOrderPool`].
+pub type LimitOrderPoolKey =
+    PoolKey<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, BasePoolTypeConfig>;
+/// [`BasePoolQuoteError`] re-exported with a pool-specific name.
+pub type LimitOrderPoolQuoteError = BasePoolQuoteError;
+
+/// Tick spacing required for limit order pools.
 pub const LIMIT_ORDER_TICK_SPACING: i32 = 128;
+/// Double tick spacing used when validating neighboring ticks.
 pub const DOUBLE_LIMIT_ORDER_TICK_SPACING: i32 = 2i32 * LIMIT_ORDER_TICK_SPACING;
 
-/// Errors that can occur when constructing a BasePool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// Price/liquidity state for a [`LimitOrderPool`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum LimitPoolError {
-    BasePoolError(BasePoolError),
+pub struct LimitOrderPoolState {
+    /// State of the underlying base pool.
+    pub base_pool_state: BasePoolState,
+    /// Minimum and maximum active tick indices observed since the last tick refresh.
+    pub tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
+}
+
+/// Resources consumed during limit order quote execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LimitOrderPoolResources {
+    /// Resources consumed by the underlying base pool.
+    pub base_pool_resources: BasePoolResources,
+    /// Number of limit orders pulled (ticks crossed that were position boundaries).
+    pub orders_pulled: u32,
+}
+
+/// Errors that can occur when constructing a [`LimitOrderPool`].
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum LimitOrderPoolConstructionError {
+    #[error("base pool error")]
+    BasePoolConstructionError(#[from] BasePoolConstructionError),
+    #[error("all ticks must have at least one neighbor")]
     AllTicksMustHaveNeighbor,
+    #[error("last tick has no neighbor")]
     LastTickHasNoNeighbor,
 }
 
@@ -70,7 +83,7 @@ impl LimitOrderPool {
         tick: i32,
         liquidity: u128,
         sorted_ticks: Vec<Tick>,
-    ) -> Result<Self, LimitPoolError> {
+    ) -> Result<Self, LimitOrderPoolConstructionError> {
         // check that each tick has at least 1 neighbor within 128 ticks
         let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
         let mut maybe_last: Option<(&Tick, usize)> = None;
@@ -80,7 +93,7 @@ impl LimitOrderPool {
                     maybe_last = Some((t, count + 1));
                 } else {
                     if count.is_zero() {
-                        return Err(LimitPoolError::AllTicksMustHaveNeighbor);
+                        return Err(LimitOrderPoolConstructionError::AllTicksMustHaveNeighbor);
                     }
                     maybe_last = Some((t, 0));
                 }
@@ -89,7 +102,7 @@ impl LimitOrderPool {
             }
         }
         if !maybe_last.map_or(true, |(_, count)| !count.is_zero()) {
-            return Err(LimitPoolError::LastTickHasNoNeighbor);
+            return Err(LimitOrderPoolConstructionError::LastTickHasNoNeighbor);
         }
 
         Ok(LimitOrderPool {
@@ -110,7 +123,7 @@ impl LimitOrderPool {
                 },
                 sorted_ticks,
             )
-            .map_err(LimitPoolError::BasePoolError)?,
+            .map_err(LimitOrderPoolConstructionError::BasePoolConstructionError)?,
         })
     }
 }
@@ -120,11 +133,11 @@ impl Pool for LimitOrderPool {
     type Fee = <Starknet as Chain>::Fee;
     type Resources = LimitOrderPoolResources;
     type State = LimitOrderPoolState;
-    type QuoteError = BasePoolQuoteError;
+    type QuoteError = LimitOrderPoolQuoteError;
     type Meta = ();
     type PoolTypeConfig = BasePoolTypeConfig;
 
-    fn key(&self) -> PoolKey<Self::Address, Self::Fee, Self::PoolTypeConfig> {
+    fn key(&self) -> LimitOrderPoolKey {
         self.base_pool.key()
     }
 
@@ -528,7 +541,10 @@ mod tests {
                 ticks(&[(0, 1), (LIMIT_ORDER_TICK_SPACING * 2, -1)]),
             )
             .unwrap_err();
-            assert_eq!(err, LimitPoolError::AllTicksMustHaveNeighbor);
+            assert_eq!(
+                err,
+                LimitOrderPoolConstructionError::AllTicksMustHaveNeighbor
+            );
         }
 
         #[test]
@@ -546,7 +562,10 @@ mod tests {
                 ]),
             )
             .unwrap_err();
-            assert_eq!(err, LimitPoolError::AllTicksMustHaveNeighbor);
+            assert_eq!(
+                err,
+                LimitOrderPoolConstructionError::AllTicksMustHaveNeighbor
+            );
         }
 
         #[test]
@@ -565,7 +584,7 @@ mod tests {
                 ]),
             )
             .unwrap_err();
-            assert_eq!(err, LimitPoolError::LastTickHasNoNeighbor);
+            assert_eq!(err, LimitOrderPoolConstructionError::LastTickHasNoNeighbor);
         }
     }
 

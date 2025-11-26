@@ -45,7 +45,6 @@ pub fn approximate_number_of_tick_spacings_crossed(
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ConstructSortedTicksError {
     #[error("current tick is outside of the searched range")]
     CurrentTickOutsideSearchedRange,

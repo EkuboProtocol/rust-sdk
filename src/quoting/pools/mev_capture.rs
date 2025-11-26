@@ -18,30 +18,48 @@ use crate::{
 };
 use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
 
-// Resources consumed during any swap execution in a full range pool.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
-pub struct MevCapturePoolResources {
-    pub state_update_count: u32,
-    pub base_pool_resources: BasePoolResources,
-}
-
+/// MEV-capture pool that wraps a concentrated liquidity pool with time-aware fees.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MevCapturePool {
+    /// Underlying concentrated liquidity pool.
     base_pool: BasePool<Evm>,
+    /// Last update timestamp.
     last_update_time: u32,
+    /// Current tick used for fixed-point fee calculation.
     tick: i32,
 }
 
+/// Unique identifier for a [`MevCapturePool`].
+pub type MevCapturePoolKey =
+    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, MevCapturePoolTypeConfig>;
+
+/// Type config for a [`MevCapturePool`].
+pub type MevCapturePoolTypeConfig = BasePoolTypeConfig;
+
+/// State snapshot for a [`MevCapturePool`].
 #[derive(Clone, Debug, PartialEq, Eq, Copy, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MevCapturePoolState {
+    /// Last update timestamp.
     pub last_update_time: u32,
+    /// State of the underlying base pool.
     pub base_pool_state: BasePoolState,
 }
 
-/// Errors that can occur when constructing a MEVResistPool.
+/// Resources consumed during MEV-capture quote execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MevCapturePoolResources {
+    /// Count of state updates (time syncs).
+    pub state_update_count: u32,
+    /// Resources consumed by the underlying base pool.
+    pub base_pool_resources: BasePoolResources,
+}
+
+/// Errors that can occur when constructing a [`MevCapturePool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-pub enum MEVResistPoolError {
+pub enum MevCapturePoolConstructionError {
     #[error("fee must be non-zero")]
     FeeMustBeGreaterThanZero,
     #[error("underlying pool must not be full range")]
@@ -52,17 +70,13 @@ pub enum MEVResistPoolError {
     InvalidCurrentTick,
 }
 
-pub type MevCapturePoolTypeConfig = BasePoolTypeConfig;
-pub type MevCapturePoolKey =
-    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, MevCapturePoolTypeConfig>;
-
 impl MevCapturePool {
     // An MEV resist pool just wraps a base pool with some additional logic
     pub fn new(
         base_pool: BasePool<Evm>,
         last_update_time: u32,
         tick: i32,
-    ) -> Result<Self, MEVResistPoolError> {
+    ) -> Result<Self, MevCapturePoolConstructionError> {
         let PoolConfig {
             fee,
             pool_type_config: TickSpacing(tick_spacing),
@@ -70,13 +84,13 @@ impl MevCapturePool {
         } = base_pool.key().config;
 
         if fee.is_zero() {
-            return Err(MEVResistPoolError::FeeMustBeGreaterThanZero);
+            return Err(MevCapturePoolConstructionError::FeeMustBeGreaterThanZero);
         }
         if tick_spacing == Evm::FULL_RANGE_TICK_SPACING {
-            return Err(MEVResistPoolError::CannotBeFullRange);
+            return Err(MevCapturePoolConstructionError::CannotBeFullRange);
         }
         if extension.is_zero() {
-            return Err(MEVResistPoolError::MissingExtension);
+            return Err(MevCapturePoolConstructionError::MissingExtension);
         }
 
         // validates that the current tick is between the active tick and the active tick index + 1
@@ -84,18 +98,18 @@ impl MevCapturePool {
             let sorted_ticks = base_pool.ticks();
             if let Some(t) = sorted_ticks.get(i) {
                 if t.index > tick {
-                    return Err(MEVResistPoolError::InvalidCurrentTick);
+                    return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
             }
             if let Some(t) = sorted_ticks.get(i + 1) {
                 if t.index <= tick {
-                    return Err(MEVResistPoolError::InvalidCurrentTick);
+                    return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
             }
         } else {
             if let Some(t) = base_pool.ticks().first() {
                 if t.index <= tick {
-                    return Err(MEVResistPoolError::InvalidCurrentTick);
+                    return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
             }
         }
