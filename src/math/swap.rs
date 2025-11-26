@@ -321,13 +321,13 @@ mod tests {
         for chain in CHAINS {
             let res = match chain {
                 ChainEnum::Starknet => compute_step::<Starknet>(step_params(
-                    Starknet::MIN_SQRT_RATIO,
+                    Starknet::min_sqrt_ratio(),
                     POSITIVE_AMOUNT,
                     false,
                     HALF_FEE_STARKNET,
                 )),
                 ChainEnum::Evm => compute_step::<Evm>(step_params(
-                    Evm::MIN_SQRT_RATIO,
+                    Evm::min_sqrt_ratio(),
                     POSITIVE_AMOUNT,
                     false,
                     HALF_FEE_EVM,
@@ -355,13 +355,13 @@ mod tests {
         for chain in CHAINS {
             let res = match chain {
                 ChainEnum::Starknet => compute_step::<Starknet>(step_params(
-                    Starknet::MAX_SQRT_RATIO,
+                    Starknet::max_sqrt_ratio(),
                     POSITIVE_AMOUNT,
                     true,
                     HALF_FEE_STARKNET,
                 )),
                 ChainEnum::Evm => compute_step::<Evm>(step_params(
-                    Evm::MAX_SQRT_RATIO,
+                    Evm::max_sqrt_ratio(),
                     POSITIVE_AMOUNT,
                     true,
                     HALF_FEE_EVM,
@@ -389,13 +389,13 @@ mod tests {
         for chain in CHAINS {
             let res = match chain {
                 ChainEnum::Starknet => compute_step::<Starknet>(step_params(
-                    Starknet::MAX_SQRT_RATIO,
+                    Starknet::max_sqrt_ratio(),
                     NEGATIVE_AMOUNT,
                     false,
                     HALF_FEE_STARKNET,
                 )),
                 ChainEnum::Evm => compute_step::<Evm>(step_params(
-                    Evm::MAX_SQRT_RATIO,
+                    Evm::max_sqrt_ratio(),
                     NEGATIVE_AMOUNT,
                     false,
                     HALF_FEE_EVM,
@@ -423,13 +423,13 @@ mod tests {
         for chain in CHAINS {
             let res = match chain {
                 ChainEnum::Starknet => compute_step::<Starknet>(step_params(
-                    Starknet::MIN_SQRT_RATIO,
+                    Starknet::min_sqrt_ratio(),
                     NEGATIVE_AMOUNT,
                     true,
                     HALF_FEE_STARKNET,
                 )),
                 ChainEnum::Evm => compute_step::<Evm>(step_params(
-                    Evm::MIN_SQRT_RATIO,
+                    Evm::min_sqrt_ratio(),
                     NEGATIVE_AMOUNT,
                     true,
                     HALF_FEE_EVM,

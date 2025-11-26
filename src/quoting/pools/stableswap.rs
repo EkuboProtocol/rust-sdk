@@ -1,5 +1,5 @@
 use crate::{
-    chain::evm::Evm,
+    chain::evm::{Evm, EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR},
     math::swap::{compute_step, is_price_increasing, ComputeStepError},
     private,
     quoting::pools::full_range::FullRangePoolState,
@@ -96,19 +96,19 @@ impl StableswapPool {
             return Err(StableswapPoolConstructionError::TokenOrderInvalid);
         }
 
-        if state.sqrt_ratio < Evm::MIN_SQRT_RATIO || state.sqrt_ratio > Evm::MAX_SQRT_RATIO {
+        if state.sqrt_ratio < Evm::min_sqrt_ratio() || state.sqrt_ratio > Evm::max_sqrt_ratio() {
             return Err(StableswapPoolConstructionError::SqrtRatioInvalid);
         }
 
-        if center_tick < Evm::MIN_TICK || center_tick > Evm::MAX_TICK {
+        if center_tick < Evm::min_tick() || center_tick > Evm::max_tick() {
             return Err(StableswapPoolConstructionError::InvalidCenterTick);
         }
 
-        if amplification_factor > Evm::MAX_STABLESWAP_AMPLIFICATION_FACTOR {
+        if amplification_factor > EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR {
             return Err(StableswapPoolConstructionError::InvalidStableswapAmplification);
         }
 
-        let liquidity_width = Evm::MAX_TICK >> amplification_factor;
+        let liquidity_width = Evm::max_tick() >> amplification_factor;
 
         Ok(Self {
             key,
@@ -119,19 +119,19 @@ impl StableswapPool {
             lower_price: {
                 let lower_tick = center_tick - liquidity_width;
 
-                if lower_tick > Evm::MIN_TICK {
+                if lower_tick > Evm::min_tick() {
                     to_sqrt_ratio::<Evm>(lower_tick).unwrap()
                 } else {
-                    Evm::MIN_SQRT_RATIO
+                    Evm::min_sqrt_ratio()
                 }
             },
             upper_price: {
                 let upper_tick = center_tick + liquidity_width;
 
-                if upper_tick < Evm::MAX_TICK {
+                if upper_tick < Evm::max_tick() {
                     to_sqrt_ratio::<Evm>(upper_tick).unwrap()
                 } else {
-                    Evm::MAX_SQRT_RATIO
+                    Evm::max_sqrt_ratio()
                 }
             },
         })
@@ -180,18 +180,18 @@ impl Pool for StableswapPool {
             if !increasing && limit > sqrt_ratio {
                 return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit < Evm::MIN_SQRT_RATIO {
+            if limit < Evm::min_sqrt_ratio() {
                 return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit > Evm::MAX_SQRT_RATIO {
+            if limit > Evm::max_sqrt_ratio() {
                 return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
         } else {
             if increasing {
-                Evm::MAX_SQRT_RATIO
+                Evm::max_sqrt_ratio()
             } else {
-                Evm::MIN_SQRT_RATIO
+                Evm::min_sqrt_ratio()
             }
         };
 
@@ -276,12 +276,12 @@ impl Pool for StableswapPool {
 
     // For full range pools, if there's liquidity, then the max tick is MAX_TICK
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        self.has_liquidity().then_some(Evm::MAX_TICK)
+        self.has_liquidity().then_some(Evm::max_tick())
     }
 
     // For full range pools, if there's liquidity, then the min tick is MIN_TICK
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        self.has_liquidity().then_some(Evm::MIN_TICK)
+        self.has_liquidity().then_some(Evm::min_tick())
     }
 
     fn is_path_dependent(&self) -> bool {
@@ -340,9 +340,9 @@ mod tests {
     }
 
     fn active_range(center_tick: i32, amplification: u8) -> (i32, i32) {
-        let width = Evm::MAX_TICK >> amplification;
-        let lower = center_tick.saturating_sub(width).max(Evm::MIN_TICK);
-        let upper = center_tick.saturating_add(width).min(Evm::MAX_TICK);
+        let width = Evm::max_tick() >> amplification;
+        let lower = center_tick.saturating_sub(width).max(Evm::min_tick());
+        let upper = center_tick.saturating_add(width).min(Evm::max_tick());
         (lower, upper)
     }
 
@@ -457,7 +457,7 @@ mod tests {
     fn outside_range_has_no_liquidity() {
         let amplification = 10;
         let (_, upper) = active_range(0, amplification);
-        let outside_tick = (upper + 1_000).min(Evm::MAX_TICK);
+        let outside_tick = (upper + 1_000).min(Evm::max_tick());
         let pool = StableswapPool::new(
             key(0, amplification),
             state(

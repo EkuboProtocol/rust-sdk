@@ -162,10 +162,10 @@ impl Pool for FullRangePool {
             if !is_increasing && limit > sqrt_ratio {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit < Evm::MIN_SQRT_RATIO {
+            if limit < Evm::min_sqrt_ratio() {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit > Evm::MAX_SQRT_RATIO {
+            if limit > Evm::max_sqrt_ratio() {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
@@ -226,12 +226,12 @@ impl Pool for FullRangePool {
 
     // For full range pools, if there's liquidity, then the max tick is MAX_TICK
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        self.has_liquidity().then_some(Evm::MAX_TICK)
+        self.has_liquidity().then_some(Evm::max_tick())
     }
 
     // For full range pools, if there's liquidity, then the min tick is MIN_TICK
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        self.has_liquidity().then_some(Evm::MIN_TICK)
+        self.has_liquidity().then_some(Evm::min_tick())
     }
 
     fn is_path_dependent(&self) -> bool {

@@ -208,12 +208,12 @@ impl Pool for LimitOrderPool {
             let active_tick_sqrt_ratio_limit = if is_increasing {
                 active_tick_index
                     .map_or_else(|| sorted_ticks.first(), |idx| sorted_ticks.get(idx + 1))
-                    .map_or(Ok(Starknet::MAX_SQRT_RATIO), |next| {
+                    .map_or(Ok(Starknet::max_sqrt_ratio()), |next| {
                         to_sqrt_ratio::<Starknet>(next.index)
                             .ok_or(BasePoolQuoteError::InvalidTick(next.index))
                     })
             } else {
-                active_tick_index.map_or(Ok(Starknet::MIN_SQRT_RATIO), |idx| {
+                active_tick_index.map_or(Ok(Starknet::min_sqrt_ratio()), |idx| {
                     let tick = sorted_ticks[idx]; // is always valid
                     to_sqrt_ratio::<Starknet>(tick.index)
                         .ok_or(BasePoolQuoteError::InvalidTick(tick.index))
@@ -221,9 +221,9 @@ impl Pool for LimitOrderPool {
             }?;
 
             let params_sqrt_ratio_limit = params.sqrt_ratio_limit.unwrap_or(if is_increasing {
-                Starknet::MAX_SQRT_RATIO
+                Starknet::max_sqrt_ratio()
             } else {
-                Starknet::MIN_SQRT_RATIO
+                Starknet::min_sqrt_ratio()
             });
 
             let active_tick_boundary_sqrt_ratio = if is_increasing {
@@ -254,7 +254,7 @@ impl Pool for LimitOrderPool {
                 let skip_starting_sqrt_ratio = if is_increasing {
                     next_unpulled_order_tick_index
                         .map_or(
-                            Ok(Starknet::MAX_SQRT_RATIO), // note that reaching this case implies that the pool has no initialized ticks
+                            Ok(Starknet::max_sqrt_ratio()), // note that reaching this case implies that the pool has no initialized ticks
                             |idx| {
                                 let tick_index = sorted_ticks[idx].index;
                                 to_sqrt_ratio::<Starknet>(tick_index)
@@ -265,7 +265,7 @@ impl Pool for LimitOrderPool {
                 } else {
                     next_unpulled_order_tick_index
                         .map_or_else(|| sorted_ticks.first(), |idx| sorted_ticks.get(idx + 1))
-                        .map_or(Ok(Starknet::MIN_SQRT_RATIO), |tick| {
+                        .map_or(Ok(Starknet::min_sqrt_ratio()), |tick| {
                             to_sqrt_ratio::<Starknet>(tick.index)
                                 .ok_or(BasePoolQuoteError::InvalidTick(tick.index))
                         })?

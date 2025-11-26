@@ -129,11 +129,13 @@ mod tests {
             for chain in CHAINS {
                 match chain {
                     ChainEnum::Starknet => {
-                        assert!(to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK - 1).is_none());
+                        assert!(
+                            to_sqrt_ratio::<Starknet>(Starknet::min_tick() - 1).is_none()
+                        );
                         assert!(to_sqrt_ratio::<Starknet>(i32::MIN).is_none());
                     }
                     ChainEnum::Evm => {
-                        assert!(to_sqrt_ratio::<Evm>(Evm::MIN_TICK - 1).is_none());
+                        assert!(to_sqrt_ratio::<Evm>(Evm::min_tick() - 1).is_none());
                         assert!(to_sqrt_ratio::<Evm>(i32::MIN).is_none());
                     }
                 }
@@ -146,14 +148,14 @@ mod tests {
                 match chain {
                     ChainEnum::Starknet => {
                         assert_eq!(
-                            to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK).unwrap(),
-                            Starknet::MIN_SQRT_RATIO
+                            to_sqrt_ratio::<Starknet>(Starknet::min_tick()).unwrap(),
+                            Starknet::min_sqrt_ratio()
                         );
                     }
                     ChainEnum::Evm => {
                         assert_eq!(
-                            to_sqrt_ratio::<Evm>(Evm::MIN_TICK).unwrap(),
-                            Evm::MIN_SQRT_RATIO
+                            to_sqrt_ratio::<Evm>(Evm::min_tick()).unwrap(),
+                            Evm::min_sqrt_ratio()
                         );
                     }
                 }
@@ -166,14 +168,14 @@ mod tests {
                 match chain {
                     ChainEnum::Starknet => {
                         assert_eq!(
-                            to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK).unwrap(),
-                            Starknet::MAX_SQRT_RATIO
+                            to_sqrt_ratio::<Starknet>(Starknet::max_tick()).unwrap(),
+                            Starknet::max_sqrt_ratio()
                         );
                     }
                     ChainEnum::Evm => {
                         assert_eq!(
-                            to_sqrt_ratio::<Evm>(Evm::MAX_TICK).unwrap(),
-                            Evm::MAX_SQRT_RATIO
+                            to_sqrt_ratio::<Evm>(Evm::max_tick()).unwrap(),
+                            Evm::max_sqrt_ratio()
                         );
                     }
                 }
@@ -185,11 +187,11 @@ mod tests {
             for chain in CHAINS {
                 match chain {
                     ChainEnum::Starknet => {
-                        assert!(to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK + 1).is_none());
+                        assert!(to_sqrt_ratio::<Starknet>(Starknet::max_tick() + 1).is_none());
                         assert!(to_sqrt_ratio::<Starknet>(i32::MAX).is_none());
                     }
                     ChainEnum::Evm => {
-                        assert!(to_sqrt_ratio::<Evm>(Evm::MAX_TICK + 1).is_none());
+                        assert!(to_sqrt_ratio::<Evm>(Evm::max_tick() + 1).is_none());
                         assert!(to_sqrt_ratio::<Evm>(i32::MAX).is_none());
                     }
                 }
@@ -274,15 +276,15 @@ mod tests {
                 match chain {
                     ChainEnum::Starknet => assert_eq!(
                         approximate_sqrt_ratio_to_tick(
-                            to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK).unwrap()
+                            to_sqrt_ratio::<Starknet>(Starknet::min_tick()).unwrap()
                         ),
-                        Starknet::MIN_TICK
+                        Starknet::min_tick()
                     ),
                     ChainEnum::Evm => assert_eq!(
                         approximate_sqrt_ratio_to_tick(
-                            to_sqrt_ratio::<Evm>(Evm::MIN_TICK).unwrap()
+                            to_sqrt_ratio::<Evm>(Evm::min_tick()).unwrap()
                         ),
-                        Evm::MIN_TICK
+                        Evm::min_tick()
                     ),
                 }
             }
@@ -294,15 +296,15 @@ mod tests {
                 match chain {
                     ChainEnum::Starknet => assert_eq!(
                         approximate_sqrt_ratio_to_tick(
-                            to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK).unwrap()
+                            to_sqrt_ratio::<Starknet>(Starknet::max_tick()).unwrap()
                         ),
-                        Starknet::MAX_TICK
+                        Starknet::max_tick()
                     ),
                     ChainEnum::Evm => assert_eq!(
                         approximate_sqrt_ratio_to_tick(
-                            to_sqrt_ratio::<Evm>(Evm::MAX_TICK).unwrap()
+                            to_sqrt_ratio::<Evm>(Evm::max_tick()).unwrap()
                         ),
-                        Evm::MAX_TICK
+                        Evm::max_tick()
                     ),
                 }
             }

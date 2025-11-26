@@ -4,7 +4,7 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 use crate::{
-    chain::evm::Evm,
+    chain::evm::{Evm, EVM_FULL_RANGE_TICK_SPACING},
     math::swap::{amount_before_fee, compute_fee},
     private,
     quoting::pools::base::{
@@ -86,7 +86,7 @@ impl MevCapturePool {
         if fee.is_zero() {
             return Err(MevCapturePoolConstructionError::FeeMustBeGreaterThanZero);
         }
-        if tick_spacing == Evm::FULL_RANGE_TICK_SPACING {
+        if tick_spacing == EVM_FULL_RANGE_TICK_SPACING {
             return Err(MevCapturePoolConstructionError::CannotBeFullRange);
         }
         if extension.is_zero() {

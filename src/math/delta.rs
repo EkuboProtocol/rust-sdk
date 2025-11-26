@@ -86,6 +86,7 @@ mod tests {
         evm::Evm,
         starknet::Starknet,
         tests::{ChainEnum, CHAINS},
+        Chain,
     };
     use ruint::uint;
 
@@ -138,11 +139,11 @@ mod tests {
                 let (expected, min_sqrt_ratio) = match chain {
                     ChainEnum::Evm => (
                         340_274_119_756_928_397_712_370_531_121_900_180_028,
-                        Evm::MIN_SQRT_RATIO,
+                        Evm::min_sqrt_ratio(),
                     ),
                     ChainEnum::Starknet => (
                         340_282_286_429_718_909_724_583_623_827_301_092_853,
-                        Starknet::MIN_SQRT_RATIO,
+                        Starknet::min_sqrt_ratio(),
                     ),
                 };
 
@@ -157,8 +158,8 @@ mod tests {
         fn overflow() {
             for chain in CHAINS {
                 let (min_sqrt_ratio, max_sqrt_ratio) = match chain {
-                    ChainEnum::Evm => (Evm::MIN_SQRT_RATIO, Evm::MAX_SQRT_RATIO),
-                    ChainEnum::Starknet => (Starknet::MIN_SQRT_RATIO, Starknet::MAX_SQRT_RATIO),
+                    ChainEnum::Evm => (Evm::min_sqrt_ratio(), Evm::max_sqrt_ratio()),
+                    ChainEnum::Starknet => (Starknet::min_sqrt_ratio(), Starknet::max_sqrt_ratio()),
                 };
 
                 assert_eq!(
@@ -210,11 +211,11 @@ mod tests {
                 let (expected, max_sqrt_ratio) = match chain {
                     ChainEnum::Evm => (
                         340_274_119_756_928_397_675_478_831_269_759_003_622,
-                        Evm::MAX_SQRT_RATIO,
+                        Evm::max_sqrt_ratio(),
                     ),
                     ChainEnum::Starknet => (
                         340_282_286_429_718_909_724_583_623_827_301_092_853,
-                        Starknet::MAX_SQRT_RATIO,
+                        Starknet::max_sqrt_ratio(),
                     ),
                 };
 
@@ -229,8 +230,8 @@ mod tests {
         fn overflow() {
             for chain in CHAINS {
                 let (min_sqrt_ratio, max_sqrt_ratio) = match chain {
-                    ChainEnum::Evm => (Evm::MIN_SQRT_RATIO, Evm::MAX_SQRT_RATIO),
-                    ChainEnum::Starknet => (Starknet::MIN_SQRT_RATIO, Starknet::MAX_SQRT_RATIO),
+                    ChainEnum::Evm => (Evm::min_sqrt_ratio(), Evm::max_sqrt_ratio()),
+                    ChainEnum::Starknet => (Starknet::min_sqrt_ratio(), Starknet::max_sqrt_ratio()),
                 };
 
                 assert_eq!(

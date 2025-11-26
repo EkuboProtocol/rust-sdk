@@ -161,7 +161,11 @@ mod tests {
     use super::*;
     use crate::{
         chain::{
-            starknet::Starknet,
+            starknet::{
+                Starknet, STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                STARKNET_MAX_TICK_AT_MAX_TICK_SPACING, STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
+                STARKNET_MIN_TICK_AT_MAX_TICK_SPACING,
+            },
             tests::{chain_test, ChainTest},
             Chain,
         },
@@ -202,12 +206,12 @@ mod tests {
     #[test]
     fn starknet_max_values() {
         assert_eq!(
-            to_sqrt_ratio::<Starknet>(Starknet::MIN_TICK_AT_MAX_TICK_SPACING).unwrap(),
-            Starknet::MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
+            to_sqrt_ratio::<Starknet>(STARKNET_MIN_TICK_AT_MAX_TICK_SPACING).unwrap(),
+            STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
         );
         assert_eq!(
-            to_sqrt_ratio::<Starknet>(Starknet::MAX_TICK_AT_MAX_TICK_SPACING).unwrap(),
-            Starknet::MAX_SQRT_RATIO_AT_MAX_TICK_SPACING
+            to_sqrt_ratio::<Starknet>(STARKNET_MAX_TICK_AT_MAX_TICK_SPACING).unwrap(),
+            STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING
         );
     }
 
@@ -227,14 +231,16 @@ mod tests {
         #[test]
         fn starknet_min_sqrt_ratio_at_max_tick_spacing() {
             let state =
-                build_pool::<Starknet>(Starknet::MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0).state();
+                build_pool::<Starknet>(STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0)
+                    .state();
             assert_eq!(state.full_range_pool_state.liquidity(), 1);
         }
 
         #[test]
         fn starknet_max_sqrt_ratio_at_max_tick_spacing() {
             let state =
-                build_pool::<Starknet>(Starknet::MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0).state();
+                build_pool::<Starknet>(STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0)
+                    .state();
             assert_eq!(state.full_range_pool_state.liquidity(), 1);
         }
     }

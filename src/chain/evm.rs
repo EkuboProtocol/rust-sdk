@@ -19,32 +19,28 @@ use crate::{
     },
 };
 
-/// Chain implementation for EVM-compatible networks.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct Evm;
+pub const EVM_NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
+pub const EVM_MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
+pub const EVM_FULL_RANGE_TICK_SPACING: u32 = 0;
+pub const EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR: u8 = 26;
 
-impl Evm {
-    pub const NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
+pub const EVM_MIN_TICK: i32 = -88722835;
+pub const EVM_MAX_TICK: i32 = 88722835;
 
-    pub const MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
-    pub const FULL_RANGE_TICK_SPACING: u32 = 0;
+pub const EVM_MIN_SQRT_RATIO: U256 = U256::from_limbs([447090492618908, 1, 0, 0]);
+pub const EVM_MAX_SQRT_RATIO: U256 =
+    U256::from_limbs([0, 7567914946021818368, 18446296994052723738, 0]);
 
-    pub const MAX_STABLESWAP_AMPLIFICATION_FACTOR: u8 = 26;
-
-    pub const MIN_TICK: i32 = -88722835;
-    pub const MAX_TICK: i32 = 88722835;
-
-    pub const MIN_SQRT_RATIO: U256 = U256::from_limbs([447090492618908, 1, 0, 0]);
-    pub const MAX_SQRT_RATIO: U256 =
-        U256::from_limbs([0, 7567914946021818368, 18446296994052723738, 0]);
-
-    pub const FEE_DENOMINATOR: U256 = U256::from_limbs([0, 1, 0, 0]);
-    pub const FEE_BITS: u8 = 64;
-}
+pub const EVM_FEE_DENOMINATOR: U256 = U256::from_limbs([0, 1, 0, 0]);
+pub const EVM_FEE_BITS: u8 = 64;
 
 const TWO_POW_160: U256 = U256::from_limbs([0, 0, 0x100000000, 0]);
 const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 const TWO_POW_96: U256 = U256::from_limbs([0, 0x0100000000, 0, 0]);
+
+/// Chain implementation for EVM-compatible networks.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+pub struct Evm;
 
 /// Pool type configuration variants for EVM.
 #[derive(From, Debug, PartialEq, Eq, Hash)]
@@ -80,13 +76,13 @@ impl TryFrom<B32> for PoolTypeConfig {
         if value.bit_and(fixed_bytes!("0x80000000")) == B32::ZERO {
             let center_tick = i32::from_be_bytes((value.bit_and(fixed_bytes!("0x00ffffff"))).0);
 
-            if center_tick < Evm::MIN_TICK || center_tick > Evm::MAX_TICK {
+            if center_tick < EVM_MIN_TICK || center_tick > EVM_MAX_TICK {
                 return Err(PoolTypeConfigParseError::InvalidCenterTick);
             }
 
             let amplification_factor = value.0[0];
 
-            if amplification_factor > Evm::MAX_STABLESWAP_AMPLIFICATION_FACTOR {
+            if amplification_factor > EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR {
                 return Err(PoolTypeConfigParseError::InvalidStableswapAmplification);
             }
 
@@ -97,7 +93,7 @@ impl TryFrom<B32> for PoolTypeConfig {
         } else {
             let tick_spacing = u32::from_be_bytes(value.bit_and(fixed_bytes!("0x7fffffff")).0);
 
-            if tick_spacing > Evm::MAX_TICK_SPACING.0 || tick_spacing.is_zero() {
+            if tick_spacing > EVM_MAX_TICK_SPACING.0 || tick_spacing.is_zero() {
                 return Err(PoolTypeConfigParseError::InvalidTickSpacing);
             }
 
@@ -148,31 +144,31 @@ impl Chain for Evm {
     type FullRangePoolConstructionError = FullRangePoolConstructionError;
 
     fn max_tick_spacing() -> TickSpacing {
-        Self::MAX_TICK_SPACING
+        EVM_MAX_TICK_SPACING
     }
 
     fn min_tick() -> i32 {
-        Self::MIN_TICK
+        EVM_MIN_TICK
     }
 
     fn max_tick() -> i32 {
-        Self::MAX_TICK
+        EVM_MAX_TICK
     }
 
     fn min_sqrt_ratio() -> U256 {
-        Self::MIN_SQRT_RATIO
+        EVM_MIN_SQRT_RATIO
     }
 
     fn max_sqrt_ratio() -> U256 {
-        Self::MAX_SQRT_RATIO
+        EVM_MAX_SQRT_RATIO
     }
 
     fn min_sqrt_ratio_full_range() -> U256 {
-        Self::MIN_SQRT_RATIO
+        EVM_MIN_SQRT_RATIO
     }
 
     fn max_sqrt_ratio_full_range() -> U256 {
-        Self::MAX_SQRT_RATIO
+        EVM_MAX_SQRT_RATIO
     }
 
     fn adjust_sqrt_ratio_precision(ratio: U256) -> U256 {
@@ -188,11 +184,11 @@ impl Chain for Evm {
     }
 
     fn fee_denominator() -> U256 {
-        Self::FEE_DENOMINATOR
+        EVM_FEE_DENOMINATOR
     }
 
     fn fee_bits() -> u8 {
-        Self::FEE_BITS
+        EVM_FEE_BITS
     }
 
     fn new_full_range_pool(
