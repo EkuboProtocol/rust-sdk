@@ -4,14 +4,58 @@ use ruint::aliases::U256;
 use starknet_types_core::felt::Felt;
 use thiserror::Error;
 
-use crate::{
-    chain::Chain,
-    private,
-    quoting::{
-        pools::base::{BasePool, BasePoolConstructionError, BasePoolState, TickSpacing},
-        types::{PoolConfig, PoolKey, Tick},
-    },
+use crate::chain::Chain;
+use crate::private;
+use crate::quoting::pools::base::{
+    BasePool, BasePoolConstructionError, BasePoolQuoteError, BasePoolResources, BasePoolState,
+    TickSpacing,
 };
+use crate::quoting::pools::limit_order::{
+    LimitOrderPool, LimitOrderPoolConstructionError, LimitOrderPoolResources, LimitOrderPoolState,
+};
+use crate::quoting::pools::oracle::{
+    OraclePool, OraclePoolConstructionError, OraclePoolResources, OraclePoolState,
+};
+use crate::quoting::pools::spline::{
+    SplinePool, SplinePoolQuoteError, SplinePoolResources, SplinePoolState,
+};
+use crate::quoting::pools::twamm::{
+    TwammPool, TwammPoolConstructionError, TwammPoolQuoteError, TwammPoolResources, TwammPoolState,
+};
+use crate::quoting::types::{PoolConfig, PoolKey, Tick};
+
+// Re-export pool types for ergonomic, chain-scoped usage.
+pub type StarknetBasePool = BasePool<Starknet>;
+pub type StarknetBasePoolConstructionError = BasePoolConstructionError;
+pub type StarknetBasePoolQuoteError = BasePoolQuoteError;
+pub type StarknetBasePoolResources = BasePoolResources;
+pub type StarknetBasePoolState = BasePoolState;
+
+pub type StarknetLimitOrderPool = LimitOrderPool;
+pub type StarknetLimitOrderPoolConstructionError = LimitOrderPoolConstructionError;
+pub type StarknetLimitOrderPoolQuoteError = BasePoolQuoteError;
+pub type StarknetLimitOrderPoolResources = LimitOrderPoolResources;
+pub type StarknetLimitOrderPoolState = LimitOrderPoolState;
+
+pub type StarknetOraclePool = OraclePool<Starknet>;
+pub type StarknetOraclePoolConstructionError =
+    OraclePoolConstructionError<FullRangePoolConstructionError>;
+pub type StarknetOraclePoolQuoteError = BasePoolQuoteError;
+pub type StarknetOraclePoolResources = OraclePoolResources<BasePoolResources>;
+pub type StarknetOraclePoolState = OraclePoolState<BasePoolState>;
+
+pub type StarknetSplinePool = SplinePool;
+pub type StarknetSplinePoolConstructionError = BasePoolConstructionError;
+pub type StarknetSplinePoolResources = SplinePoolResources;
+pub type StarknetSplinePoolState = SplinePoolState;
+pub type StarknetSplinePoolQuoteError = SplinePoolQuoteError;
+
+pub type StarknetTwammPool = TwammPool<Starknet>;
+pub type StarknetTwammPoolConstructionError =
+    TwammPoolConstructionError<FullRangePoolConstructionError>;
+pub type StarknetTwammPoolQuoteError = TwammPoolQuoteError<BasePoolQuoteError>;
+pub type StarknetTwammPoolResources = TwammPoolResources<BasePoolResources>;
+pub type StarknetTwammPoolState = TwammPoolState<BasePoolState>;
 
 pub const STARKNET_MAX_TICK_SPACING: TickSpacing = TickSpacing(354892);
 
@@ -122,15 +166,14 @@ impl Chain for Starknet {
         let (active_tick_index, sorted_ticks, liquidity) = if active_liquidity.is_zero() {
             (None, vec![], 0)
         } else {
-            let (active_tick_index, liquidity) = if sqrt_ratio
-                < STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING
-            {
-                (None, 0)
-            } else if sqrt_ratio <= STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
-                (Some(0), active_liquidity)
-            } else {
-                (Some(1), 0)
-            };
+            let (active_tick_index, liquidity) =
+                if sqrt_ratio < STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING {
+                    (None, 0)
+                } else if sqrt_ratio <= STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING {
+                    (Some(0), active_liquidity)
+                } else {
+                    (Some(1), 0)
+                };
             (
                 active_tick_index,
                 vec![

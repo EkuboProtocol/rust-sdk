@@ -3,21 +3,75 @@ use derive_more::From;
 use num_traits::Zero as _;
 use thiserror::Error;
 
-use crate::{
-    chain::Chain,
-    private,
-    quoting::{
-        pools::{
-            base::{BasePoolTypeConfig, TickSpacing},
-            full_range::{
-                FullRangePool, FullRangePoolConstructionError, FullRangePoolState,
-                FullRangePoolTypeConfig,
-            },
-            stableswap::StableswapPoolTypeConfig,
-        },
-        types::{PoolConfig, PoolKey},
-    },
+use crate::chain::Chain;
+use crate::private;
+use crate::quoting::pools::base::{
+    BasePool, BasePoolConstructionError, BasePoolQuoteError, BasePoolResources, BasePoolState,
+    BasePoolTypeConfig, TickSpacing,
 };
+use crate::quoting::pools::full_range::{
+    FullRangePool, FullRangePoolConstructionError, FullRangePoolQuoteError, FullRangePoolResources,
+    FullRangePoolState, FullRangePoolTypeConfig,
+};
+use crate::quoting::pools::mev_capture::{
+    MevCapturePool, MevCapturePoolConstructionError, MevCapturePoolResources, MevCapturePoolState,
+    MevCapturePoolTypeConfig,
+};
+use crate::quoting::pools::oracle::{
+    OraclePool, OraclePoolConstructionError, OraclePoolResources, OraclePoolState,
+};
+use crate::quoting::pools::stableswap::{
+    StableswapPool, StableswapPoolConstructionError, StableswapPoolQuoteError,
+    StableswapPoolResources, StableswapPoolTypeConfig,
+};
+use crate::quoting::pools::twamm::{
+    TwammPool, TwammPoolConstructionError, TwammPoolQuoteError, TwammPoolResources, TwammPoolState,
+};
+use crate::quoting::types::{PoolConfig, PoolKey};
+
+// Re-export pool types for ergonomic, chain-scoped usage.
+pub type EvmBasePool = BasePool<Evm>;
+pub type EvmBasePoolConstructionError = BasePoolConstructionError;
+pub type EvmBasePoolQuoteError = BasePoolQuoteError;
+pub type EvmBasePoolResources = BasePoolResources;
+pub type EvmBasePoolState = BasePoolState;
+pub type EvmBasePoolTypeConfig = BasePoolTypeConfig;
+
+pub type EvmFullRangePool = FullRangePool;
+pub type EvmFullRangePoolConstructionError = FullRangePoolConstructionError;
+pub type EvmFullRangePoolQuoteError = FullRangePoolQuoteError;
+pub type EvmFullRangePoolResources = FullRangePoolResources;
+pub type EvmFullRangePoolState = FullRangePoolState;
+pub type EvmFullRangePoolTypeConfig = FullRangePoolTypeConfig;
+
+pub type EvmStableswapPool = StableswapPool;
+pub type EvmStableswapPoolConstructionError = StableswapPoolConstructionError;
+pub type EvmStableswapPoolQuoteError = StableswapPoolQuoteError;
+pub type EvmStableswapPoolResources = StableswapPoolResources;
+pub type EvmStableswapPoolState = FullRangePoolState;
+pub type EvmStableswapPoolTypeConfig = StableswapPoolTypeConfig;
+
+pub type EvmMevCapturePool = MevCapturePool;
+pub type EvmMevCapturePoolConstructionError = MevCapturePoolConstructionError;
+pub type EvmMevCapturePoolQuoteError = BasePoolQuoteError;
+pub type EvmMevCapturePoolResources = MevCapturePoolResources;
+pub type EvmMevCapturePoolState = MevCapturePoolState;
+pub type EvmMevCapturePoolTypeConfig = MevCapturePoolTypeConfig;
+
+pub type EvmOraclePool = OraclePool<Evm>;
+pub type EvmOraclePoolConstructionError =
+    OraclePoolConstructionError<FullRangePoolConstructionError>;
+pub type EvmOraclePoolQuoteError = FullRangePoolQuoteError;
+pub type EvmOraclePoolResources = OraclePoolResources<FullRangePoolResources>;
+pub type EvmOraclePoolState = OraclePoolState<FullRangePoolState>;
+pub type EvmOraclePoolTypeConfig = FullRangePoolTypeConfig;
+
+pub type EvmTwammPool = TwammPool<Evm>;
+pub type EvmTwammPoolConstructionError = TwammPoolConstructionError<FullRangePoolConstructionError>;
+pub type EvmTwammPoolQuoteError = TwammPoolQuoteError<FullRangePoolQuoteError>;
+pub type EvmTwammPoolResources = TwammPoolResources<FullRangePoolResources>;
+pub type EvmTwammPoolState = TwammPoolState<FullRangePoolState>;
+pub type EvmTwammPoolTypeConfig = FullRangePoolTypeConfig;
 
 pub const EVM_NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
 pub const EVM_MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
