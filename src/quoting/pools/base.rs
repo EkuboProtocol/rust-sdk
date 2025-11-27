@@ -1,3 +1,7 @@
+use crate::private;
+use crate::quoting::pools::{
+    ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
+};
 use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
     approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
@@ -7,7 +11,6 @@ use crate::{
     math::swap::{compute_step, is_price_increasing, ComputeStepError},
 };
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
-use crate::{private, quoting::types::PoolConfig};
 use alloc::vec::Vec;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
@@ -70,11 +73,10 @@ pub struct BasePoolResources {
 /// Errors that can occur when constructing a BasePool.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum BasePoolConstructionError {
+    #[error(transparent)]
+    Common(#[from] CommonPoolConstructionError),
     #[error("constructing ticks from partial data")]
     ConstructSortedTicksFromPartialDataError(#[from] ConstructSortedTicksError),
-    #[error("token0 must be less than token1")]
-    /// Token0 must be less than token1.
-    TokenOrderInvalid,
     #[error("tick spacing too large")]
     /// Tick spacing must be less than or equal to max tick spacing.
     TickSpacingTooLarge,
@@ -112,8 +114,8 @@ pub enum BasePoolConstructionError {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum BasePoolQuoteError {
-    #[error("invalid token")]
-    InvalidToken,
+    #[error(transparent)]
+    Common(#[from] CommonPoolQuoteError),
     #[error("invalid price limit")]
     InvalidSqrtRatioLimit,
     #[error("invalid tick {0}")]
@@ -198,19 +200,9 @@ impl<C: Chain> BasePool<C> {
         state: BasePoolState,
         sorted_ticks: Vec<Tick>,
     ) -> Result<Self, BasePoolConstructionError> {
-        let PoolKey {
-            token0,
-            token1,
-            config:
-                PoolConfig {
-                    pool_type_config: tick_spacing,
-                    ..
-                },
-        } = key;
+        ensure_valid_token_order(&key)?;
 
-        if token0 >= token1 {
-            return Err(BasePoolConstructionError::TokenOrderInvalid);
-        }
+        let tick_spacing = key.config.pool_type_config;
 
         if tick_spacing > C::max_tick_spacing() {
             return Err(BasePoolConstructionError::TickSpacingTooLarge);
@@ -340,11 +332,7 @@ impl<C: Chain> Pool for BasePool<C> {
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
-        let is_token1 = token == self.key.token1;
-
-        if !is_token1 && token != self.key.token0 {
-            return Err(BasePoolQuoteError::InvalidToken);
-        }
+        let is_token1 = is_token1(&self.key, token)?;
 
         let state = params.override_state.unwrap_or(self.state);
 
@@ -592,7 +580,9 @@ mod tests {
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::TokenOrderInvalid
+                    BasePoolConstructionError::Common(
+                        CommonPoolConstructionError::TokenOrderInvalid
+                    )
                 );
             });
         }

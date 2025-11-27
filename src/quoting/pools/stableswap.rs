@@ -7,6 +7,9 @@ use crate::{
 use crate::{
     chain::Chain,
     math::tick::to_sqrt_ratio,
+    quoting::pools::{
+        ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
+    },
     quoting::types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount},
 };
 use core::ops::Not;
@@ -55,8 +58,8 @@ pub type StableswapPoolKey =
 /// Errors that can occur when constructing a [`StableswapPool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum StableswapPoolConstructionError {
-    #[error("token0 must be less than token1")]
-    TokenOrderInvalid,
+    #[error(transparent)]
+    Common(#[from] CommonPoolConstructionError),
     #[error("sqrt ratio out of bounds")]
     SqrtRatioInvalid,
     #[error("stableswap center tick is not between min and max tick")]
@@ -68,8 +71,8 @@ pub enum StableswapPoolConstructionError {
 /// Errors that can occur when quoting a [`StableswapPool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum StableswapPoolQuoteError {
-    #[error("specified token not part of the pool")]
-    InvalidToken,
+    #[error(transparent)]
+    Common(#[from] CommonPoolQuoteError),
     #[error("price limit invalid")]
     InvalidSqrtRatioLimit,
     #[error("failed swap computation step")]
@@ -81,20 +84,12 @@ impl StableswapPool {
         key: StableswapPoolKey,
         state: FullRangePoolState,
     ) -> Result<Self, StableswapPoolConstructionError> {
-        let PoolKey {
-            token0,
-            token1,
-            config,
-        } = key;
-
         let StableswapPoolTypeConfig {
             center_tick,
             amplification_factor,
-        } = config.pool_type_config;
+        } = key.config.pool_type_config;
 
-        if token0 >= token1 {
-            return Err(StableswapPoolConstructionError::TokenOrderInvalid);
-        }
+        ensure_valid_token_order(&key)?;
 
         if state.sqrt_ratio < Evm::min_sqrt_ratio() || state.sqrt_ratio > Evm::max_sqrt_ratio() {
             return Err(StableswapPoolConstructionError::SqrtRatioInvalid);
@@ -160,11 +155,7 @@ impl Pool for StableswapPool {
         params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let TokenAmount { amount, token } = params.token_amount;
-        let is_token1 = token == self.key.token1;
-
-        if !is_token1 && token != self.key.token0 {
-            return Err(StableswapPoolQuoteError::InvalidToken);
-        }
+        let is_token1 = is_token1(&self.key, token)?;
 
         let FullRangePoolState {
             mut sqrt_ratio,

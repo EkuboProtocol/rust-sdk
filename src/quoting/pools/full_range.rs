@@ -4,6 +4,10 @@ use crate::{
 };
 use crate::{
     chain::Chain,
+    quoting::pools::{
+        is_token1, ensure_valid_token_order, CommonPoolConstructionError,
+        CommonPoolQuoteError,
+    },
     quoting::types::{Pool, PoolKey, Quote, QuoteParams},
 };
 use crate::{private, quoting::types::PoolState};
@@ -52,8 +56,8 @@ pub struct FullRangePoolResources {
 /// Errors that can occur when constructing a [`FullRangePool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum FullRangePoolConstructionError {
-    #[error("token0 must be less than token1")]
-    TokenOrderInvalid,
+    #[error(transparent)]
+    Common(#[from] CommonPoolConstructionError),
     #[error("sqrt ratio out of bounds")]
     SqrtRatioInvalid,
 }
@@ -61,8 +65,8 @@ pub enum FullRangePoolConstructionError {
 /// Errors that can occur when quoting a [`FullRangePool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum FullRangePoolQuoteError {
-    #[error("invalid token")]
-    InvalidToken,
+    #[error(transparent)]
+    Common(#[from] CommonPoolQuoteError),
     #[error("invalid price limit")]
     InvalidSqrtRatioLimit,
     #[error("failed swap step computation")]
@@ -74,9 +78,7 @@ impl FullRangePool {
         key: FullRangePoolKey,
         state: FullRangePoolState,
     ) -> Result<Self, FullRangePoolConstructionError> {
-        if !(key.token0 < key.token1) {
-            return Err(FullRangePoolConstructionError::TokenOrderInvalid);
-        }
+        ensure_valid_token_order(&key)?;
 
         if state.sqrt_ratio < Evm::min_sqrt_ratio() || state.sqrt_ratio > Evm::max_sqrt_ratio() {
             return Err(FullRangePoolConstructionError::SqrtRatioInvalid);
@@ -115,11 +117,7 @@ impl Pool for FullRangePool {
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
-        let is_token1 = token == self.key.token1;
-
-        if !is_token1 && token != self.key.token0 {
-            return Err(FullRangePoolQuoteError::InvalidToken);
-        }
+        let is_token1 = is_token1(&self.key, token)?;
 
         let state = if let Some(override_state) = params.override_state {
             override_state
@@ -257,6 +255,7 @@ mod tests {
     use super::*;
     use crate::{
         chain::tests::ChainTest,
+        quoting::pools::CommonPoolConstructionError,
         quoting::types::{PoolConfig, TokenAmount},
     };
 
@@ -293,7 +292,7 @@ mod tests {
         );
         assert_eq!(
             result.unwrap_err(),
-            FullRangePoolConstructionError::TokenOrderInvalid
+            FullRangePoolConstructionError::Common(CommonPoolConstructionError::TokenOrderInvalid)
         );
     }
 
