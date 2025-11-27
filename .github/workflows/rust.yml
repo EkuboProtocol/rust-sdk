@@ -13,10 +13,24 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [default, evm, starknet, all]
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Build (${{ matrix.feature }})
+      run: |
+        case "${{ matrix.feature }}" in
+          default) cargo build --verbose ;;
+          all) cargo build --verbose --all-features ;;
+          *) cargo build --verbose --features "${{ matrix.feature }}" ;;
+        esac
+    - name: Run tests (${{ matrix.feature }})
+      run: |
+        case "${{ matrix.feature }}" in
+          default) cargo test --verbose ;;
+          all) cargo test --verbose --all-features ;;
+          *) cargo test --verbose --features "${{ matrix.feature }}" ;;
+        esac
