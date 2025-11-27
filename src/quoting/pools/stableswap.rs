@@ -203,7 +203,7 @@ impl Pool for StableswapPool {
 
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
             let mut step_liquidity = liquidity;
-            let in_range = sqrt_ratio < self.upper_price && sqrt_ratio > self.lower_price;
+            let in_range = sqrt_ratio < self.upper_price && sqrt_ratio >= self.lower_price;
 
             let next_tick_sqrt_ratio = if in_range {
                 Some(if increasing {

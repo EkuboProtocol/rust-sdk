@@ -43,8 +43,7 @@ const TWO_POW_96: U256 = U256::from_limbs([0, 0x0100000000, 0, 0]);
 pub struct Evm;
 
 /// Pool config alias for EVM.
-pub type EvmPoolConfig =
-    PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>;
+pub type EvmPoolConfig = PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>;
 /// Pool key alias for EVM.
 pub type EvmPoolKey = PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>;
 /// Pool type config alias for EVM.
@@ -89,7 +88,12 @@ impl TryFrom<B32> for PoolTypeConfig {
         }
 
         if value.bit_and(fixed_bytes!("0x80000000")) == B32::ZERO {
-            let center_tick = i32::from_be_bytes((value.bit_and(fixed_bytes!("0x00ffffff"))).0);
+            let mut center_tick_bytes = [0u8; 4];
+            center_tick_bytes[1..].copy_from_slice(&value.0[1..]);
+            if value.0[1] & 0x80 != 0 {
+                center_tick_bytes[0] = 0xff;
+            }
+            let center_tick = i32::from_be_bytes(center_tick_bytes);
 
             if center_tick < EVM_MIN_TICK || center_tick > EVM_MAX_TICK {
                 return Err(PoolTypeConfigParseError::InvalidCenterTick);
@@ -259,6 +263,69 @@ mod tests {
 
         fn one_address() -> Self::Address {
             address!("0x0000000000000000000000000000000000000001")
+        }
+    }
+
+    #[test]
+    fn stableswap_round_trip_positive_and_negative_ticks() {
+        let cases = [
+            (0, 1u8),
+            (10, 26u8),
+            (-1, 5u8),
+            (1_000_000, 0u8),
+            (-1_000_000, EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR),
+        ];
+
+        for (center_tick, amplification) in cases {
+            let encoded: B32 = PoolTypeConfig::Stableswap(StableswapPoolTypeConfig {
+                center_tick,
+                amplification_factor: amplification,
+            })
+            .into();
+            let decoded = PoolTypeConfig::try_from(encoded).unwrap();
+
+            assert_eq!(
+                decoded,
+                PoolTypeConfig::Stableswap(StableswapPoolTypeConfig {
+                    center_tick,
+                    amplification_factor: amplification
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn stableswap_rejects_amplification_over_max() {
+        let mut raw = [0u8; 4];
+        raw[0] = EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR + 1;
+        raw[3] = 1; // center tick = 1
+
+        let b32 = B32::from(u32::from_be_bytes(raw));
+        assert_eq!(
+            PoolTypeConfig::try_from(b32).unwrap_err(),
+            PoolTypeConfigParseError::InvalidStableswapAmplification
+        );
+    }
+
+    #[test]
+    fn concentrated_round_trip_and_limits() {
+        let ok = [1u32, EVM_MAX_TICK_SPACING.0];
+
+        for spacing in ok {
+            let config = PoolTypeConfig::Concentrated(TickSpacing(spacing));
+            let encoded: B32 = config.into();
+            let decoded = PoolTypeConfig::try_from(encoded).unwrap();
+            assert_eq!(decoded, PoolTypeConfig::Concentrated(TickSpacing(spacing)));
+        }
+
+        for spacing in [0u32, EVM_MAX_TICK_SPACING.0 + 1] {
+            let mut spacing_bytes = spacing.to_be_bytes();
+            spacing_bytes[0] |= 0x80;
+            let b32 = B32::from(u32::from_be_bytes(spacing_bytes));
+            assert_eq!(
+                PoolTypeConfig::try_from(b32).unwrap_err(),
+                PoolTypeConfigParseError::InvalidTickSpacing
+            );
         }
     }
 }
