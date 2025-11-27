@@ -43,6 +43,15 @@ pub const STARKNET_FEE_BITS: u8 = 128;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Starknet;
 
+/// Pool config alias for Starknet.
+pub type StarknetPoolConfig =
+    PoolConfig<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, TickSpacing>;
+/// Pool key alias for Starknet.
+pub type StarknetPoolKey =
+    PoolKey<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, TickSpacing>;
+/// Pool type config alias for Starknet.
+pub type StarknetPoolTypeConfig = TickSpacing;
+
 /// Errors constructing a Starknet full range pool from inputs.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum FullRangePoolConstructionError {
@@ -138,15 +147,17 @@ impl Chain for Starknet {
             )
         };
 
+        let config: StarknetPoolConfig = PoolConfig {
+            fee,
+            pool_type_config: STARKNET_MAX_TICK_SPACING,
+            extension,
+        };
+
         BasePool::new(
             PoolKey {
                 token0,
                 token1,
-                config: PoolConfig {
-                    fee,
-                    pool_type_config: STARKNET_MAX_TICK_SPACING,
-                    extension,
-                },
+                config,
             },
             BasePoolState {
                 sqrt_ratio,

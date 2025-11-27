@@ -42,6 +42,14 @@ const TWO_POW_96: U256 = U256::from_limbs([0, 0x0100000000, 0, 0]);
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Evm;
 
+/// Pool config alias for EVM.
+pub type EvmPoolConfig =
+    PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>;
+/// Pool key alias for EVM.
+pub type EvmPoolKey = PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>;
+/// Pool type config alias for EVM.
+pub type EvmPoolTypeConfig = PoolTypeConfig;
+
 /// Pool type configuration variants for EVM.
 #[derive(From, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -63,6 +71,13 @@ pub enum PoolTypeConfigParseError {
     InvalidStableswapAmplification,
     #[error("tick spacing exceeds the maximum allowed value")]
     InvalidTickSpacing,
+}
+
+/// Errors when parsing pool configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Error)]
+pub enum PoolConfigParseError {
+    #[error("invalid pool type config")]
+    InvalidPoolTypeConfig(#[from] PoolTypeConfigParseError),
 }
 
 impl TryFrom<B32> for PoolTypeConfig {
@@ -125,15 +140,25 @@ impl From<PoolTypeConfig> for B32 {
     }
 }
 
-impl From<PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>> for B256 {
-    fn from(
-        value: PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, PoolTypeConfig>,
-    ) -> Self {
+impl From<EvmPoolConfig> for B256 {
+    fn from(value: EvmPoolConfig) -> Self {
         value
             .extension
             .0
             .concat_const::<_, 28>(FixedBytes(value.fee.to_be_bytes()))
             .concat_const(value.pool_type_config.into())
+    }
+}
+
+impl TryFrom<B256> for EvmPoolConfig {
+    type Error = PoolConfigParseError;
+
+    fn try_from(FixedBytes(bytes): B256) -> Result<Self, Self::Error> {
+        Ok(PoolConfig {
+            extension: Address::from_slice(&bytes[..20]),
+            fee: u64::from_be_bytes(bytes[20..28].try_into().expect("slice with correct length")),
+            pool_type_config: PoolTypeConfig::try_from(B32::from_slice(&bytes[28..32]))?,
+        })
     }
 }
 
