@@ -1,13 +1,20 @@
 use crate::math::muldiv::{muldiv, MuldivError};
-use crate::math::uint::U256;
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+pub const SQRT_RATIO_ONE: U256 = U256::from_limbs([0, 0, 1, 0]);
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum PriceMathError {
+    #[error("no liquidity")]
     NoLiquidity,
+    #[error("overflow")]
     Overflow,
+    #[error("underflow")]
     Underflow,
-    MuldivError(MuldivError),
+    #[error("muldiv error")]
+    MuldivError(#[from] MuldivError),
 }
 
 pub fn next_sqrt_ratio_from_amount0(
@@ -23,11 +30,11 @@ pub fn next_sqrt_ratio_from_amount0(
         return Err(PriceMathError::NoLiquidity);
     }
 
-    let numerator1 = U256::from(liquidity) << 128;
+    let numerator1 = U256::from(liquidity) << 128u8;
 
     if amount0 < 0 {
-        // amount0 is negative
-        let amount0_abs = U256::from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?);
+        let amount0_abs = U256::try_from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?)
+            .map_err(|_| PriceMathError::Overflow)?;
 
         // product = amount0_abs * sqrt_ratio
         let product = amount0_abs
@@ -40,8 +47,7 @@ pub fn next_sqrt_ratio_from_amount0(
 
         muldiv(numerator1, sqrt_ratio, denominator, true).map_err(PriceMathError::MuldivError)
     } else {
-        // amount0 is positive
-        let amount0_u256 = U256::from(amount0);
+        let amount0_u256 = U256::try_from(amount0).map_err(|_| PriceMathError::Overflow)?;
 
         let denom_p1 = numerator1 / sqrt_ratio;
 
@@ -49,11 +55,9 @@ pub fn next_sqrt_ratio_from_amount0(
             .checked_add(amount0_u256)
             .ok_or(PriceMathError::Overflow)?;
 
-        muldiv(numerator1, U256::one(), denom, true).map_err(PriceMathError::MuldivError)
+        muldiv(numerator1, U256::ONE, denom, true).map_err(PriceMathError::MuldivError)
     }
 }
-
-const TWO_POW_128: U256 = U256([0, 0, 1, 0]);
 
 pub fn next_sqrt_ratio_from_amount1(
     sqrt_ratio: U256,
@@ -68,11 +72,12 @@ pub fn next_sqrt_ratio_from_amount1(
         return Err(PriceMathError::NoLiquidity);
     }
 
-    let amount1_abs = U256::from(amount1.abs());
+    let amount1_abs = U256::try_from(amount1.checked_abs().ok_or(PriceMathError::Overflow)?)
+        .map_err(|_| PriceMathError::Overflow)?;
 
     let round_up = amount1 < 0;
 
-    let quotient = muldiv(amount1_abs, TWO_POW_128, liquidity.into(), round_up)
+    let quotient = muldiv(amount1_abs, SQRT_RATIO_ONE, U256::from(liquidity), round_up)
         .map_err(PriceMathError::MuldivError)?;
 
     if amount1 < 0 {
@@ -89,101 +94,102 @@ pub fn next_sqrt_ratio_from_amount1(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruint::uint;
 
-    #[test]
-    fn test_next_sqrt_ratio_from_amount0_add_price_goes_down() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount0(1n << 128n, 1000000n, 1000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 1_000_000u128;
-        let amount0 = 1000i128;
-        let result = next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, amount0).unwrap();
-        let expected = U256::from_dec_str("339942424496442021441932674757011200256").unwrap();
-        assert_eq!(result, expected);
+    const LIQUIDITY_ONE: u128 = 1;
+    const LIQUIDITY_MILLION: u128 = 1_000_000;
+    const LIQUIDITY_HUNDRED_BILLION: u128 = 100_000_000_000;
+
+    const AMOUNT_SMALL_POS: i128 = 1_000;
+    const AMOUNT_SMALL_NEG: i128 = -1_000;
+    const AMOUNT_LARGE_POS: i128 = 100_000_000_000_000;
+    const AMOUNT_LARGE_NEG: i128 = -100_000_000_000_000;
+
+    mod amount0 {
+        use super::*;
+
+        #[test]
+        fn add_price_goes_down() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount0(SQRT_RATIO_ONE, LIQUIDITY_MILLION, AMOUNT_SMALL_POS)
+                    .unwrap(),
+                uint!(339942424496442021441932674757011200256_U256)
+            );
+        }
+
+        #[test]
+        fn exact_out_overflow() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount0(SQRT_RATIO_ONE, LIQUIDITY_ONE, AMOUNT_LARGE_NEG)
+                    .unwrap_err(),
+                PriceMathError::Overflow
+            );
+        }
+
+        #[test]
+        fn exact_in_cant_underflow() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount0(SQRT_RATIO_ONE, LIQUIDITY_ONE, AMOUNT_LARGE_POS)
+                    .unwrap(),
+                uint!(3402823669209350606397054_U256)
+            );
+        }
+
+        #[test]
+        fn sub_price_goes_up() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount0(
+                    SQRT_RATIO_ONE,
+                    LIQUIDITY_HUNDRED_BILLION,
+                    AMOUNT_SMALL_NEG
+                )
+                .unwrap(),
+                uint!(340282370323762166700996274441730955874_U256)
+            );
+        }
     }
 
-    #[test]
-    fn test_next_sqrt_ratio_from_amount0_exact_out_overflow() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount0(1n << 128n, 1n, -100000000000000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 1u128;
-        let amount0 = -100_000_000_000_000i128;
-        let result = next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, amount0);
-        assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), PriceMathError::Overflow);
-    }
+    mod amount1 {
+        use super::*;
 
-    #[test]
-    fn test_next_sqrt_ratio_from_amount0_exact_in_cant_underflow() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount0(1n << 128n, 1n, 100000000000000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 1u128;
-        let amount0 = 100_000_000_000_000i128;
-        let result = next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, amount0).unwrap();
-        let expected = U256::from_dec_str("3402823669209350606397054").unwrap();
-        assert_eq!(result, expected);
-    }
+        #[test]
+        fn add_price_goes_up() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount1(SQRT_RATIO_ONE, LIQUIDITY_MILLION, AMOUNT_SMALL_POS)
+                    .unwrap(),
+                uint!(340622649287859401926837982039199979667_U256)
+            );
+        }
 
-    #[test]
-    fn test_next_sqrt_ratio_from_amount0_sub_price_goes_up() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount0(1n << 128n, 100000000000n, -1000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 100_000_000_000u128;
-        let amount0 = -1000i128;
-        let result = next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, amount0).unwrap();
-        let expected = U256::from_dec_str("340282370323762166700996274441730955874").unwrap();
-        assert_eq!(result, expected);
-    }
+        #[test]
+        fn exact_out_overflow() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount1(SQRT_RATIO_ONE, LIQUIDITY_ONE, AMOUNT_LARGE_NEG)
+                    .unwrap_err(),
+                PriceMathError::Underflow
+            );
+        }
 
-    #[test]
-    fn test_next_sqrt_ratio_from_amount1_add_price_goes_up() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount1(1n << 128n, 1000000n, 1000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 1_000_000u128;
-        let amount1 = 1000i128;
-        let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1).unwrap();
-        let expected = U256::from_dec_str("340622649287859401926837982039199979667").unwrap();
-        assert_eq!(result, expected);
-    }
+        #[test]
+        fn exact_in_cant_underflow() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount1(SQRT_RATIO_ONE, LIQUIDITY_ONE, AMOUNT_LARGE_POS)
+                    .unwrap(),
+                uint!(34028236692094186628704381681640284520207431768211456_U256)
+            );
+        }
 
-    #[test]
-    fn test_next_sqrt_ratio_from_amount1_exact_out_overflow() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount1(1n << 128n, 1n, -100000000000000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 1u128;
-        let amount1 = -100_000_000_000_000i128;
-        let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1);
-        assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), PriceMathError::Underflow);
-    }
-
-    #[test]
-    fn test_next_sqrt_ratio_from_amount1_exact_in_cant_underflow() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount1(1n << 128n, 1n, 100000000000000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 1u128;
-        let amount1 = 100_000_000_000_000i128;
-        let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1).unwrap();
-        let expected =
-            U256::from_dec_str("34028236692094186628704381681640284520207431768211456").unwrap();
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_next_sqrt_ratio_from_amount1_sub_price_goes_down() {
-        // Corresponds to:
-        // nextSqrtRatioFromAmount1(1n << 128n, 100000000000n, -1000n)
-        let sqrt_ratio = U256::from(1u64) << 128;
-        let liquidity = 100_000_000_000u128;
-        let amount1 = -1000i128;
-        let result = next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, amount1).unwrap();
-        let expected = U256::from_dec_str("340282363518114794253989972798022137138").unwrap();
-        assert_eq!(result, expected);
+        #[test]
+        fn sub_price_goes_down() {
+            assert_eq!(
+                next_sqrt_ratio_from_amount1(
+                    SQRT_RATIO_ONE,
+                    LIQUIDITY_HUNDRED_BILLION,
+                    AMOUNT_SMALL_NEG
+                )
+                .unwrap(),
+                uint!(340282363518114794253989972798022137138_U256)
+            );
+        }
     }
 }

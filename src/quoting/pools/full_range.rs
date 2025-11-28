@@ -1,84 +1,87 @@
-use crate::math::swap::{compute_step, is_price_increasing, ComputeStepError};
-use crate::math::tick::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
-use crate::math::uint::U256;
-use crate::quoting::types::{NodeKey, Pool, Quote, QuoteParams};
-use core::ops::{Add, AddAssign, Sub, SubAssign};
+use crate::{
+    chain::evm::Evm,
+    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+};
+use crate::{
+    chain::Chain,
+    quoting::pools::{
+        is_token1, ensure_valid_token_order, CommonPoolConstructionError,
+        CommonPoolQuoteError,
+    },
+    quoting::types::{Pool, PoolKey, Quote, QuoteParams},
+};
+use crate::{private, quoting::types::PoolState};
+use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
-// Resources consumed during any swap execution in a full range pool.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
-pub struct FullRangePoolResources {
-    pub no_override_price_change: u32,
-}
-
-impl AddAssign for FullRangePoolResources {
-    fn add_assign(&mut self, rhs: Self) {
-        self.no_override_price_change += rhs.no_override_price_change;
-    }
-}
-
-impl Add for FullRangePoolResources {
-    type Output = Self;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl SubAssign for FullRangePoolResources {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.no_override_price_change -= rhs.no_override_price_change;
-    }
-}
-
-impl Sub for FullRangePoolResources {
-    type Output = Self;
-
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum FullRangePoolQuoteError {
-    InvalidToken,
-    InvalidSqrtRatioLimit,
-    FailedComputeSwapStep(ComputeStepError),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FullRangePoolState {
-    #[cfg_attr(feature = "serde", serde(with = "crate::quoting::types::serde_u256"))]
-    pub sqrt_ratio: U256,
-    pub liquidity: u128,
-}
-
+/// Full range pool with constant liquidity across the entire price range.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FullRangePool {
-    key: NodeKey,
+    /// Immutable pool configuration key.
+    key: FullRangePoolKey,
+    /// Current pool state.
     state: FullRangePoolState,
 }
 
-/// Errors that can occur when constructing a FullRangePool.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum FullRangePoolError {
-    /// Token0 must be less than token1.
-    TokenOrderInvalid,
+/// Unique identifier for a [`FullRangePool`].
+pub type FullRangePoolKey =
+    PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, FullRangePoolTypeConfig>;
+
+/// Pool type config placeholder for a full range pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePoolTypeConfig;
+
+/// Price/liquidity state for a [`FullRangePool`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePoolState {
+    /// Current square root price ratio.
+    pub sqrt_ratio: U256,
+    /// Current active liquidity.
+    pub liquidity: u128,
+}
+
+/// Resources consumed during full range swap execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FullRangePoolResources {
+    /// Whether price changed when no override was provided.
+    pub no_override_price_change: u32,
+}
+
+/// Errors that can occur when constructing a [`FullRangePool`].
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum FullRangePoolConstructionError {
+    #[error(transparent)]
+    Common(#[from] CommonPoolConstructionError),
+    #[error("sqrt ratio out of bounds")]
     SqrtRatioInvalid,
 }
 
-impl FullRangePool {
-    pub fn new(key: NodeKey, state: FullRangePoolState) -> Result<Self, FullRangePoolError> {
-        if !(key.token0 < key.token1) {
-            return Err(FullRangePoolError::TokenOrderInvalid);
-        }
+/// Errors that can occur when quoting a [`FullRangePool`].
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum FullRangePoolQuoteError {
+    #[error(transparent)]
+    Common(#[from] CommonPoolQuoteError),
+    #[error("invalid price limit")]
+    InvalidSqrtRatioLimit,
+    #[error("failed swap step computation")]
+    FailedComputeSwapStep(#[from] ComputeStepError),
+}
 
-        if state.sqrt_ratio < MIN_SQRT_RATIO || state.sqrt_ratio > MAX_SQRT_RATIO {
-            return Err(FullRangePoolError::SqrtRatioInvalid);
+impl FullRangePool {
+    pub fn new(
+        key: FullRangePoolKey,
+        state: FullRangePoolState,
+    ) -> Result<Self, FullRangePoolConstructionError> {
+        ensure_valid_token_order(&key)?;
+
+        if state.sqrt_ratio < Evm::min_sqrt_ratio() || state.sqrt_ratio > Evm::max_sqrt_ratio() {
+            return Err(FullRangePoolConstructionError::SqrtRatioInvalid);
         }
 
         Ok(Self {
@@ -92,30 +95,29 @@ impl FullRangePool {
 }
 
 impl Pool for FullRangePool {
+    type Address = <Evm as Chain>::Address;
+    type Fee = <Evm as Chain>::Fee;
     type Resources = FullRangePoolResources;
     type State = FullRangePoolState;
     type QuoteError = FullRangePoolQuoteError;
     type Meta = ();
+    type PoolTypeConfig = FullRangePoolTypeConfig;
 
-    fn get_key(&self) -> &NodeKey {
-        &self.key
+    fn key(&self) -> FullRangePoolKey {
+        self.key
     }
 
-    fn get_state(&self) -> Self::State {
+    fn state(&self) -> Self::State {
         self.state
     }
 
     fn quote(
         &self,
-        params: QuoteParams<Self::State, Self::Meta>,
+        params: QuoteParams<<Evm as Chain>::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let amount = params.token_amount.amount;
         let token = params.token_amount.token;
-        let is_token1 = token == self.key.token1;
-
-        if !is_token1 && token != self.key.token0 {
-            return Err(FullRangePoolQuoteError::InvalidToken);
-        }
+        let is_token1 = is_token1(&self.key, token)?;
 
         let state = if let Some(override_state) = params.override_state {
             override_state
@@ -158,25 +160,25 @@ impl Pool for FullRangePool {
             if !is_increasing && limit > sqrt_ratio {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit < MIN_SQRT_RATIO {
+            if limit < Evm::min_sqrt_ratio() {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
-            if limit > MAX_SQRT_RATIO {
+            if limit > Evm::max_sqrt_ratio() {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
         } else {
             if is_increasing {
-                MAX_SQRT_RATIO
+                Evm::max_sqrt_ratio_full_range()
             } else {
-                MIN_SQRT_RATIO
+                Evm::min_sqrt_ratio_full_range()
             }
         };
 
         let starting_sqrt_ratio = sqrt_ratio;
 
         // Since we're in a full range pool, we can complete the swap in a single step
-        let step = compute_step(
+        let step = compute_step::<Evm>(
             sqrt_ratio,
             liquidity,
             sqrt_ratio_limit,
@@ -222,20 +224,12 @@ impl Pool for FullRangePool {
 
     // For full range pools, if there's liquidity, then the max tick is MAX_TICK
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        if self.has_liquidity() {
-            Some(crate::math::tick::MAX_TICK)
-        } else {
-            None
-        }
+        self.has_liquidity().then_some(Evm::max_tick())
     }
 
     // For full range pools, if there's liquidity, then the min tick is MIN_TICK
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        if self.has_liquidity() {
-            Some(crate::math::tick::MIN_TICK)
-        } else {
-            None
-        }
+        self.has_liquidity().then_some(Evm::min_tick())
     }
 
     fn is_path_dependent(&self) -> bool {
@@ -243,54 +237,71 @@ impl Pool for FullRangePool {
     }
 }
 
+impl PoolState for FullRangePoolState {
+    fn sqrt_ratio(&self) -> U256 {
+        self.sqrt_ratio
+    }
+
+    fn liquidity(&self) -> u128 {
+        self.liquidity
+    }
+}
+
+impl private::Sealed for FullRangePool {}
+impl private::Sealed for FullRangePoolState {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quoting::types::{Config, TokenAmount};
+    use crate::{
+        chain::tests::ChainTest,
+        quoting::pools::CommonPoolConstructionError,
+        quoting::types::{PoolConfig, TokenAmount},
+    };
 
-    const TOKEN0: U256 = U256([1, 0, 0, 0]);
-    const TOKEN1: U256 = U256([2, 0, 0, 0]);
-
-    fn node_key(fee: u64) -> NodeKey {
-        NodeKey {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            config: Config {
-                tick_spacing: 0,
+    fn pool_key(fee: u64) -> FullRangePoolKey {
+        PoolKey {
+            token0: Evm::zero_address(),
+            token1: Evm::one_address(),
+            config: PoolConfig {
+                pool_type_config: FullRangePoolTypeConfig,
                 fee,
-                extension: U256::zero(),
+                extension: Evm::zero_address(),
             },
         }
     }
 
-    use super::FullRangePoolError;
+    use super::FullRangePoolConstructionError;
 
     #[test]
     fn test_token0_lt_token1() {
         let result = FullRangePool::new(
-            NodeKey {
-                token0: U256::zero(),
-                token1: U256::zero(),
-                config: Config {
-                    extension: U256::zero(),
+            PoolKey {
+                token0: Evm::zero_address(),
+                token1: Evm::zero_address(),
+                config: PoolConfig {
+                    extension: Evm::zero_address(),
                     fee: 0,
-                    tick_spacing: 0,
+                    pool_type_config: FullRangePoolTypeConfig,
                 },
             },
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 0,
             },
         );
-        assert_eq!(result.unwrap_err(), FullRangePoolError::TokenOrderInvalid);
+        assert_eq!(
+            result.unwrap_err(),
+            FullRangePoolConstructionError::Common(CommonPoolConstructionError::TokenOrderInvalid)
+        );
     }
 
     #[test]
     fn test_quote_zero_liquidity() {
         let pool = FullRangePool::new(
-            node_key(0),
+            pool_key(0),
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 0,
             },
         )
@@ -299,7 +310,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: TOKEN0,
+                token: Evm::zero_address(),
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -316,9 +327,9 @@ mod tests {
     #[test]
     fn test_quote_with_liquidity_token0_input() {
         let pool = FullRangePool::new(
-            node_key(0),
+            pool_key(0),
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
             },
         )
@@ -327,7 +338,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: TOKEN0,
+                token: Evm::zero_address(),
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -344,9 +355,9 @@ mod tests {
     #[test]
     fn test_quote_with_liquidity_token1_input() {
         let pool = FullRangePool::new(
-            node_key(0),
+            pool_key(0),
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
             },
         )
@@ -355,7 +366,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 1000,
-                token: TOKEN1,
+                token: Evm::one_address(),
             },
             sqrt_ratio_limit: None,
             override_state: None,
@@ -372,9 +383,9 @@ mod tests {
     #[test]
     fn test_with_fee() {
         let pool = FullRangePool::new(
-            node_key(1 << 32), // 0.01% fee
+            pool_key(1 << 32), // 0.01% fee
             FullRangePoolState {
-                sqrt_ratio: U256::one() << 128,
+                sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
             },
         )
@@ -383,7 +394,7 @@ mod tests {
         let params = QuoteParams {
             token_amount: TokenAmount {
                 amount: 10000,
-                token: TOKEN0,
+                token: Evm::zero_address(),
             },
             sqrt_ratio_limit: None,
             override_state: None,

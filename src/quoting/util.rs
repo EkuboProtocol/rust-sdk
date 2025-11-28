@@ -1,9 +1,9 @@
-use crate::math::tick::{MAX_TICK, MIN_TICK};
-use crate::math::uint::{u256_to_float_base_x128, U256};
-use crate::quoting::base_pool::MAX_TICK_SPACING;
 use crate::quoting::types::Tick;
+use crate::{chain::Chain, math::uint::u256_to_float_base_x128};
 use alloc::vec::Vec;
 use num_traits::Zero;
+use ruint::aliases::U256;
+use thiserror::Error;
 
 // Function to find the nearest initialized tick index.
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
@@ -44,11 +44,13 @@ pub fn approximate_number_of_tick_spacings_crossed(
     ticks_crossed / tick_spacing
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum ConstructSortedTicksError {
+    #[error("current tick is outside of the searched range")]
     CurrentTickOutsideSearchedRange,
+    #[error("minimum tick must be less than the max tick")]
     MinTickLessThanMaxTick,
+    #[error("tick spacing is invalid")]
     InvalidTickSpacing,
 }
 
@@ -67,7 +69,7 @@ pub enum ConstructSortedTicksError {
 /// * `tick_spacing` - The tick spacing of the pool
 /// * `liquidity` - The current liquidity of the pool
 /// * `current_tick` - The current tick of the pool, must be between min and max tick searched
-pub fn construct_sorted_ticks(
+pub fn construct_sorted_ticks<C: Chain>(
     partial_ticks: Vec<Tick>,
     min_tick_searched: i32,
     max_tick_searched: i32,
@@ -81,17 +83,17 @@ pub fn construct_sorted_ticks(
     if min_tick_searched > max_tick_searched {
         return Err(ConstructSortedTicksError::MinTickLessThanMaxTick);
     }
-    if tick_spacing.is_zero() || tick_spacing > MAX_TICK_SPACING {
+    if tick_spacing.is_zero() || tick_spacing > C::max_tick_spacing().0 {
         return Err(ConstructSortedTicksError::InvalidTickSpacing);
     }
 
     let spacing_i32 = tick_spacing as i32;
 
     let valid_min_tick = (((min_tick_searched - (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
-        .max((MIN_TICK / spacing_i32) * spacing_i32);
+        .max((C::min_tick() / spacing_i32) * spacing_i32);
 
     let valid_max_tick = (((max_tick_searched + (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
-        .min((MAX_TICK / spacing_i32) * spacing_i32);
+        .min((C::max_tick() / spacing_i32) * spacing_i32);
 
     // Sort and deduplicate ticks
     let mut result = partial_ticks.clone();
@@ -156,91 +158,53 @@ pub fn construct_sorted_ticks(
 
 #[cfg(test)]
 mod tests {
-    use crate::math::tick::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
-    use crate::math::uint::U256;
-    use crate::quoting::types::Tick;
-    use crate::quoting::util::find_nearest_initialized_tick_index;
-    use crate::quoting::util::{
-        approximate_number_of_tick_spacings_crossed, construct_sorted_ticks,
-        u256_to_float_base_x128,
+    use super::*;
+    use crate::{
+        chain::{tests::run_for_all_chains, Chain},
+        math::sqrt_ratio::SQRT_RATIO_ONE,
+        quoting::types::Tick,
     };
     use alloc::vec;
 
-    #[test]
-    fn test_find_nearest_initialized_tick_index_no_ticks() {
-        assert_eq!(find_nearest_initialized_tick_index(&vec![], 0), None);
+    macro_rules! chain_test {
+        ($name:ident, $body:block) => {
+            #[test]
+            fn $name() {
+                run_for_all_chains!(ChainTy, _chain => $body);
+            }
+        };
+    }
+
+    fn make_ticks(entries: &[(i32, i128)]) -> Vec<Tick> {
+        entries
+            .iter()
+            .map(|(index, delta)| Tick {
+                index: *index,
+                liquidity_delta: *delta,
+            })
+            .collect()
     }
 
     #[test]
-    fn test_find_nearest_initialized_tick_index_one_tick_less_than() {
-        assert_eq!(
-            find_nearest_initialized_tick_index(
-                &vec![Tick {
-                    index: -1,
-                    liquidity_delta: 1,
-                }],
-                0
-            ),
-            Some(0)
-        );
+    fn find_nearest_initialized_tick_index_no_ticks() {
+        assert_eq!(find_nearest_initialized_tick_index(&[], 0), None);
     }
 
     #[test]
-    fn test_find_nearest_initialized_tick_index_one_tick_equal_to() {
-        assert_eq!(
-            find_nearest_initialized_tick_index(
-                &vec![Tick {
-                    index: 0,
-                    liquidity_delta: 1,
-                }],
-                0
-            ),
-            Some(0)
-        );
+    fn find_nearest_initialized_tick_index_single_tick() {
+        let ticks = make_ticks(&[(-1, 1)]);
+        assert_eq!(find_nearest_initialized_tick_index(&ticks, 0), Some(0));
+
+        let ticks = make_ticks(&[(0, 1)]);
+        assert_eq!(find_nearest_initialized_tick_index(&ticks, 0), Some(0));
+
+        let ticks = make_ticks(&[(1, 1)]);
+        assert_eq!(find_nearest_initialized_tick_index(&ticks, 0), None);
     }
 
     #[test]
-    fn test_find_nearest_initialized_tick_index_one_tick_greater_than() {
-        assert_eq!(
-            find_nearest_initialized_tick_index(
-                &vec![Tick {
-                    index: 1,
-                    liquidity_delta: 1,
-                }],
-                0
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn test_find_nearest_initialized_tick_index_many_ticks() {
-        let sorted_ticks = vec![
-            Tick {
-                index: -100,
-                liquidity_delta: 0,
-            },
-            Tick {
-                index: -5,
-                liquidity_delta: 0,
-            },
-            Tick {
-                index: -4,
-                liquidity_delta: 0,
-            },
-            Tick {
-                index: 18,
-                liquidity_delta: 0,
-            },
-            Tick {
-                index: 23,
-                liquidity_delta: 0,
-            },
-            Tick {
-                index: 50,
-                liquidity_delta: 0,
-            },
-        ];
+    fn find_nearest_initialized_tick_index_many_ticks() {
+        let sorted_ticks = make_ticks(&[(-100, 0), (-5, 0), (-4, 0), (18, 0), (23, 0), (50, 0)]);
 
         assert_eq!(
             find_nearest_initialized_tick_index(&sorted_ticks, -101),
@@ -312,61 +276,69 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_approximate_number_of_tick_spacings_crossed_for_doubling() {
-        assert_eq!(
-            approximate_number_of_tick_spacings_crossed(MIN_SQRT_RATIO, MIN_SQRT_RATIO * 2, 0),
-            0
-        );
-        // 2x sqrt ratio increase ~= 4x price increase
-        assert_eq!(
-            approximate_number_of_tick_spacings_crossed(U256([0, 0, 1, 0]), U256([0, 0, 2, 0]), 1),
-            1386295
-        );
-        assert_eq!(
-            approximate_number_of_tick_spacings_crossed(MIN_SQRT_RATIO, MIN_SQRT_RATIO * 2, 1),
-            1386295
-        );
-        assert_eq!(
-            approximate_number_of_tick_spacings_crossed(MAX_SQRT_RATIO, MAX_SQRT_RATIO / 2, 1),
-            1386295
-        );
-    }
+    chain_test!(approximate_number_of_tick_spacings_crossed_for_doubling, {
+        let min = ChainTy::min_sqrt_ratio();
+        let max = ChainTy::max_sqrt_ratio();
+        let cases = [
+            (min, min * U256::from(2), 0, 0),
+            (SQRT_RATIO_ONE, SQRT_RATIO_ONE * U256::from(2), 1, 1_386_295),
+            (min, min * U256::from(2), 1, 1_386_295),
+            (max, max / U256::from(2), 1, 1_386_295),
+        ];
+
+        for (start, end, spacing, expected) in cases {
+            assert_eq!(
+                approximate_number_of_tick_spacings_crossed(start, end, spacing),
+                expected
+            );
+        }
+    });
+
+    chain_test!(
+        approximate_number_of_tick_spacings_crossed_for_doubling_big_tick_spacing,
+        {
+            let min = ChainTy::min_sqrt_ratio();
+            let max = ChainTy::max_sqrt_ratio();
+            let cases = [
+                (SQRT_RATIO_ONE, SQRT_RATIO_ONE * U256::from(2), 5, 277_259),
+                (min, min * U256::from(2), 3, 462_098),
+                (max, max / U256::from(2), 200, 6_931),
+            ];
+
+            for (start, end, spacing, expected) in cases {
+                assert_eq!(
+                    approximate_number_of_tick_spacings_crossed(start, end, spacing),
+                    expected
+                );
+            }
+        }
+    );
 
     #[test]
-    fn test_approximate_number_of_tick_spacings_crossed_for_doubling_big_tick_spacing() {
-        // 2x sqrt ratio increase ~= 4x price increase
+    fn u256_to_fraction() {
         assert_eq!(
-            approximate_number_of_tick_spacings_crossed(U256([0, 0, 1, 0]), U256([0, 0, 2, 0]), 5),
-            277259
-        );
-        assert_eq!(
-            approximate_number_of_tick_spacings_crossed(MIN_SQRT_RATIO, MIN_SQRT_RATIO * 2, 3),
-            462098
-        );
-        assert_eq!(
-            approximate_number_of_tick_spacings_crossed(MAX_SQRT_RATIO, MAX_SQRT_RATIO / 2, 200),
-            6931
-        );
-    }
-
-    #[test]
-    fn test_u256_to_fraction() {
-        assert_eq!(
-            u256_to_float_base_x128(U256([16403144882676588163, 1525053501570699700, 35, 0])),
+            u256_to_float_base_x128(U256::from_limbs([
+                16403144882676588163,
+                1525053501570699700,
+                35,
+                0
+            ])),
             35.08267331597798
         );
         assert_eq!(
-            u256_to_float_base_x128(U256([123456, 0, 0, 0])),
+            u256_to_float_base_x128(U256::from_limbs([123456, 0, 0, 0])),
             3.628045764377908e-34
         );
         assert_eq!(
-            u256_to_float_base_x128(U256([0, 123456, 0, 0])),
+            u256_to_float_base_x128(U256::from_limbs([0, 123456, 0, 0])),
             6.692563170318522e-15
         );
-        assert_eq!(u256_to_float_base_x128(U256([0, 0, 123456, 0])), 123456.0);
         assert_eq!(
-            u256_to_float_base_x128(U256([0, 0, 0, 123456])),
+            u256_to_float_base_x128(U256::from_limbs([0, 0, 123456, 0])),
+            123456.0
+        );
+        assert_eq!(
+            u256_to_float_base_x128(U256::from_limbs([0, 0, 0, 123456])),
             2.2773612363638864e24
         );
     }
@@ -375,37 +347,72 @@ mod tests {
         use super::*;
         use crate::quoting::util::ConstructSortedTicksError;
 
-        #[test]
-        fn test_empty_ticks() {
-            let result = construct_sorted_ticks(vec![], MIN_TICK, MAX_TICK, 1, 1000, 0).unwrap();
-
-            assert_eq!(result.len(), 2);
-            assert_eq!(result[0].index, MIN_TICK);
-            assert_eq!(result[0].liquidity_delta, 1000);
-            assert_eq!(result[1].index, MAX_TICK);
-            assert_eq!(result[1].liquidity_delta, -1000);
+        fn expected_min_tick<C: Chain>(min_searched: i32, spacing: u32) -> i32 {
+            let spacing = spacing as i32;
+            let adjusted = ((min_searched - (spacing - 1)) / spacing) * spacing;
+            let chain_min = (C::min_tick() / spacing) * spacing;
+            Ord::max(adjusted, chain_min)
         }
 
-        #[test]
-        fn test_empty_ticks_rounded_tick_spacing() {
-            let result = construct_sorted_ticks(vec![], MIN_TICK, MAX_TICK, 10, 1000, 0).unwrap();
-
-            assert_eq!(result.len(), 2);
-            assert_eq!(result[0].index, -88722830);
-            assert_eq!(result[0].liquidity_delta, 1000);
-            assert_eq!(result[1].index, 88722830);
-            assert_eq!(result[1].liquidity_delta, -1000);
+        fn expected_max_tick<C: Chain>(max_searched: i32, spacing: u32) -> i32 {
+            let spacing = spacing as i32;
+            let adjusted = ((max_searched + (spacing - 1)) / spacing) * spacing;
+            let chain_max = (C::max_tick() / spacing) * spacing;
+            Ord::min(adjusted, chain_max)
         }
 
-        #[test]
-        fn test_empty_ticks_zero_liquidity() {
-            let result = construct_sorted_ticks(vec![], MIN_TICK, MAX_TICK, 1, 0, 0).unwrap();
+        chain_test!(empty_ticks, {
+            let min_tick = ChainTy::min_tick();
+            let max_tick = ChainTy::max_tick();
+            let result =
+                construct_sorted_ticks::<ChainTy>(vec![], min_tick, max_tick, 1, 1000, 0).unwrap();
+
+            assert_eq!(result.len(), 2);
+            assert_eq!(
+                (result[0].index, result[0].liquidity_delta),
+                (min_tick, 1000)
+            );
+            assert_eq!(
+                (result[1].index, result[1].liquidity_delta),
+                (max_tick, -1000)
+            );
+        });
+
+        chain_test!(empty_ticks_rounded_tick_spacing, {
+            let result = construct_sorted_ticks::<ChainTy>(
+                vec![],
+                ChainTy::min_tick(),
+                ChainTy::max_tick(),
+                10,
+                1000,
+                0,
+            )
+            .unwrap();
+
+            assert_eq!(result.len(), 2);
+            let expected_min = expected_min_tick::<ChainTy>(ChainTy::min_tick(), 10);
+            let expected_max = expected_max_tick::<ChainTy>(ChainTy::max_tick(), 10);
+            assert_eq!(result[0].index, expected_min);
+            assert_eq!(result[0].liquidity_delta, 1000);
+            assert_eq!(result[1].index, expected_max);
+            assert_eq!(result[1].liquidity_delta, -1000);
+        });
+
+        chain_test!(empty_ticks_zero_liquidity, {
+            let result = construct_sorted_ticks::<ChainTy>(
+                vec![],
+                ChainTy::min_tick(),
+                ChainTy::max_tick(),
+                1,
+                0,
+                0,
+            )
+            .unwrap();
 
             assert_eq!(result.len(), 0);
-        }
+        });
 
-        #[test]
-        fn test_min_max_tick_rounding() {
+        chain_test!(min_max_tick_rounding, {
             let tick_spacing = 10;
             let min_searched = -15; // Should round down to -20
             let max_searched = 25; // Should round up to 30
@@ -415,21 +422,27 @@ mod tests {
                 liquidity_delta: 100,
             }];
 
-            let result =
-                construct_sorted_ticks(ticks, min_searched, max_searched, tick_spacing, 100, -5)
-                    .unwrap();
+            let result = construct_sorted_ticks::<ChainTy>(
+                ticks,
+                min_searched,
+                max_searched,
+                tick_spacing,
+                100,
+                -5,
+            )
+            .unwrap();
 
-            // We should have added ticks at -20 and 30
-            assert!(result.iter().any(|t| t.index == -20));
-            assert!(result.iter().any(|t| t.index == 30));
+            let expected_min = expected_min_tick::<ChainTy>(min_searched, tick_spacing);
+            let expected_max = expected_max_tick::<ChainTy>(max_searched, tick_spacing);
+            assert!(result.iter().any(|t| t.index == expected_min));
+            assert!(result.iter().any(|t| t.index == expected_max));
 
             // The sum of all liquidity deltas should be zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
-        }
+        });
 
-        #[test]
-        fn test_current_tick_active_liquidity() {
+        chain_test!(current_tick_active_liquidity, {
             let tick_spacing = 10;
             let current_tick = 15;
             let liquidity = 200;
@@ -445,9 +458,15 @@ mod tests {
                 },
             ];
 
-            let result =
-                construct_sorted_ticks(ticks, -10, 30, tick_spacing, liquidity, current_tick)
-                    .unwrap();
+            let result = construct_sorted_ticks::<ChainTy>(
+                ticks,
+                -10,
+                30,
+                tick_spacing,
+                liquidity,
+                current_tick,
+            )
+            .unwrap();
 
             // Verify that the liquidity at the current tick is correct
             let mut active_liquidity = 0_u128;
@@ -468,10 +487,9 @@ mod tests {
             // The sum of all liquidity deltas should be zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
-        }
+        });
 
-        #[test]
-        fn test_partial_view_with_existing_liquidity() {
+        chain_test!(partial_view_with_existing_liquidity, {
             let tick_spacing = 10;
 
             // Create partial ticks that don't include the whole range
@@ -491,7 +509,7 @@ mod tests {
             let current_tick = 52;
             let liquidity = 750; // Current liquidity at tick 50
 
-            let result = construct_sorted_ticks(
+            let result = construct_sorted_ticks::<ChainTy>(
                 partial_ticks,
                 min_searched,
                 max_searched,
@@ -501,32 +519,28 @@ mod tests {
             )
             .unwrap();
 
-            // Check that we have ticks at the min and max boundaries
+            let first = result.first().unwrap();
+            let last = result.last().unwrap();
             assert_eq!(
-                result.first().unwrap(),
-                &Tick {
-                    index: -50,
-                    liquidity_delta: 250
-                }
+                first.index,
+                expected_min_tick::<ChainTy>(min_searched, tick_spacing)
             );
+            assert_eq!(first.liquidity_delta, 250);
             assert_eq!(
-                result.last().unwrap(),
-                &Tick {
-                    index: 150,
-                    liquidity_delta: -550
-                }
+                last.index,
+                expected_max_tick::<ChainTy>(max_searched, tick_spacing)
             );
+            assert_eq!(last.liquidity_delta, -550);
 
             // Verify sum is zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
-        }
+        });
 
-        #[test]
-        fn test_current_tick_below_min_tick() {
+        chain_test!(current_tick_below_min_tick, {
             let tick_spacing = 10;
-            let min_searched = 0;
-            let max_searched = 100;
+            let min_searched = ChainTy::min_tick();
+            let max_searched = ChainTy::min_tick() + 100;
             let current_tick = -20; // Current tick is below the min searched tick
             let liquidity = 100;
 
@@ -542,7 +556,7 @@ mod tests {
             ];
 
             assert_eq!(
-                construct_sorted_ticks(
+                construct_sorted_ticks::<ChainTy>(
                     partial_ticks,
                     min_searched,
                     max_searched,
@@ -553,15 +567,16 @@ mod tests {
                 .unwrap_err(),
                 ConstructSortedTicksError::CurrentTickOutsideSearchedRange
             );
-        }
+        });
 
-        #[test]
-        fn test_with_min_max_tick_boundary() {
+        chain_test!(with_min_max_tick_boundary, {
             let tick_spacing = 10;
+            let min_tick = ChainTy::min_tick();
+            let max_tick = ChainTy::max_tick();
 
             let partial_ticks = vec![
                 Tick {
-                    index: MIN_TICK,
+                    index: min_tick,
                     liquidity_delta: 1000,
                 },
                 Tick {
@@ -569,18 +584,24 @@ mod tests {
                     liquidity_delta: 500,
                 },
                 Tick {
-                    index: MAX_TICK,
+                    index: max_tick,
                     liquidity_delta: -1500,
                 },
             ];
 
-            let result =
-                construct_sorted_ticks(partial_ticks, MIN_TICK, MAX_TICK, tick_spacing, 1000, -10)
-                    .unwrap();
+            let result = construct_sorted_ticks::<ChainTy>(
+                partial_ticks,
+                min_tick,
+                max_tick,
+                tick_spacing,
+                1000,
+                -10,
+            )
+            .unwrap();
 
             // Check boundaries are preserved
-            assert!(result.iter().any(|t| t.index == MIN_TICK));
-            assert!(result.iter().any(|t| t.index == MAX_TICK));
+            assert!(result.iter().any(|t| t.index == min_tick));
+            assert!(result.iter().any(|t| t.index == max_tick));
 
             // Sum should be zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
@@ -601,6 +622,6 @@ mod tests {
             }
 
             assert_eq!(active_liquidity, 1000);
-        }
+        });
     }
 }
