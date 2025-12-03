@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Resolve minimal versions
-        run: cargo -Z minimal-versions update --workspace
+        run: cargo -Z minimal-versions update
       - name: build
         run: cargo build --features serde,evm,starknet --verbose
       - name: test
