@@ -16,6 +16,7 @@ pub struct SwapResult {
     pub fee_amount: u128,
 }
 
+#[must_use]
 pub fn is_price_increasing(amount: i128, is_token1: bool) -> bool {
     (amount < 0) != is_token1
 }

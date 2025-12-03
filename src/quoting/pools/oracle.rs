@@ -114,7 +114,7 @@ impl<C: Chain> Pool for OraclePool<C> {
             calculated_amount: result.calculated_amount,
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
-                snapshots_written: if pool_time != block_time { 1 } else { 0 },
+                snapshots_written: u32::from(pool_time != block_time),
                 full_range_pool_resources: result.execution_resources,
             },
             fees_paid: result.fees_paid,

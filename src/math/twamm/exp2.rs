@@ -1,5 +1,6 @@
 use ruint::aliases::U256;
 
+#[must_use]
 pub fn exp2(x: u128) -> u128 {
     // x must be less than 0x400000000000000000 == 64 << 64 (overflow check)
     assert!(x < 0x400000000000000000, "Overflow");

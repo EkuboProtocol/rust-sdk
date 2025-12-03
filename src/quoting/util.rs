@@ -9,19 +9,19 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 // Function to find the nearest initialized tick index.
+#[must_use]
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
     let mut l = 0usize;
     let mut r = sorted_ticks.len();
 
     while l < r {
-        let mid = (l + r) / 2;
+        let mid = usize::midpoint(l, r);
         let mid_tick = sorted_ticks[mid].index;
         if mid_tick <= tick {
             if mid == sorted_ticks.len() - 1 || sorted_ticks[mid + 1].index > tick {
                 return Some(mid);
-            } else {
-                l = mid;
             }
+            l = mid;
         } else {
             r = mid;
         }
@@ -32,6 +32,7 @@ pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> 
 
 const LOG_BASE_SQRT_TICK_SIZE: f64 = 4.9999975000016666654166676666658333340476184226196031741031750577196410537756684185262518589393595459766211405607685305832e-7;
 
+#[must_use]
 pub fn approximate_number_of_tick_spacings_crossed(
     starting_sqrt_ratio: U256,
     ending_sqrt_ratio: U256,
@@ -62,7 +63,7 @@ pub enum ConstructSortedTicksError {
 /// This function takes partial tick data retrieved from a quote data fetcher lens contract
 /// along with min/max tick range, and constructs a valid set of sorted ticks that ensures:
 /// 1. All liquidity deltas add up to zero
-/// 2. The current liquidity matches the sum of liquidity deltas from MIN_TICK to current active tick
+/// 2. The current liquidity matches the sum of liquidity deltas from `MIN_TICK` to current active tick
 ///
 /// # Arguments
 ///
@@ -106,7 +107,7 @@ pub fn construct_sorted_ticks<C: Chain>(
     let mut liquidity_sum = 0_i128;
 
     // First pass: find active tick index and calculate running sum
-    for tick in result.iter() {
+    for tick in &result {
         if tick.index <= current_tick {
             liquidity_sum += tick.liquidity_delta;
         } else {
@@ -124,7 +125,7 @@ pub fn construct_sorted_ticks<C: Chain>(
 
     if min_tick_liquidity_delta != 0 {
         // Check if we already have min/max boundary ticks
-        let has_min_tick = result.first().map_or(false, |t| t.index == valid_min_tick);
+        let has_min_tick = result.first().is_some_and(|t| t.index == valid_min_tick);
 
         // Add or update min boundary tick
         if has_min_tick {
@@ -141,7 +142,7 @@ pub fn construct_sorted_ticks<C: Chain>(
     }
 
     if max_tick_liquidity_delta != 0 {
-        let has_max_tick = result.last().map_or(false, |t| t.index == valid_max_tick);
+        let has_max_tick = result.last().is_some_and(|t| t.index == valid_max_tick);
 
         // Add or update max boundary tick
         if has_max_tick {

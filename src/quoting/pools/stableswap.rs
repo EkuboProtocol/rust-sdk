@@ -178,12 +178,10 @@ impl Pool for StableswapPool {
                 return Err(StableswapPoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
+        } else if increasing {
+            Evm::max_sqrt_ratio()
         } else {
-            if increasing {
-                Evm::max_sqrt_ratio()
-            } else {
-                Evm::min_sqrt_ratio()
-            }
+            Evm::min_sqrt_ratio()
         };
 
         let mut calculated_amount = 0;

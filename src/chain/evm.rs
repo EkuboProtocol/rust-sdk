@@ -149,7 +149,7 @@ impl TryFrom<B32> for PoolTypeConfig {
             }
             let center_tick = i32::from_be_bytes(center_tick_bytes);
 
-            if center_tick < EVM_MIN_TICK || center_tick > EVM_MAX_TICK {
+            if !(EVM_MIN_TICK..=EVM_MAX_TICK).contains(&center_tick) {
                 return Err(PoolTypeConfigParseError::InvalidCenterTick);
             }
 

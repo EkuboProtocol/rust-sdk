@@ -61,7 +61,7 @@ pub enum TwammPoolConstructionError<E> {
     /// Errors from the underlying full range pool constructor.
     FullRangePoolError(#[from] E),
     #[error("sale rate deltas not ordered or not greater than last execution time")]
-    /// Sale rate deltas are not ordered or not greater than last_execution_time.
+    /// Sale rate deltas are not ordered or not greater than `last_execution_time`.
     SaleRateDeltasInvalid,
     #[error("sale rate delta overflow or underflow")]
     /// Sale rate deltas overflow or underflow at some point
@@ -72,6 +72,7 @@ pub enum TwammPoolConstructionError<E> {
 }
 
 impl<C: Chain> TwammPool<C> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         token0: C::Address,
         token1: C::Address,
@@ -88,7 +89,7 @@ impl<C: Chain> TwammPool<C> {
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
 
-        for t in virtual_order_deltas.iter() {
+        for t in &virtual_order_deltas {
             if t.time <= last_time {
                 return Err(TwammPoolConstructionError::SaleRateDeltasInvalid);
             }
@@ -225,9 +226,8 @@ impl<C: Chain> Pool for TwammPool<C> {
         while last_execution_time != current_time {
             let sale_rate_delta = self.virtual_order_deltas.get(next_sale_rate_delta_index);
 
-            let next_execution_time = sale_rate_delta
-                .map(|srd| srd.time.min(current_time))
-                .unwrap_or(current_time);
+            let next_execution_time =
+                sale_rate_delta.map_or(current_time, |srd| srd.time.min(current_time));
 
             let time_elapsed = next_execution_time - last_execution_time;
             if time_elapsed > u32::MAX.into() {
@@ -356,11 +356,9 @@ impl<C: Chain> Pool for TwammPool<C> {
                 virtual_order_seconds_executed: (current_time - initial_state.last_execution_time)
                     as u32,
                 virtual_order_delta_times_crossed,
-                virtual_orders_executed: if current_time > initial_state.last_execution_time {
-                    1
-                } else {
-                    0
-                },
+                virtual_orders_executed: u32::from(
+                    current_time > initial_state.last_execution_time,
+                ),
             },
             state_after: TwammPoolState {
                 full_range_pool_state: final_quote.state_after,

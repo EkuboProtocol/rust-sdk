@@ -1,4 +1,4 @@
-//! Thin facades over std/libm so float operations work in no_std mode.
+//! Thin facades over std/libm so float operations work in `no_std` mode.
 use ruint::aliases::U256;
 #[inline]
 pub fn ln(value: f64) -> f64 {

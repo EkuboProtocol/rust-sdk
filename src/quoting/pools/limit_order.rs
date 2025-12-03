@@ -87,7 +87,7 @@ impl LimitOrderPool {
         // check that each tick has at least 1 neighbor within 128 ticks
         let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
         let mut maybe_last: Option<(&Tick, usize)> = None;
-        for t in sorted_ticks.iter() {
+        for t in &sorted_ticks {
             if let Some((last, count)) = maybe_last {
                 if t.index == last.index + LIMIT_ORDER_TICK_SPACING {
                     maybe_last = Some((t, count + 1));
@@ -101,7 +101,7 @@ impl LimitOrderPool {
                 maybe_last = Some((t, 0));
             }
         }
-        if !maybe_last.map_or(true, |(_, count)| !count.is_zero()) {
+        if maybe_last.is_some_and(|(_, count)| count.is_zero()) {
             return Err(LimitOrderPoolConstructionError::LastTickHasNoNeighbor);
         }
 
@@ -177,13 +177,13 @@ impl Pool for LimitOrderPool {
                         Some(upper.map_or(
                             0, // safe because active_tick_index != upper
                             |upper| {
-                                if !(sorted_ticks[upper].index % DOUBLE_LIMIT_ORDER_TICK_SPACING)
+                                if (sorted_ticks[upper].index % DOUBLE_LIMIT_ORDER_TICK_SPACING)
                                     .is_zero()
                                 {
+                                    upper
+                                } else {
                                     // upper has been pulled as part of a decrease in price, so select the next tick index
                                     Ord::min(upper + 1, sorted_ticks.len() - 1)
-                                } else {
-                                    upper
                                 }
                             },
                         ))
@@ -317,7 +317,7 @@ impl Pool for LimitOrderPool {
                             current_liquidity += liquidity_delta.unsigned_abs();
                         } else {
                             current_liquidity -= liquidity_delta.unsigned_abs();
-                        };
+                        }
                     }
 
                     current_liquidity

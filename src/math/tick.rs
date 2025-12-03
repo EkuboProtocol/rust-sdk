@@ -39,6 +39,7 @@ const MASKS: [U256; 27] = [
     U256::from_limbs([6723154418996326713, 49365, 0, 0]),
 ];
 
+#[must_use]
 pub fn to_sqrt_ratio<C: Chain>(tick: i32) -> Option<U256> {
     if tick < C::min_tick() || tick > C::max_tick() {
         return None;
@@ -64,6 +65,7 @@ pub fn to_sqrt_ratio<C: Chain>(tick: i32) -> Option<U256> {
 const SQRT_TICK_SIZE: f64 =
     1.00000049999987500006249996093752734372949220361326815796989439990616646_f64;
 
+#[must_use]
 pub fn approximate_sqrt_ratio_to_tick(sqrt_ratio: U256) -> i32 {
     round_f64(log_base(
         u256_to_float_base_x128(sqrt_ratio),
