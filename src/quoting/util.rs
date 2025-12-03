@@ -1,5 +1,8 @@
 use crate::quoting::types::Tick;
-use crate::{chain::Chain, math::uint::u256_to_float_base_x128};
+use crate::{
+    chain::Chain,
+    math::{facade::ln, uint::u256_to_float_base_x128},
+};
 use alloc::vec::Vec;
 use num_traits::Zero;
 use ruint::aliases::U256;
@@ -40,7 +43,7 @@ pub fn approximate_number_of_tick_spacings_crossed(
 
     let start: f64 = u256_to_float_base_x128(starting_sqrt_ratio);
     let end: f64 = u256_to_float_base_x128(ending_sqrt_ratio);
-    let ticks_crossed = ((start.ln() - end.ln()).abs() / LOG_BASE_SQRT_TICK_SIZE) as u32;
+    let ticks_crossed = ((ln(start) - ln(end)).abs() / LOG_BASE_SQRT_TICK_SIZE) as u32;
     ticks_crossed / tick_spacing
 }
 

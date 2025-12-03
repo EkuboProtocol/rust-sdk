@@ -5,8 +5,7 @@ use crate::{
 use crate::{
     chain::Chain,
     quoting::pools::{
-        is_token1, ensure_valid_token_order, CommonPoolConstructionError,
-        CommonPoolQuoteError,
+        ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
     },
     quoting::types::{Pool, PoolKey, Quote, QuoteParams},
 };

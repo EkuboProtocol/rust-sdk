@@ -1,4 +1,4 @@
-use crate::math::{sqrt_ratio::SQRT_RATIO_ONE, twamm::exp2::exp2};
+use crate::math::{facade::integer_sqrt_u256, sqrt_ratio::SQRT_RATIO_ONE, twamm::exp2::exp2};
 use crate::{chain::Chain, math::muldiv::muldiv};
 use num_traits::Zero;
 use ruint::{aliases::U256, uint};
@@ -20,9 +20,10 @@ pub fn calculate_next_sqrt_ratio<C: Chain>(
         return sqrt_sale_ratio;
     }
 
-    let sale_rate = ((U256::from(sale_rate_token1) * U256::from(sale_rate_token0)).root(2)
-        * (C::fee_denominator() - U256::from(fee.into())))
-        / C::fee_denominator();
+    let sale_rate =
+        (integer_sqrt_u256(U256::from(sale_rate_token1) * U256::from(sale_rate_token0))
+            * (C::fee_denominator() - U256::from(fee.into())))
+            / C::fee_denominator();
 
     let round_up = sqrt_ratio > sqrt_sale_ratio;
 
@@ -68,12 +69,12 @@ fn compute_sqrt_sale_ratio_x128(sale_rate_token0: u128, sale_rate_token1: u128) 
 
     if sale_ratio < U256::from_limbs([0, 0, 1, 0]) {
         // full precision
-        (sale_ratio << 128u8).root(2)
+        integer_sqrt_u256(sale_ratio << 128u8)
     } else if sale_ratio < U256::from_limbs([0, 0, 0, 1]) {
         // we know it only has 192 bits, so we can shift it 64 before rooting to get more precision
-        (sale_ratio << 64u8).root(2) << 32
+        integer_sqrt_u256(sale_ratio << 64u8) << 32
     } else {
-        (sale_ratio << 16u8).root(2) << 56
+        integer_sqrt_u256(sale_ratio << 16u8) << 56
     }
 }
 

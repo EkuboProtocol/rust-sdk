@@ -10,25 +10,87 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: fmt
+        run: cargo fmt --check --all --verbose
+
+  clippy:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        feature: [default, evm, starknet, all]
-
+        include:
+          - name: std
+            args: ""
+          - name: no-std
+            args: "--no-default-features --features no_std"
     steps:
-    - uses: actions/checkout@v4
-    - name: Build (${{ matrix.feature }})
-      run: |
-        case "${{ matrix.feature }}" in
-          default) cargo build --verbose ;;
-          all) cargo build --verbose --all-features ;;
-          *) cargo build --verbose --features "${{ matrix.feature }}" ;;
-        esac
-  test:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: clippy (${{ matrix.name }})
+        run: cargo clippy --features evm,starknet,serde ${{ matrix.args }} --workspace -- -D warnings -W clippy::pedantic
+
+  check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Run tests (all features)
-      run: cargo test --verbose --all-features
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: check
+        run: cargo hack check --feature-powerset --at-least-one-of std,no_std --mutually-exclusive-features std,no_std --group-features std,default --no-dev-deps --verbose
+
+  build-std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build
+        run: cargo build --features serde,evm,starknet --verbose
+
+  build-no-std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add no_std target
+        run: rustup target add thumbv7em-none-eabihf
+      - name: build
+        run: cargo build --target thumbv7em-none-eabihf --no-default-features --features no_std,serde,evm,starknet --verbose
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: std
+            args: ""
+          - name: no-std
+            args: "--no-default-features --features no_std"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: test
+        run: cargo test --features evm,starknet,serde ${{ matrix.args }} --verbose
+
+  minimal-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Resolve minimal versions
+        run: cargo -Z minimal-versions update --workspace
+      - name: build
+        run: cargo build --features serde,evm,starknet --verbose
+      - name: test
+        run: cargo test --features serde,evm,starknet --verbose

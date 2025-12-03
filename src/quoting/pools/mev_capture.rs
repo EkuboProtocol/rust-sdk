@@ -5,7 +5,10 @@ use thiserror::Error;
 
 use crate::{
     chain::evm::{Evm, EVM_FULL_RANGE_TICK_SPACING},
-    math::swap::{amount_before_fee, compute_fee},
+    math::{
+        facade::round_f64,
+        swap::{amount_before_fee, compute_fee},
+    },
     private,
     quoting::pools::base::{
         BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState, BasePoolTypeConfig,
@@ -162,7 +165,7 @@ impl Pool for MevCapturePool {
                     / (pool_config.pool_type_config.0 as f64);
 
                 let fixed_point_additional_fee: u64 =
-                    ((approximate_fee_multiplier * pool_config.fee as f64).round() as u128)
+                    (round_f64(approximate_fee_multiplier * pool_config.fee as f64) as u128)
                         .min(u64::MAX as u128) as u64;
 
                 let pool_time = params

@@ -1,5 +1,5 @@
 test:
-    cargo test --all-features
+    cargo test --features serde,evm,starknet
 
 check:
-    cargo check --all-features
+    cargo check --features serde,evm,starknet

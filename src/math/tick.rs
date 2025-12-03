@@ -2,7 +2,11 @@ use ruint::aliases::U256;
 
 use crate::{
     chain::Chain,
-    math::{sqrt_ratio::SQRT_RATIO_ONE, uint::u256_to_float_base_x128},
+    math::{
+        facade::{log_base, round_f64},
+        sqrt_ratio::SQRT_RATIO_ONE,
+        uint::u256_to_float_base_x128,
+    },
 };
 
 const MASKS: [U256; 27] = [
@@ -61,9 +65,10 @@ const SQRT_TICK_SIZE: f64 =
     1.00000049999987500006249996093752734372949220361326815796989439990616646_f64;
 
 pub fn approximate_sqrt_ratio_to_tick(sqrt_ratio: U256) -> i32 {
-    u256_to_float_base_x128(sqrt_ratio)
-        .log(SQRT_TICK_SIZE)
-        .round() as i32
+    round_f64(log_base(
+        u256_to_float_base_x128(sqrt_ratio),
+        SQRT_TICK_SIZE,
+    )) as i32
 }
 
 #[cfg(test)]
@@ -129,9 +134,7 @@ mod tests {
             for chain in CHAINS {
                 match chain {
                     ChainEnum::Starknet => {
-                        assert!(
-                            to_sqrt_ratio::<Starknet>(Starknet::min_tick() - 1).is_none()
-                        );
+                        assert!(to_sqrt_ratio::<Starknet>(Starknet::min_tick() - 1).is_none());
                         assert!(to_sqrt_ratio::<Starknet>(i32::MIN).is_none());
                     }
                     ChainEnum::Evm => {
