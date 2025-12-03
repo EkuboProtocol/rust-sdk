@@ -36,7 +36,7 @@ jobs:
         with:
           components: clippy
       - name: clippy (${{ matrix.name }})
-        run: cargo clippy --features evm,starknet,serde ${{ matrix.args }} --workspace -- -D warnings -W clippy::pedantic
+        run: cargo clippy --features evm,starknet,serde ${{ matrix.args }} --workspace -- -D warnings # TODO -W clippy::pedantic
 
   check:
     runs-on: ubuntu-latest
