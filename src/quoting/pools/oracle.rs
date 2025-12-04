@@ -114,7 +114,7 @@ impl<C: Chain> Pool for OraclePool<C> {
             calculated_amount: result.calculated_amount,
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
-                snapshots_written: if pool_time != block_time { 1 } else { 0 },
+                snapshots_written: u32::from(pool_time != block_time),
                 full_range_pool_resources: result.execution_resources,
             },
             fees_paid: result.fees_paid,
@@ -231,16 +231,14 @@ mod tests {
         #[test]
         fn starknet_min_sqrt_ratio_at_max_tick_spacing() {
             let state =
-                build_pool::<Starknet>(STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0)
-                    .state();
+                build_pool::<Starknet>(STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0).state();
             assert_eq!(state.full_range_pool_state.liquidity(), 1);
         }
 
         #[test]
         fn starknet_max_sqrt_ratio_at_max_tick_spacing() {
             let state =
-                build_pool::<Starknet>(STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0)
-                    .state();
+                build_pool::<Starknet>(STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, 1, 0).state();
             assert_eq!(state.full_range_pool_state.liquidity(), 1);
         }
     }

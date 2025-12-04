@@ -5,7 +5,10 @@ use thiserror::Error;
 
 use crate::{
     chain::evm::{Evm, EVM_FULL_RANGE_TICK_SPACING},
-    math::swap::{amount_before_fee, compute_fee},
+    math::{
+        facade::round_f64,
+        swap::{amount_before_fee, compute_fee},
+    },
     private,
     quoting::pools::base::{
         BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState, BasePoolTypeConfig,
@@ -106,16 +109,14 @@ impl MevCapturePool {
                     return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
             }
-        } else {
-            if let Some(t) = base_pool.ticks().first() {
-                if t.index <= tick {
-                    return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
-                }
+        } else if let Some(t) = base_pool.ticks().first() {
+            if t.index <= tick {
+                return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
             }
         }
 
         Ok(Self {
-            base_pool: base_pool,
+            base_pool,
             last_update_time,
             tick,
         })
@@ -158,12 +159,12 @@ impl Pool for MevCapturePool {
                 let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
 
                 let pool_config = self.base_pool.key().config;
-                let approximate_fee_multiplier = (((tick_after_swap - self.tick).abs() + 1) as f64)
-                    / (pool_config.pool_type_config.0 as f64);
+                let approximate_fee_multiplier = f64::from((tick_after_swap - self.tick).abs() + 1)
+                    / f64::from(pool_config.pool_type_config.0);
 
                 let fixed_point_additional_fee: u64 =
-                    ((approximate_fee_multiplier * pool_config.fee as f64).round() as u128)
-                        .min(u64::MAX as u128) as u64;
+                    (round_f64(approximate_fee_multiplier * pool_config.fee as f64) as u128)
+                        .min(u128::from(u64::MAX)) as u64;
 
                 let pool_time = params
                     .override_state
@@ -171,7 +172,7 @@ impl Pool for MevCapturePool {
 
                 // if the time is updated, fees are accumulated to the current liquidity providers
                 // this causes up to 3 additional SSTOREs (~15k gas)
-                let state_update_count = if pool_time != current_time { 1 } else { 0 };
+                let state_update_count = u32::from(pool_time != current_time);
 
                 let mut calculated_amount = quote.calculated_amount;
 
@@ -198,10 +199,10 @@ impl Pool for MevCapturePool {
                 }
 
                 Ok(Quote {
-                    calculated_amount: calculated_amount,
+                    calculated_amount,
                     consumed_amount: quote.consumed_amount,
                     execution_resources: MevCapturePoolResources {
-                        state_update_count: state_update_count,
+                        state_update_count,
                         base_pool_resources: quote.execution_resources,
                     },
                     fees_paid: quote.fees_paid,

@@ -45,10 +45,7 @@ where
 }
 
 /// Returns whether `token` matches token1 in the pool, or an error if it is not part of the pool.
-pub fn is_token1<A, F, C>(
-    key: &PoolKey<A, F, C>,
-    token: A,
-) -> Result<bool, CommonPoolQuoteError>
+pub fn is_token1<A, F, C>(key: &PoolKey<A, F, C>, token: A) -> Result<bool, CommonPoolQuoteError>
 where
     A: PartialEq + Copy,
 {

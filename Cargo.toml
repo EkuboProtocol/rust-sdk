@@ -8,30 +8,35 @@ description = "Types for interacting with Ekubo Protocol on Starknet & EVM chain
 homepage = "https://ekubo.org"
 repository = "https://github.com/EkuboProtocol/rust-sdk"
 readme = "README.md"
-keywords = ["crypto", "math", "ekubo", "protocol", "defi"]
+keywords = ["crypto", "math", "ekubo", "protocol", "defi", "no_std"]
 
 [dependencies]
-derive_more = { version = "2.0.1", features = ["add", "add_assign", "from"] }
-num-traits = "0.2.19"
-ruint = "1.17.0"
-thiserror = "2.0.17"
-
-# serde
-serde = { version = "1.0", features = ["derive"], optional = true }
-
-# starknet
-starknet-types-core = { version = "1.0.0", optional = true, default-features = false }
-
-# evm
-alloy-primitives = { version = "1.4.1", optional = true, default-features = false }
+alloy-primitives = { version = "1", optional = true, default-features = false }
+derive_more = { version = "2", features = ["add", "add_assign", "from"], default-features = false }
+libm = { version = "0.2", default-features = false, optional = true }
+num-traits = { version = "0.2.4", features = ["i128"], default-features = false }
+ruint = { version = "1.14.0", default-features = false }
+serde = { version = "1", features = ["derive"], optional = true, default-features = false }
+starknet-types-core = { version = "1", optional = true, default-features = false }
+thiserror = { version = "2", default-features = false }
 
 [features]
+default = ["std"]
+std = [
+    "alloy-primitives?/std",
+    "derive_more/std",
+    "num-traits/std",
+    "ruint/std",
+    "thiserror/std",
+    "serde?/std",
+    "starknet-types-core?/std",
+]
+no_std = ["dep:libm"]
 serde = [
     "dep:serde",
     "alloy-primitives?/serde",
     "starknet-types-core?/serde",
     "ruint/serde",
 ]
-
 starknet = ["starknet-types-core"]
 evm = ["alloy-primitives"]

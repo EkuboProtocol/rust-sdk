@@ -70,7 +70,7 @@ pub struct BasePoolResources {
     pub tick_spacings_crossed: u32,
 }
 
-/// Errors that can occur when constructing a BasePool.
+/// Errors that can occur when constructing a `BasePool`.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum BasePoolConstructionError {
     #[error(transparent)]
@@ -87,7 +87,7 @@ pub enum BasePoolConstructionError {
     /// Ticks must be sorted in ascending order.
     TicksNotSorted,
     #[error("all ticks must be a multiple of the tick spacing")]
-    /// All ticks must be a multiple of tick_spacing.
+    /// All ticks must be a multiple of `tick_spacing`.
     TickNotMultipleOfSpacing,
     #[error("total liquidity is non-zero")]
     /// The total liquidity across all ticks must sum to zero.
@@ -96,10 +96,10 @@ pub enum BasePoolConstructionError {
     /// Active liquidity doesn't match the sum of liquidity deltas before the active tick.
     ActiveLiquidityMismatch,
     #[error("active tick price is invalid")]
-    /// The sqrt_ratio of active tick is not less than or equal to current sqrt_ratio.
+    /// The `sqrt_ratio` of active tick is not less than or equal to current `sqrt_ratio`.
     ActiveTickSqrtRatioInvalid,
     #[error("active price is higher than lowest initialized tick's price")]
-    /// current sqrt_ratio must be lower than the first tick's sqrt_ratio when active_tick_index is none.
+    /// current `sqrt_ratio` must be lower than the first tick's `sqrt_ratio` when `active_tick_index` is none.
     SqrtRatioTooHighWithNoActiveTick,
     #[error("active tick index out of bounds")]
     /// The active tick index is out of bounds.
@@ -125,14 +125,14 @@ pub enum BasePoolQuoteError {
 }
 
 impl<C: Chain> BasePool<C> {
-    /// Creates a BasePool from partial tick data retrieved from a quote data fetcher lens contract.
+    /// Creates a `BasePool` from partial tick data retrieved from a quote data fetcher lens contract.
     ///
     /// This helper constructor takes partial tick data along with min/max tick boundaries and constructs
-    /// a valid BasePool instance with properly balanced liquidity deltas.
+    /// a valid `BasePool` instance with properly balanced liquidity deltas.
     ///
     /// # Arguments
     ///
-    /// * `key` - The NodeKey containing token information and configuration
+    /// * `key` - The `NodeKey` containing token information and configuration
     /// * `sqrt_ratio` - The square root price ratio of the pool
     /// * `partial_ticks` - A vector of ticks retrieved from the lens contract
     /// * `min_tick_searched` - The minimum tick that was searched (not necessarily a multiple of tick spacing)
@@ -142,7 +142,7 @@ impl<C: Chain> BasePool<C> {
     ///
     /// # Returns
     ///
-    /// * `Result<Self, BasePoolConstructionError>` - A new BasePool instance or an error
+    /// * `Result<Self, BasePoolConstructionError>` - A new `BasePool` instance or an error
     pub fn from_partial_data(
         key: BasePoolKey<C>,
         sqrt_ratio: U256,
@@ -221,10 +221,10 @@ impl<C: Chain> BasePool<C> {
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
             if let Some(last) = last_tick {
-                if !(tick.index > last) {
+                if tick.index <= last {
                     return Err(BasePoolConstructionError::TicksNotSorted);
                 }
-            };
+            }
 
             // Verify ticks are multiples of tick_spacing
             if !(tick.index % spacing_i32).is_zero() {
@@ -273,17 +273,15 @@ impl<C: Chain> BasePool<C> {
             let active_tick_sqrt_ratio = to_sqrt_ratio::<C>(tick.index)
                 .ok_or(BasePoolConstructionError::InvalidTickIndex(tick.index))?;
 
-            if !(active_tick_sqrt_ratio <= state.sqrt_ratio) {
+            if active_tick_sqrt_ratio > state.sqrt_ratio {
                 return Err(BasePoolConstructionError::ActiveTickSqrtRatioInvalid);
             }
-        } else {
-            if let Some(first) = sorted_ticks.first() {
-                let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index)
-                    .ok_or(BasePoolConstructionError::InvalidTickIndex(first.index))?;
+        } else if let Some(first) = sorted_ticks.first() {
+            let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index)
+                .ok_or(BasePoolConstructionError::InvalidTickIndex(first.index))?;
 
-                if !(state.sqrt_ratio <= first_tick_sqrt_ratio) {
-                    return Err(BasePoolConstructionError::SqrtRatioTooHighWithNoActiveTick);
-                }
+            if state.sqrt_ratio > first_tick_sqrt_ratio {
+                return Err(BasePoolConstructionError::SqrtRatioTooHighWithNoActiveTick);
             }
         }
 
@@ -404,16 +402,16 @@ impl<C: Chain> Pool for BasePool<C> {
                 None
             };
 
-            let step_sqrt_ratio_limit = next_initialized_tick
-                .as_ref()
-                .map(|(_, _, ratio)| {
-                    if (*ratio < sqrt_ratio_limit) == is_increasing {
-                        *ratio
-                    } else {
-                        sqrt_ratio_limit
-                    }
-                })
-                .unwrap_or(sqrt_ratio_limit);
+            let step_sqrt_ratio_limit =
+                next_initialized_tick
+                    .as_ref()
+                    .map_or(sqrt_ratio_limit, |(_, _, ratio)| {
+                        if (*ratio < sqrt_ratio_limit) == is_increasing {
+                            *ratio
+                        } else {
+                            sqrt_ratio_limit
+                        }
+                    });
 
             let step = compute_step::<C>(
                 sqrt_ratio,
@@ -441,9 +439,9 @@ impl<C: Chain> Pool for BasePool<C> {
                     initialized_ticks_crossed += 1;
 
                     if (next_tick.liquidity_delta.signum() == 1) == is_increasing {
-                        liquidity = liquidity + next_tick.liquidity_delta.unsigned_abs();
+                        liquidity += next_tick.liquidity_delta.unsigned_abs();
                     } else {
-                        liquidity = liquidity - next_tick.liquidity_delta.unsigned_abs();
+                        liquidity -= next_tick.liquidity_delta.unsigned_abs();
                     }
                 }
             } else {
@@ -456,13 +454,9 @@ impl<C: Chain> Pool for BasePool<C> {
         }
 
         let resources = BasePoolResources {
-            no_override_price_change: if starting_sqrt_ratio == self.state.sqrt_ratio
-                && starting_sqrt_ratio != sqrt_ratio
-            {
-                1
-            } else {
-                0
-            },
+            no_override_price_change: u32::from(
+                starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
+            ),
             initialized_ticks_crossed,
             tick_spacings_crossed: approximate_number_of_tick_spacings_crossed(
                 starting_sqrt_ratio,

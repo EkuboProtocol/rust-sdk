@@ -5,8 +5,7 @@ use crate::{
 use crate::{
     chain::Chain,
     quoting::pools::{
-        is_token1, ensure_valid_token_order, CommonPoolConstructionError,
-        CommonPoolQuoteError,
+        ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
     },
     quoting::types::{Pool, PoolKey, Quote, QuoteParams},
 };
@@ -167,12 +166,10 @@ impl Pool for FullRangePool {
                 return Err(FullRangePoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
+        } else if is_increasing {
+            Evm::max_sqrt_ratio_full_range()
         } else {
-            if is_increasing {
-                Evm::max_sqrt_ratio_full_range()
-            } else {
-                Evm::min_sqrt_ratio_full_range()
-            }
+            Evm::min_sqrt_ratio_full_range()
         };
 
         let starting_sqrt_ratio = sqrt_ratio;
@@ -193,13 +190,9 @@ impl Pool for FullRangePool {
 
         let resources = FullRangePoolResources {
             // Track if the price changed, but only if not overridden
-            no_override_price_change: if starting_sqrt_ratio == self.state.sqrt_ratio
-                && starting_sqrt_ratio != sqrt_ratio
-            {
-                1
-            } else {
-                0
-            },
+            no_override_price_change: u32::from(
+                starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
+            ),
         };
 
         let state_after = FullRangePoolState {
