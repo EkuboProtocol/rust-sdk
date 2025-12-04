@@ -8,7 +8,7 @@ description = "Types for interacting with Ekubo Protocol on Starknet & EVM chain
 homepage = "https://ekubo.org"
 repository = "https://github.com/EkuboProtocol/rust-sdk"
 readme = "README.md"
-keywords = ["crypto", "math", "ekubo", "protocol", "defi", "no_std"]
+keywords = ["crypto", "ekubo", "protocol", "defi", "no_std"]
 
 [dependencies]
 alloy-primitives = { version = "1", optional = true, default-features = false }
