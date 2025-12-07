@@ -136,3 +136,29 @@ pub trait PoolState: private::Sealed {
     fn sqrt_ratio(&self) -> U256;
     fn liquidity(&self) -> u128;
 }
+
+impl<A, F, C> PoolKey<A, F, C> {
+    /// Convenience function to map pool type configs using their [`From`] implementations.
+    pub fn map_into_config<T: From<C>>(self) -> PoolKey<A, F, T> {
+        let Self {
+            token0,
+            token1,
+            config:
+                PoolConfig {
+                    extension,
+                    fee,
+                    pool_type_config,
+                },
+        } = self;
+
+        PoolKey {
+            token0,
+            token1,
+            config: PoolConfig {
+                extension,
+                fee,
+                pool_type_config: pool_type_config.into(),
+            },
+        }
+    }
+}
