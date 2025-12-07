@@ -1,4 +1,4 @@
-use crate::quoting::types::{BlockTimestamp, Pool, PoolKey, Quote, QuoteParams};
+use crate::quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams};
 use crate::{private, quoting::types::PoolState};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
@@ -31,6 +31,8 @@ pub struct OraclePoolResources<R> {
 pub type OraclePoolTypeConfig<C> = <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig;
 pub type OraclePoolKey<C> =
     PoolKey<<C as Chain>::Address, <C as Chain>::Fee, OraclePoolTypeConfig<C>>;
+pub type OraclePoolConfig<C> =
+    PoolConfig<<C as Chain>::Address, <C as Chain>::Fee, OraclePoolTypeConfig<C>>;
 
 /// Pool that wraps a full range pool and produces time-based oracle snapshots.
 #[derive(Clone, Debug, PartialEq, Eq)]
