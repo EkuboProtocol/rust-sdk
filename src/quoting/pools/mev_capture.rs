@@ -36,6 +36,9 @@ pub struct MevCapturePool {
 /// Unique identifier for a [`MevCapturePool`].
 pub type MevCapturePoolKey =
     PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, MevCapturePoolTypeConfig>;
+/// Pool configuration for a [`MevCapturePool`].
+pub type MevCapturePoolConfig =
+    PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, MevCapturePoolTypeConfig>;
 
 /// Type config for a [`MevCapturePool`].
 pub type MevCapturePoolTypeConfig = BasePoolTypeConfig;

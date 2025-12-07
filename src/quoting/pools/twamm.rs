@@ -1,5 +1,4 @@
-use crate::quoting::types::{BlockTimestamp, PoolConfig};
-use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount};
+use crate::quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount};
 use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
 use crate::{private, quoting::types::PoolState};
 
@@ -20,11 +19,11 @@ pub struct TwammPool<C: Chain> {
     virtual_order_deltas: Vec<TwammSaleRateDelta>,
 }
 
-pub type TwammPoolKey<C> = PoolKey<
-    <C as Chain>::Address,
-    <C as Chain>::Fee,
-    <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig,
->;
+pub type TwammPoolTypeConfig<C> = <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig;
+pub type TwammPoolKey<C> =
+    PoolKey<<C as Chain>::Address, <C as Chain>::Fee, TwammPoolTypeConfig<C>>;
+pub type TwammPoolConfig<C> =
+    PoolConfig<<C as Chain>::Address, <C as Chain>::Fee, TwammPoolTypeConfig<C>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

@@ -2,7 +2,7 @@ use crate::private;
 use crate::quoting::pools::{
     ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
 };
-use crate::quoting::types::{Pool, PoolKey, Quote, QuoteParams, Tick};
+use crate::quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
     approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
 };
@@ -38,6 +38,9 @@ pub struct BasePool<C: Chain> {
 
 /// Unique identifier for a [`BasePool`].
 pub type BasePoolKey<C> = PoolKey<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
+/// Pool configuration for a [`BasePool`].
+pub type BasePoolConfig<C> =
+    PoolConfig<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
 /// Type configuration for a [`BasePool`], representing the tick spacing.
 pub type BasePoolTypeConfig = TickSpacing;
 

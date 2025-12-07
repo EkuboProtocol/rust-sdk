@@ -7,7 +7,7 @@ use crate::{
     quoting::pools::{
         ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
     },
-    quoting::types::{Pool, PoolKey, Quote, QuoteParams},
+    quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams},
 };
 use crate::{private, quoting::types::PoolState};
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -28,6 +28,9 @@ pub struct FullRangePool {
 /// Unique identifier for a [`FullRangePool`].
 pub type FullRangePoolKey =
     PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, FullRangePoolTypeConfig>;
+/// Pool configuration for a [`FullRangePool`].
+pub type FullRangePoolConfig =
+    PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, FullRangePoolTypeConfig>;
 
 /// Pool type config placeholder for a full range pool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

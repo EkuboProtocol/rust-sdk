@@ -35,6 +35,9 @@ pub struct LimitOrderPool {
 /// Unique identifier for a [`LimitOrderPool`].
 pub type LimitOrderPoolKey =
     PoolKey<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, BasePoolTypeConfig>;
+/// Pool configuration for a [`LimitOrderPool`].
+pub type LimitOrderPoolConfig =
+    PoolConfig<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, BasePoolTypeConfig>;
 /// [`BasePoolQuoteError`] re-exported with a pool-specific name.
 pub type LimitOrderPoolQuoteError = BasePoolQuoteError;
 

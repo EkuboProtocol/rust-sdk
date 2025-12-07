@@ -10,7 +10,7 @@ use crate::{
     quoting::pools::{
         ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
     },
-    quoting::types::{Pool, PoolKey, Quote, QuoteParams, TokenAmount},
+    quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount},
 };
 use core::ops::Not;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -54,6 +54,11 @@ pub struct StableswapPoolResources {
 /// Unique identifier for a [`StableswapPool`].
 pub type StableswapPoolKey =
     PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>;
+/// Pool configuration for a [`StableswapPool`].
+pub type StableswapPoolConfig =
+    PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, StableswapPoolTypeConfig>;
+/// State alias for a [`StableswapPool`].
+pub type StableswapPoolState = FullRangePoolState;
 
 /// Errors that can occur when constructing a [`StableswapPool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]

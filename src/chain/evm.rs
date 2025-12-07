@@ -8,32 +8,36 @@ use thiserror::Error;
 use crate::chain::Chain;
 use crate::private;
 use crate::quoting::pools::base::{
-    BasePool, BasePoolConstructionError, BasePoolQuoteError, BasePoolResources, BasePoolState,
-    BasePoolTypeConfig, TickSpacing,
+    BasePool, BasePoolConfig, BasePoolConstructionError, BasePoolKey, BasePoolQuoteError,
+    BasePoolResources, BasePoolState, BasePoolTypeConfig, TickSpacing,
 };
 use crate::quoting::pools::full_range::{
-    FullRangePool, FullRangePoolConstructionError, FullRangePoolQuoteError, FullRangePoolResources,
-    FullRangePoolState, FullRangePoolTypeConfig,
+    FullRangePool, FullRangePoolConfig, FullRangePoolConstructionError, FullRangePoolKey,
+    FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState, FullRangePoolTypeConfig,
 };
 use crate::quoting::pools::mev_capture::{
-    MevCapturePool, MevCapturePoolConstructionError, MevCapturePoolResources, MevCapturePoolState,
-    MevCapturePoolTypeConfig,
+    MevCapturePool, MevCapturePoolConfig, MevCapturePoolConstructionError, MevCapturePoolKey,
+    MevCapturePoolResources, MevCapturePoolState, MevCapturePoolTypeConfig,
 };
 use crate::quoting::pools::oracle::{
-    OraclePool, OraclePoolConstructionError, OraclePoolResources, OraclePoolState,
+    OraclePool, OraclePoolConfig, OraclePoolConstructionError, OraclePoolKey, OraclePoolResources,
+    OraclePoolState, OraclePoolTypeConfig,
 };
 use crate::quoting::pools::stableswap::{
-    StableswapPool, StableswapPoolConstructionError, StableswapPoolQuoteError,
-    StableswapPoolResources, StableswapPoolTypeConfig,
+    StableswapPool, StableswapPoolConfig, StableswapPoolConstructionError, StableswapPoolKey,
+    StableswapPoolQuoteError, StableswapPoolResources, StableswapPoolState, StableswapPoolTypeConfig,
 };
 use crate::quoting::pools::twamm::{
-    TwammPool, TwammPoolConstructionError, TwammPoolQuoteError, TwammPoolResources, TwammPoolState,
+    TwammPool, TwammPoolConfig, TwammPoolConstructionError, TwammPoolKey, TwammPoolQuoteError,
+    TwammPoolResources, TwammPoolState, TwammPoolTypeConfig,
 };
-use crate::quoting::types::{PoolConfig, PoolKey};
+use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
 // Re-export pool types for ergonomic, chain-scoped usage.
 pub type EvmBasePool = BasePool<Evm>;
 pub type EvmBasePoolConstructionError = BasePoolConstructionError;
+pub type EvmBasePoolConfig = BasePoolConfig<Evm>;
+pub type EvmBasePoolKey = BasePoolKey<Evm>;
 pub type EvmBasePoolQuoteError = BasePoolQuoteError;
 pub type EvmBasePoolResources = BasePoolResources;
 pub type EvmBasePoolState = BasePoolState;
@@ -41,6 +45,8 @@ pub type EvmBasePoolTypeConfig = BasePoolTypeConfig;
 
 pub type EvmFullRangePool = FullRangePool;
 pub type EvmFullRangePoolConstructionError = FullRangePoolConstructionError;
+pub type EvmFullRangePoolConfig = FullRangePoolConfig;
+pub type EvmFullRangePoolKey = FullRangePoolKey;
 pub type EvmFullRangePoolQuoteError = FullRangePoolQuoteError;
 pub type EvmFullRangePoolResources = FullRangePoolResources;
 pub type EvmFullRangePoolState = FullRangePoolState;
@@ -48,13 +54,17 @@ pub type EvmFullRangePoolTypeConfig = FullRangePoolTypeConfig;
 
 pub type EvmStableswapPool = StableswapPool;
 pub type EvmStableswapPoolConstructionError = StableswapPoolConstructionError;
+pub type EvmStableswapPoolConfig = StableswapPoolConfig;
+pub type EvmStableswapPoolKey = StableswapPoolKey;
 pub type EvmStableswapPoolQuoteError = StableswapPoolQuoteError;
 pub type EvmStableswapPoolResources = StableswapPoolResources;
-pub type EvmStableswapPoolState = FullRangePoolState;
+pub type EvmStableswapPoolState = StableswapPoolState;
 pub type EvmStableswapPoolTypeConfig = StableswapPoolTypeConfig;
 
 pub type EvmMevCapturePool = MevCapturePool;
 pub type EvmMevCapturePoolConstructionError = MevCapturePoolConstructionError;
+pub type EvmMevCapturePoolConfig = MevCapturePoolConfig;
+pub type EvmMevCapturePoolKey = MevCapturePoolKey;
 pub type EvmMevCapturePoolQuoteError = BasePoolQuoteError;
 pub type EvmMevCapturePoolResources = MevCapturePoolResources;
 pub type EvmMevCapturePoolState = MevCapturePoolState;
@@ -63,17 +73,21 @@ pub type EvmMevCapturePoolTypeConfig = MevCapturePoolTypeConfig;
 pub type EvmOraclePool = OraclePool<Evm>;
 pub type EvmOraclePoolConstructionError =
     OraclePoolConstructionError<FullRangePoolConstructionError>;
+pub type EvmOraclePoolConfig = OraclePoolConfig<Evm>;
+pub type EvmOraclePoolKey = OraclePoolKey<Evm>;
 pub type EvmOraclePoolQuoteError = FullRangePoolQuoteError;
 pub type EvmOraclePoolResources = OraclePoolResources<FullRangePoolResources>;
 pub type EvmOraclePoolState = OraclePoolState<FullRangePoolState>;
-pub type EvmOraclePoolTypeConfig = FullRangePoolTypeConfig;
+pub type EvmOraclePoolTypeConfig = OraclePoolTypeConfig<Evm>;
 
 pub type EvmTwammPool = TwammPool<Evm>;
 pub type EvmTwammPoolConstructionError = TwammPoolConstructionError<FullRangePoolConstructionError>;
+pub type EvmTwammPoolConfig = TwammPoolConfig<Evm>;
+pub type EvmTwammPoolKey = TwammPoolKey<Evm>;
 pub type EvmTwammPoolQuoteError = TwammPoolQuoteError<FullRangePoolQuoteError>;
 pub type EvmTwammPoolResources = TwammPoolResources<FullRangePoolResources>;
 pub type EvmTwammPoolState = TwammPoolState<FullRangePoolState>;
-pub type EvmTwammPoolTypeConfig = FullRangePoolTypeConfig;
+pub type EvmTwammPoolTypeConfig = TwammPoolTypeConfig<Evm>;
 
 pub const EVM_NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
 pub const EVM_MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
@@ -106,6 +120,8 @@ pub type EvmPoolConfig =
     PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, EvmPoolTypeConfig>;
 /// Pool key alias for EVM.
 pub type EvmPoolKey = PoolKey<<Evm as Chain>::Address, <Evm as Chain>::Fee, EvmPoolTypeConfig>;
+/// Token amount alias for EVM.
+pub type EvmTokenAmount = TokenAmount<<Evm as Chain>::Address>;
 
 /// Pool type configuration variants for EVM.
 #[derive(Clone, Copy, From, Debug, PartialEq, Eq, Hash)]
