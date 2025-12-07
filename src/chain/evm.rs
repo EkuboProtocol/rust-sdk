@@ -25,7 +25,8 @@ use crate::quoting::pools::oracle::{
 };
 use crate::quoting::pools::stableswap::{
     StableswapPool, StableswapPoolConfig, StableswapPoolConstructionError, StableswapPoolKey,
-    StableswapPoolQuoteError, StableswapPoolResources, StableswapPoolState, StableswapPoolTypeConfig,
+    StableswapPoolQuoteError, StableswapPoolResources, StableswapPoolState,
+    StableswapPoolTypeConfig,
 };
 use crate::quoting::pools::twamm::{
     TwammPool, TwammPoolConfig, TwammPoolConstructionError, TwammPoolKey, TwammPoolQuoteError,

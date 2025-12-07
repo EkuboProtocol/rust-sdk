@@ -1,4 +1,6 @@
-use crate::quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount};
+use crate::quoting::types::{
+    BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount,
+};
 use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
 use crate::{private, quoting::types::PoolState};
 
