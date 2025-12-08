@@ -7,7 +7,7 @@ compile_error!(r#"Features "std" and "no_std" are mutually exclusive."#);
 compile_error!(r#"Either feature "std" or "no_std" must be enabled."#);
 
 extern crate alloc;
-#[cfg(feature = "std")]
+#[cfg(any(test, feature = "std"))]
 extern crate std;
 
 pub use ruint::aliases::U256;

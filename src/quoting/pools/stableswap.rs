@@ -12,7 +12,6 @@ use crate::{
     },
     quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount},
 };
-use core::ops::Not;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use ruint::aliases::U256;
 use thiserror::Error;
@@ -197,7 +196,7 @@ impl Pool for StableswapPool {
 
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
             let mut step_liquidity = liquidity;
-            let in_range = sqrt_ratio < self.upper_price && sqrt_ratio >= self.lower_price;
+            let in_range = sqrt_ratio < self.upper_price && sqrt_ratio > self.lower_price;
 
             let next_tick_sqrt_ratio = if in_range {
                 Some(if increasing {
@@ -211,7 +210,7 @@ impl Pool for StableswapPool {
                 if sqrt_ratio <= self.lower_price {
                     increasing.then_some(self.lower_price)
                 } else {
-                    increasing.not().then_some(self.upper_price)
+                    (!increasing).then_some(self.upper_price)
                 }
             };
 
@@ -515,5 +514,43 @@ mod tests {
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
         assert!(quote.calculated_amount > 0);
         assert!(quote.calculated_amount < SMALL_AMOUNT as u128);
+    }
+
+    #[test]
+    fn large_input_at_lower_boundary_does_not_hang() {
+        use std::{sync::mpsc, thread, time::Duration};
+
+        let amplification = 10;
+        let (lower, _) = active_range(0, amplification);
+        let sqrt_lower = to_sqrt_ratio::<Evm>(lower).unwrap();
+        let liquidity = minted_liquidity(0, amplification, lower);
+
+        let pool = StableswapPool::new(key(0, amplification), state(lower, liquidity)).unwrap();
+
+        let params = QuoteParams {
+            token_amount: TokenAmount {
+                token: Evm::zero_address(),
+                amount: i128::MAX,
+            },
+            sqrt_ratio_limit: None,
+            override_state: Some(FullRangePoolState {
+                sqrt_ratio: sqrt_lower,
+                liquidity,
+            }),
+            meta: (),
+        };
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let quote = pool.quote(params).unwrap();
+            tx.send(quote).ok();
+        });
+
+        let quote = rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("quote should not hang at lower boundary");
+
+        assert_eq!(quote.consumed_amount, 0);
+        assert_eq!(quote.calculated_amount, 0);
     }
 }
