@@ -11,6 +11,24 @@ use crate::quoting::pools::base::{
     BasePool, BasePoolConfig, BasePoolConstructionError, BasePoolKey, BasePoolQuoteError,
     BasePoolResources, BasePoolState, BasePoolTypeConfig, TickSpacing,
 };
+use crate::quoting::pools::boosted_fees::concentrated::{
+    BoostedFeesConcentratedPool, BoostedFeesConcentratedPoolConfig,
+    BoostedFeesConcentratedPoolConstructionError, BoostedFeesConcentratedPoolKey,
+    BoostedFeesConcentratedPoolQuoteError, BoostedFeesConcentratedPoolResources,
+    BoostedFeesConcentratedPoolState, BoostedFeesConcentratedPoolTypeConfig,
+};
+use crate::quoting::pools::boosted_fees::full_range::{
+    BoostedFeesFullRangePool, BoostedFeesFullRangePoolConfig,
+    BoostedFeesFullRangePoolConstructionError, BoostedFeesFullRangePoolKey,
+    BoostedFeesFullRangePoolQuoteError, BoostedFeesFullRangePoolResources,
+    BoostedFeesFullRangePoolState, BoostedFeesFullRangePoolTypeConfig,
+};
+use crate::quoting::pools::boosted_fees::stableswap::{
+    BoostedFeesStableswapPool, BoostedFeesStableswapPoolConfig,
+    BoostedFeesStableswapPoolConstructionError, BoostedFeesStableswapPoolKey,
+    BoostedFeesStableswapPoolQuoteError, BoostedFeesStableswapPoolResources,
+    BoostedFeesStableswapPoolState, BoostedFeesStableswapPoolTypeConfig,
+};
 use crate::quoting::pools::full_range::{
     FullRangePool, FullRangePoolConfig, FullRangePoolConstructionError, FullRangePoolKey,
     FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState, FullRangePoolTypeConfig,
@@ -89,6 +107,34 @@ pub type EvmTwammPoolQuoteError = TwammPoolQuoteError<FullRangePoolQuoteError>;
 pub type EvmTwammPoolResources = TwammPoolResources<FullRangePoolResources>;
 pub type EvmTwammPoolState = TwammPoolState<FullRangePoolState>;
 pub type EvmTwammPoolTypeConfig = TwammPoolTypeConfig<Evm>;
+
+pub type EvmBoostedFeesConcentratedPoolConstructionError =
+    BoostedFeesConcentratedPoolConstructionError;
+pub type EvmBoostedFeesConcentratedPoolTypeConfig = BoostedFeesConcentratedPoolTypeConfig;
+pub type EvmBoostedFeesConcentratedPoolKey = BoostedFeesConcentratedPoolKey;
+pub type EvmBoostedFeesConcentratedPoolConfig<P> = BoostedFeesConcentratedPoolConfig<P>;
+pub type EvmBoostedFeesConcentratedPool = BoostedFeesConcentratedPool;
+pub type EvmBoostedFeesConcentratedPoolResources = BoostedFeesConcentratedPoolResources;
+pub type EvmBoostedFeesConcentratedPoolState = BoostedFeesConcentratedPoolState;
+pub type EvmBoostedFeesConcentratedPoolQuoteError = BoostedFeesConcentratedPoolQuoteError;
+
+pub type EvmBoostedFeesFullRangePool = BoostedFeesFullRangePool;
+pub type EvmBoostedFeesFullRangePoolConstructionError = BoostedFeesFullRangePoolConstructionError;
+pub type EvmBoostedFeesFullRangePoolConfig = BoostedFeesFullRangePoolConfig;
+pub type EvmBoostedFeesFullRangePoolKey = BoostedFeesFullRangePoolKey;
+pub type EvmBoostedFeesFullRangePoolQuoteError = BoostedFeesFullRangePoolQuoteError;
+pub type EvmBoostedFeesFullRangePoolResources = BoostedFeesFullRangePoolResources;
+pub type EvmBoostedFeesFullRangePoolState = BoostedFeesFullRangePoolState;
+pub type EvmBoostedFeesFullRangePoolTypeConfig = BoostedFeesFullRangePoolTypeConfig;
+
+pub type EvmBoostedFeesStableswapPool = BoostedFeesStableswapPool;
+pub type EvmBoostedFeesStableswapPoolConstructionError = BoostedFeesStableswapPoolConstructionError;
+pub type EvmBoostedFeesStableswapPoolConfig = BoostedFeesStableswapPoolConfig;
+pub type EvmBoostedFeesStableswapPoolKey = BoostedFeesStableswapPoolKey;
+pub type EvmBoostedFeesStableswapPoolResources = BoostedFeesStableswapPoolResources;
+pub type EvmBoostedFeesStableswapPoolState = BoostedFeesStableswapPoolState;
+pub type EvmBoostedFeesStableswapPoolQuoteError = BoostedFeesStableswapPoolQuoteError;
+pub type EvmBoostedFeesStableswapPoolTypeConfig = BoostedFeesStableswapPoolTypeConfig;
 
 pub const EVM_NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
 pub const EVM_MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
