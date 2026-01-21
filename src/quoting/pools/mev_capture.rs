@@ -56,11 +56,19 @@ pub struct MevCapturePoolState {
 /// Resources consumed during MEV-capture quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct MevCapturePoolResources {
+pub struct MevCaptureStandalonePoolResources {
     /// Count of state updates (time syncs).
     pub state_update_count: u32,
+}
+
+/// Resources consumed during MEV-capture quote execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MevCapturePoolResources {
     /// Resources consumed by the underlying base pool.
-    pub base_pool_resources: BasePoolResources,
+    pub base: BasePoolResources,
+    /// Resources added by the MEV-capture wrapper.
+    pub mev_capture: MevCaptureStandalonePoolResources,
 }
 
 /// Errors that can occur when constructing a [`MevCapturePool`].
@@ -205,8 +213,10 @@ impl Pool for MevCapturePool {
                     calculated_amount,
                     consumed_amount: quote.consumed_amount,
                     execution_resources: MevCapturePoolResources {
-                        state_update_count,
-                        base_pool_resources: quote.execution_resources,
+                        base: quote.execution_resources,
+                        mev_capture: MevCaptureStandalonePoolResources {
+                            state_update_count,
+                        },
                     },
                     fees_paid: quote.fees_paid,
                     is_price_increasing: quote.is_price_increasing,

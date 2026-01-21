@@ -16,6 +16,7 @@ use crate::quoting::pools::boosted_fees::concentrated::{
     BoostedFeesConcentratedPoolConstructionError, BoostedFeesConcentratedPoolKey,
     BoostedFeesConcentratedPoolQuoteError, BoostedFeesConcentratedPoolResources,
     BoostedFeesConcentratedPoolState, BoostedFeesConcentratedPoolTypeConfig,
+    BoostedFeesConcentratedStandalonePoolResources,
 };
 use crate::quoting::pools::boosted_fees::full_range::{
     BoostedFeesFullRangePool, BoostedFeesFullRangePoolConfig,
@@ -36,10 +37,11 @@ use crate::quoting::pools::full_range::{
 use crate::quoting::pools::mev_capture::{
     MevCapturePool, MevCapturePoolConfig, MevCapturePoolConstructionError, MevCapturePoolKey,
     MevCapturePoolResources, MevCapturePoolState, MevCapturePoolTypeConfig,
+    MevCaptureStandalonePoolResources,
 };
 use crate::quoting::pools::oracle::{
     OraclePool, OraclePoolConfig, OraclePoolConstructionError, OraclePoolKey, OraclePoolResources,
-    OraclePoolState, OraclePoolTypeConfig,
+    OraclePoolState, OraclePoolTypeConfig, OracleStandalonePoolResources,
 };
 use crate::quoting::pools::stableswap::{
     StableswapPool, StableswapPoolConfig, StableswapPoolConstructionError, StableswapPoolKey,
@@ -48,7 +50,7 @@ use crate::quoting::pools::stableswap::{
 };
 use crate::quoting::pools::twamm::{
     TwammPool, TwammPoolConfig, TwammPoolConstructionError, TwammPoolKey, TwammPoolQuoteError,
-    TwammPoolResources, TwammPoolState, TwammPoolTypeConfig,
+    TwammPoolResources, TwammPoolState, TwammPoolTypeConfig, TwammStandalonePoolResources,
 };
 use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
@@ -86,6 +88,7 @@ pub type EvmMevCapturePoolConfig = MevCapturePoolConfig;
 pub type EvmMevCapturePoolKey = MevCapturePoolKey;
 pub type EvmMevCapturePoolQuoteError = BasePoolQuoteError;
 pub type EvmMevCapturePoolResources = MevCapturePoolResources;
+pub type EvmMevCaptureStandalonePoolResources = MevCaptureStandalonePoolResources;
 pub type EvmMevCapturePoolState = MevCapturePoolState;
 pub type EvmMevCapturePoolTypeConfig = MevCapturePoolTypeConfig;
 
@@ -96,6 +99,7 @@ pub type EvmOraclePoolConfig = OraclePoolConfig<Evm>;
 pub type EvmOraclePoolKey = OraclePoolKey<Evm>;
 pub type EvmOraclePoolQuoteError = FullRangePoolQuoteError;
 pub type EvmOraclePoolResources = OraclePoolResources<FullRangePoolResources>;
+pub type EvmOracleStandalonePoolResources = OracleStandalonePoolResources;
 pub type EvmOraclePoolState = OraclePoolState<FullRangePoolState>;
 pub type EvmOraclePoolTypeConfig = OraclePoolTypeConfig<Evm>;
 
@@ -105,6 +109,7 @@ pub type EvmTwammPoolConfig = TwammPoolConfig<Evm>;
 pub type EvmTwammPoolKey = TwammPoolKey<Evm>;
 pub type EvmTwammPoolQuoteError = TwammPoolQuoteError<FullRangePoolQuoteError>;
 pub type EvmTwammPoolResources = TwammPoolResources<FullRangePoolResources>;
+pub type EvmTwammStandalonePoolResources = TwammStandalonePoolResources;
 pub type EvmTwammPoolState = TwammPoolState<FullRangePoolState>;
 pub type EvmTwammPoolTypeConfig = TwammPoolTypeConfig<Evm>;
 
@@ -115,6 +120,8 @@ pub type EvmBoostedFeesConcentratedPoolKey = BoostedFeesConcentratedPoolKey;
 pub type EvmBoostedFeesConcentratedPoolConfig<P> = BoostedFeesConcentratedPoolConfig<P>;
 pub type EvmBoostedFeesConcentratedPool = BoostedFeesConcentratedPool;
 pub type EvmBoostedFeesConcentratedPoolResources = BoostedFeesConcentratedPoolResources;
+pub type EvmBoostedFeesConcentratedStandalonePoolResources =
+    BoostedFeesConcentratedStandalonePoolResources;
 pub type EvmBoostedFeesConcentratedPoolState = BoostedFeesConcentratedPoolState;
 pub type EvmBoostedFeesConcentratedPoolQuoteError = BoostedFeesConcentratedPoolQuoteError;
 

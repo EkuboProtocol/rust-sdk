@@ -1,5 +1,8 @@
 use crate::chain::Chain;
-use crate::quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams};
+use crate::quoting::types::{
+    BlockTimestamp, LastTimeInfo, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TimeRateDelta,
+};
+use crate::quoting::util::real_last_time;
 use crate::{private, quoting::types::PoolState};
 
 use alloc::vec::Vec;
@@ -19,10 +22,10 @@ use crate::quoting::pools::base::BasePool;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedPool {
     underlying_pool: BasePool<Evm>,
-    last_donation_time: u32,
-    token0_donation_rate: u128,
-    token1_donation_rate: u128,
-    donation_rate_deltas: Vec<BoostedFeesConcentratedDonationRateDelta>,
+    last_donate_time: u32,
+    donate_rate0: u128,
+    donate_rate1: u128,
+    donate_rate_deltas: Vec<TimeRateDelta>,
 }
 
 pub type BoostedFeesConcentratedPoolTypeConfig = <BasePool<Evm> as Pool>::PoolTypeConfig;
@@ -37,31 +40,29 @@ pub type BoostedFeesConcentratedPoolConfig<P> =
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedPoolState {
-    pub underlying_pool_state: EvmBasePoolState,
-    pub last_donation_time: u32,
-    pub token0_donation_rate: u128,
-    pub token1_donation_rate: u128,
+    pub base_pool_state: EvmBasePoolState,
+    pub last_donate_time: u32,
+    pub donate_rate0: u128,
+    pub donate_rate1: u128,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BoostedFeesConcentratedPoolResources {
-    pub underlying_pool_resources: EvmBasePoolResources,
+pub struct BoostedFeesConcentratedStandalonePoolResources {
     /// The number of seconds that passed since the last donation accumulation
-    pub virtual_donation_seconds_executed: u32,
+    pub virtual_donate_seconds_executed: u32,
     /// The amount of donate rate updates that were applied
-    pub virtual_donation_delta_times_crossed: u32,
+    pub virtual_donate_delta_times_crossed: u32,
     /// Whether the donations were executed or not (for a single swap, 1 or 0)
     pub virtual_donations_executed: u32,
     pub fees_accumulated: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BoostedFeesConcentratedDonationRateDelta {
-    pub time: u64,
-    pub token0_donation_rate_delta: i128,
-    pub token1_donation_rate_delta: i128,
+pub struct BoostedFeesConcentratedPoolResources {
+    pub base: EvmBasePoolResources,
+    pub boosted_fees: BoostedFeesConcentratedStandalonePoolResources,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
@@ -76,61 +77,29 @@ pub enum BoostedFeesConcentratedPoolConstructionError {
     IncorrectPoolType,
 }
 
-#[derive(Debug, Clone, Copy, Hash)]
-pub enum LastTimeInfo {
-    Stored { stored: u32, current: u64 },
-    Real(u64),
-}
-
-pub fn real_last_time(stored: u32, current: u64) -> u64 {
-    current - (current.wrapping_sub(stored.into()) & u64::from(u32::MAX))
-}
-
-impl LastTimeInfo {
-    pub fn stored_time(self) -> u32 {
-        match self {
-            Self::Stored { stored, current: _ } => stored,
-            Self::Real(real) => real as u32,
-        }
-    }
-
-    pub fn real_time(self) -> u64 {
-        match self {
-            Self::Stored { stored, current } => {
-                current - (current.wrapping_sub(stored.into()) & u64::from(u32::MAX))
-            }
-            Self::Real(real) => real,
-        }
-    }
-}
-
 impl BoostedFeesConcentratedPool {
     pub fn new(
         underlying_pool: BasePool<Evm>,
-        last_donation_time_info: LastTimeInfo,
-        token0_donation_rate: u128,
-        token1_donation_rate: u128,
-        donation_rate_deltas: Vec<BoostedFeesConcentratedDonationRateDelta>,
+        last_donate_time_info: LastTimeInfo,
+        donate_rate0: u128,
+        donate_rate1: u128,
+        donate_rate_deltas: Vec<TimeRateDelta>,
     ) -> Result<Self, BoostedFeesConcentratedPoolConstructionError> {
-        let mut last_time = last_donation_time_info.real_time();
-        let mut dr0 = token0_donation_rate;
-        let mut dr1 = token1_donation_rate;
+        let mut last_time = last_donate_time_info.real_time();
+        let mut dr0 = donate_rate0;
+        let mut dr1 = donate_rate1;
 
-        for delta in &donation_rate_deltas {
+        for delta in &donate_rate_deltas {
             if delta.time <= last_time {
                 return Err(BoostedFeesConcentratedPoolConstructionError::DonateRateDeltasInvalid);
             }
             last_time = delta.time;
 
-            dr0 = dr0
-                .checked_add_signed(delta.token0_donation_rate_delta)
-                .ok_or(
+            dr0 = dr0.checked_add_signed(delta.rate_delta0).ok_or(
                 BoostedFeesConcentratedPoolConstructionError::DonateRateDeltasOverflowOrUnderflow,
             )?;
 
-            dr1 = dr1
-                .checked_add_signed(delta.token1_donation_rate_delta)
-                .ok_or(
+            dr1 = dr1.checked_add_signed(delta.rate_delta1).ok_or(
                 BoostedFeesConcentratedPoolConstructionError::DonateRateDeltasOverflowOrUnderflow,
             )?;
         }
@@ -141,15 +110,15 @@ impl BoostedFeesConcentratedPool {
 
         Ok(Self {
             underlying_pool,
-            last_donation_time: last_donation_time_info.stored_time(),
-            token0_donation_rate,
-            token1_donation_rate,
-            donation_rate_deltas,
+            last_donate_time: last_donate_time_info.stored_time(),
+            donate_rate0,
+            donate_rate1,
+            donate_rate_deltas,
         })
     }
 
-    pub fn donation_rate_deltas(&self) -> &Vec<BoostedFeesConcentratedDonationRateDelta> {
-        &self.donation_rate_deltas
+    pub fn donate_rate_deltas(&self) -> &Vec<TimeRateDelta> {
+        &self.donate_rate_deltas
     }
 }
 
@@ -174,10 +143,10 @@ impl Pool for BoostedFeesConcentratedPool {
 
     fn state(&self) -> Self::State {
         BoostedFeesConcentratedPoolState {
-            underlying_pool_state: self.underlying_pool.state(),
-            last_donation_time: self.last_donation_time,
-            token0_donation_rate: self.token0_donation_rate,
-            token1_donation_rate: self.token1_donation_rate,
+            base_pool_state: self.underlying_pool.state(),
+            last_donate_time: self.last_donate_time,
+            donate_rate0: self.donate_rate0,
+            donate_rate1: self.donate_rate1,
         }
     }
 
@@ -191,40 +160,37 @@ impl Pool for BoostedFeesConcentratedPool {
         }: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let BoostedFeesConcentratedPoolState {
-            underlying_pool_state,
-            last_donation_time,
-            mut token0_donation_rate,
-            mut token1_donation_rate,
+            base_pool_state: underlying_pool_state,
+            last_donate_time,
+            mut donate_rate0,
+            mut donate_rate1,
         } = override_state.unwrap_or_else(|| self.state());
 
-        let mut virtual_donation_deltas_crossed = 0;
+        let mut virtual_donate_delta_times_crossed = 0;
         let mut fees_accumulated = false;
-        let real_last_donation_time;
+        let real_last_donate_time;
 
-        if current_time as u32 != last_donation_time {
-            real_last_donation_time = real_last_time(last_donation_time, current_time);
-            let mut time = real_last_donation_time;
+        if current_time as u32 != last_donate_time {
+            real_last_donate_time = real_last_time(last_donate_time, current_time);
+            let mut time = real_last_donate_time;
 
             for delta in self
-                .donation_rate_deltas
+                .donate_rate_deltas
                 .iter()
-                .skip_while(|delta| delta.time <= real_last_donation_time)
+                .skip_while(|delta| delta.time <= real_last_donate_time)
                 .take_while(|delta| delta.time <= current_time)
             {
-                fees_accumulated |=
-                    (((token0_donation_rate * u128::from(delta.time - time)) >> 32) != 0)
-                        || (((token1_donation_rate * u128::from(delta.time - time)) >> 32) != 0);
+                fees_accumulated |= (((donate_rate0 * u128::from(delta.time - time)) >> 32) != 0)
+                    || (((donate_rate1 * u128::from(delta.time - time)) >> 32) != 0);
 
-                token0_donation_rate =
-                    token0_donation_rate.strict_add_signed(delta.token0_donation_rate_delta);
-                token1_donation_rate =
-                    token1_donation_rate.strict_add_signed(delta.token1_donation_rate_delta);
+                donate_rate0 = donate_rate0.strict_add_signed(delta.rate_delta0);
+                donate_rate1 = donate_rate1.strict_add_signed(delta.rate_delta1);
 
                 time = delta.time;
-                virtual_donation_deltas_crossed += 1;
+                virtual_donate_delta_times_crossed += 1;
             }
         } else {
-            real_last_donation_time = current_time;
+            real_last_donate_time = current_time;
         }
 
         let Quote {
@@ -250,17 +216,19 @@ impl Pool for BoostedFeesConcentratedPool {
             calculated_amount,
             fees_paid,
             execution_resources: BoostedFeesConcentratedPoolResources {
-                underlying_pool_resources: underlying_execution_resources,
-                virtual_donation_seconds_executed: (current_time - real_last_donation_time) as u32,
-                virtual_donation_delta_times_crossed: virtual_donation_deltas_crossed,
-                virtual_donations_executed: u32::from(current_time != real_last_donation_time),
-                fees_accumulated: u32::from(fees_accumulated),
+                base: underlying_execution_resources,
+                boosted_fees: BoostedFeesConcentratedStandalonePoolResources {
+                    virtual_donate_seconds_executed: (current_time - real_last_donate_time) as u32,
+                    virtual_donate_delta_times_crossed,
+                    virtual_donations_executed: u32::from(current_time != real_last_donate_time),
+                    fees_accumulated: u32::from(fees_accumulated),
+                },
             },
             state_after: BoostedFeesConcentratedPoolState {
-                underlying_pool_state: underlying_state_after,
-                last_donation_time: current_time as u32,
-                token0_donation_rate,
-                token1_donation_rate,
+                base_pool_state: underlying_state_after,
+                last_donate_time: current_time as u32,
+                donate_rate0,
+                donate_rate1,
             },
         })
     }
@@ -284,11 +252,11 @@ impl Pool for BoostedFeesConcentratedPool {
 
 impl PoolState for BoostedFeesConcentratedPoolState {
     fn sqrt_ratio(&self) -> U256 {
-        self.underlying_pool_state.sqrt_ratio()
+        self.base_pool_state.sqrt_ratio()
     }
 
     fn liquidity(&self) -> u128 {
-        self.underlying_pool_state.liquidity()
+        self.base_pool_state.liquidity()
     }
 }
 
@@ -339,17 +307,17 @@ mod tests {
     }
 
     fn boosted_pool(
-        last_donation_time_info: LastTimeInfo,
-        token0_donation_rate: u128,
-        token1_donation_rate: u128,
-        donation_rate_deltas: Vec<BoostedFeesConcentratedDonationRateDelta>,
+        last_donated_time_info: LastTimeInfo,
+        donate_rate0: u128,
+        donate_rate1: u128,
+        donate_rate_deltas: Vec<TimeRateDelta>,
     ) -> BoostedFeesConcentratedPool {
         BoostedFeesConcentratedPool::new(
             base_pool(1_000_000),
-            last_donation_time_info,
-            token0_donation_rate,
-            token1_donation_rate,
-            donation_rate_deltas,
+            last_donated_time_info,
+            donate_rate0,
+            donate_rate1,
+            donate_rate_deltas,
         )
         .expect("boosted fees pool construction succeeds")
     }
@@ -375,29 +343,23 @@ mod tests {
         let pool = boosted_pool(LastTimeInfo::Real(100), 0, 0, vec![]);
         let quote = quote_at(&pool, 100);
 
-        let BoostedFeesConcentratedPoolResources {
-            virtual_donation_seconds_executed,
-            virtual_donation_delta_times_crossed,
-            virtual_donations_executed,
-            fees_accumulated,
-            underlying_pool_resources: _,
-        } = quote.execution_resources;
+        let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(virtual_donation_seconds_executed, 0);
-        assert_eq!(virtual_donation_delta_times_crossed, 0);
-        assert_eq!(virtual_donations_executed, 0);
-        assert_eq!(fees_accumulated, 0);
+        assert_eq!(resources.virtual_donate_seconds_executed, 0);
+        assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
+        assert_eq!(resources.virtual_donations_executed, 0);
+        assert_eq!(resources.fees_accumulated, 0);
 
         let BoostedFeesConcentratedPoolState {
-            underlying_pool_state: _,
-            last_donation_time,
-            token0_donation_rate,
-            token1_donation_rate,
+            base_pool_state: _,
+            last_donate_time,
+            donate_rate0,
+            donate_rate1,
         } = quote.state_after;
 
-        assert_eq!(last_donation_time, 100);
-        assert_eq!(token0_donation_rate, 0);
-        assert_eq!(token1_donation_rate, 0);
+        assert_eq!(last_donate_time, 100);
+        assert_eq!(donate_rate0, 0);
+        assert_eq!(donate_rate1, 0);
     }
 
     #[test]
@@ -405,29 +367,23 @@ mod tests {
         let pool = boosted_pool(LastTimeInfo::Real(100), 0, 0, vec![]);
         let quote = quote_at(&pool, 150);
 
-        let BoostedFeesConcentratedPoolResources {
-            virtual_donation_seconds_executed,
-            virtual_donation_delta_times_crossed,
-            virtual_donations_executed,
-            fees_accumulated,
-            underlying_pool_resources: _,
-        } = quote.execution_resources;
+        let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(virtual_donation_seconds_executed, 50);
-        assert_eq!(virtual_donation_delta_times_crossed, 0);
-        assert_eq!(virtual_donations_executed, 1);
-        assert_eq!(fees_accumulated, 0);
+        assert_eq!(resources.virtual_donate_seconds_executed, 50);
+        assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
+        assert_eq!(resources.virtual_donations_executed, 1);
+        assert_eq!(resources.fees_accumulated, 0);
 
         let BoostedFeesConcentratedPoolState {
-            underlying_pool_state: _,
-            last_donation_time,
-            token0_donation_rate,
-            token1_donation_rate,
+            base_pool_state: _,
+            last_donate_time,
+            donate_rate0,
+            donate_rate1,
         } = quote.state_after;
 
-        assert_eq!(last_donation_time, 150);
-        assert_eq!(token0_donation_rate, 0);
-        assert_eq!(token1_donation_rate, 0);
+        assert_eq!(last_donate_time, 150);
+        assert_eq!(donate_rate0, 0);
+        assert_eq!(donate_rate1, 0);
     }
 
     #[test]
@@ -437,38 +393,32 @@ mod tests {
             LastTimeInfo::Real(0),
             rate,
             0,
-            vec![BoostedFeesConcentratedDonationRateDelta {
+            vec![TimeRateDelta {
                 time: 200,
-                token0_donation_rate_delta: -(rate as i128),
-                token1_donation_rate_delta: 0,
+                rate_delta0: -(rate as i128),
+                rate_delta1: 0,
             }],
         );
 
         let quote = quote_at(&pool, 300);
 
-        let BoostedFeesConcentratedPoolResources {
-            virtual_donation_seconds_executed,
-            virtual_donation_delta_times_crossed,
-            virtual_donations_executed,
-            fees_accumulated,
-            underlying_pool_resources: _,
-        } = quote.execution_resources;
+        let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(virtual_donation_seconds_executed, 300);
-        assert_eq!(virtual_donation_delta_times_crossed, 1);
-        assert_eq!(virtual_donations_executed, 1);
-        assert_eq!(fees_accumulated, 1);
+        assert_eq!(resources.virtual_donate_seconds_executed, 300);
+        assert_eq!(resources.virtual_donate_delta_times_crossed, 1);
+        assert_eq!(resources.virtual_donations_executed, 1);
+        assert_eq!(resources.fees_accumulated, 1);
 
         let BoostedFeesConcentratedPoolState {
-            underlying_pool_state: _,
-            last_donation_time,
-            token0_donation_rate,
-            token1_donation_rate,
+            base_pool_state: _,
+            last_donate_time,
+            donate_rate0,
+            donate_rate1,
         } = quote.state_after;
 
-        assert_eq!(last_donation_time, 300);
-        assert_eq!(token0_donation_rate, 0);
-        assert_eq!(token1_donation_rate, 0);
+        assert_eq!(last_donate_time, 300);
+        assert_eq!(donate_rate0, 0);
+        assert_eq!(donate_rate1, 0);
     }
 
     #[test]
@@ -479,43 +429,37 @@ mod tests {
             0,
             0,
             vec![
-                BoostedFeesConcentratedDonationRateDelta {
+                TimeRateDelta {
                     time: 200,
-                    token0_donation_rate_delta: rate as i128,
-                    token1_donation_rate_delta: 0,
+                    rate_delta0: rate as i128,
+                    rate_delta1: 0,
                 },
-                BoostedFeesConcentratedDonationRateDelta {
+                TimeRateDelta {
                     time: 300,
-                    token0_donation_rate_delta: -(rate as i128),
-                    token1_donation_rate_delta: 0,
+                    rate_delta0: -(rate as i128),
+                    rate_delta1: 0,
                 },
             ],
         );
 
         let quote = quote_at(&pool, 150);
 
-        let BoostedFeesConcentratedPoolResources {
-            virtual_donation_seconds_executed,
-            virtual_donation_delta_times_crossed,
-            virtual_donations_executed,
-            fees_accumulated,
-            underlying_pool_resources: _,
-        } = quote.execution_resources;
+        let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(virtual_donation_seconds_executed, 50);
-        assert_eq!(virtual_donation_delta_times_crossed, 0);
-        assert_eq!(virtual_donations_executed, 1);
-        assert_eq!(fees_accumulated, 0);
+        assert_eq!(resources.virtual_donate_seconds_executed, 50);
+        assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
+        assert_eq!(resources.virtual_donations_executed, 1);
+        assert_eq!(resources.fees_accumulated, 0);
 
         let BoostedFeesConcentratedPoolState {
-            underlying_pool_state: _,
-            last_donation_time,
-            token0_donation_rate,
-            token1_donation_rate,
+            base_pool_state: _,
+            last_donate_time,
+            donate_rate0,
+            donate_rate1,
         } = quote.state_after;
 
-        assert_eq!(last_donation_time, 150);
-        assert_eq!(token0_donation_rate, 0);
-        assert_eq!(token1_donation_rate, 0);
+        assert_eq!(last_donate_time, 150);
+        assert_eq!(donate_rate0, 0);
+        assert_eq!(donate_rate1, 0);
     }
 }

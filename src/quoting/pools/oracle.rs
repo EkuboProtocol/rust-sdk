@@ -20,11 +20,19 @@ pub struct OraclePoolState<S> {
 /// Resources consumed during oracle quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct OraclePoolResources<R> {
-    /// Resources consumed by the underlying full range pool.
-    pub full_range_pool_resources: R,
+pub struct OracleStandalonePoolResources {
     /// Number of snapshots written.
     pub snapshots_written: u32,
+}
+
+/// Resources consumed during oracle quote execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct OraclePoolResources<R> {
+    /// Resources consumed by the underlying full range pool.
+    pub full_range: R,
+    /// Resources added by the oracle extension.
+    pub oracle: OracleStandalonePoolResources,
 }
 
 /// Unique identifier for an [`OraclePool`].
@@ -116,8 +124,10 @@ impl<C: Chain> Pool for OraclePool<C> {
             calculated_amount: result.calculated_amount,
             consumed_amount: result.consumed_amount,
             execution_resources: OraclePoolResources {
-                snapshots_written: u32::from(pool_time != block_time),
-                full_range_pool_resources: result.execution_resources,
+                full_range: result.execution_resources,
+                oracle: OracleStandalonePoolResources {
+                    snapshots_written: u32::from(pool_time != block_time),
+                },
             },
             fees_paid: result.fees_paid,
             is_price_increasing: result.is_price_increasing,
@@ -264,7 +274,7 @@ mod tests {
             (
                 quote.calculated_amount,
                 quote.consumed_amount,
-                quote.execution_resources.snapshots_written,
+                quote.execution_resources.oracle.snapshots_written,
                 quote.state_after.last_snapshot_time
             ),
             (999, 1000, 1, 2)
@@ -290,7 +300,7 @@ mod tests {
             (
                 quote.calculated_amount,
                 quote.consumed_amount,
-                quote.execution_resources.snapshots_written,
+                quote.execution_resources.oracle.snapshots_written,
                 quote.state_after.last_snapshot_time
             ),
             (999, 1000, 1, 2)

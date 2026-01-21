@@ -12,11 +12,11 @@ use crate::quoting::pools::base::{
 };
 use crate::quoting::pools::limit_order::{
     LimitOrderPool, LimitOrderPoolConfig, LimitOrderPoolConstructionError, LimitOrderPoolKey,
-    LimitOrderPoolResources, LimitOrderPoolState,
+    LimitOrderPoolResources, LimitOrderPoolState, LimitOrderStandalonePoolResources,
 };
 use crate::quoting::pools::oracle::{
     OraclePool, OraclePoolConfig, OraclePoolConstructionError, OraclePoolKey, OraclePoolResources,
-    OraclePoolState, OraclePoolTypeConfig,
+    OraclePoolState, OraclePoolTypeConfig, OracleStandalonePoolResources,
 };
 use crate::quoting::pools::spline::{
     SplinePool, SplinePoolConfig, SplinePoolKey, SplinePoolQuoteError, SplinePoolResources,
@@ -24,7 +24,7 @@ use crate::quoting::pools::spline::{
 };
 use crate::quoting::pools::twamm::{
     TwammPool, TwammPoolConfig, TwammPoolConstructionError, TwammPoolKey, TwammPoolQuoteError,
-    TwammPoolResources, TwammPoolState, TwammPoolTypeConfig,
+    TwammPoolResources, TwammPoolState, TwammPoolTypeConfig, TwammStandalonePoolResources,
 };
 use crate::quoting::types::{PoolConfig, PoolKey, Tick, TokenAmount};
 
@@ -44,6 +44,7 @@ pub type StarknetLimitOrderPoolConfig = LimitOrderPoolConfig;
 pub type StarknetLimitOrderPoolKey = LimitOrderPoolKey;
 pub type StarknetLimitOrderPoolQuoteError = BasePoolQuoteError;
 pub type StarknetLimitOrderPoolResources = LimitOrderPoolResources;
+pub type StarknetLimitOrderStandalonePoolResources = LimitOrderStandalonePoolResources;
 pub type StarknetLimitOrderPoolState = LimitOrderPoolState;
 
 pub type StarknetOraclePool = OraclePool<Starknet>;
@@ -53,6 +54,7 @@ pub type StarknetOraclePoolConfig = OraclePoolConfig<Starknet>;
 pub type StarknetOraclePoolKey = OraclePoolKey<Starknet>;
 pub type StarknetOraclePoolQuoteError = BasePoolQuoteError;
 pub type StarknetOraclePoolResources = OraclePoolResources<BasePoolResources>;
+pub type StarknetOracleStandalonePoolResources = OracleStandalonePoolResources;
 pub type StarknetOraclePoolState = OraclePoolState<BasePoolState>;
 pub type StarknetOraclePoolTypeConfig = OraclePoolTypeConfig<Starknet>;
 
@@ -71,6 +73,7 @@ pub type StarknetTwammPoolConfig = TwammPoolConfig<Starknet>;
 pub type StarknetTwammPoolKey = TwammPoolKey<Starknet>;
 pub type StarknetTwammPoolQuoteError = TwammPoolQuoteError<BasePoolQuoteError>;
 pub type StarknetTwammPoolResources = TwammPoolResources<BasePoolResources>;
+pub type StarknetTwammStandalonePoolResources = TwammStandalonePoolResources;
 pub type StarknetTwammPoolState = TwammPoolState<BasePoolState>;
 pub type StarknetTwammPoolTypeConfig = TwammPoolTypeConfig<Starknet>;
 

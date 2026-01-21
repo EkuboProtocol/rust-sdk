@@ -1,5 +1,5 @@
 use crate::quoting::types::{
-    BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount,
+    BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TimeRateDelta, TokenAmount,
 };
 use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
 use crate::{private, quoting::types::PoolState};
@@ -18,7 +18,7 @@ pub struct TwammPool<C: Chain> {
     token0_sale_rate: u128,
     token1_sale_rate: u128,
     last_execution_time: u64,
-    virtual_order_deltas: Vec<TwammSaleRateDelta>,
+    virtual_order_deltas: Vec<TimeRateDelta>,
 }
 
 pub type TwammPoolTypeConfig<C> = <<C as Chain>::FullRangePool as Pool>::PoolTypeConfig;
@@ -38,8 +38,7 @@ pub struct TwammPoolState<S> {
 
 #[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TwammPoolResources<R> {
-    pub full_range_pool_resources: R,
+pub struct TwammStandalonePoolResources {
     /// The number of seconds that passed since the last virtual order execution
     pub virtual_order_seconds_executed: u32,
     /// The amount of order updates that were applied to the sale rate
@@ -48,12 +47,11 @@ pub struct TwammPoolResources<R> {
     pub virtual_orders_executed: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TwammSaleRateDelta {
-    pub time: u64,
-    pub sale_rate_delta0: i128,
-    pub sale_rate_delta1: i128,
+pub struct TwammPoolResources<R> {
+    pub full_range: R,
+    pub twamm: TwammStandalonePoolResources,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
@@ -84,31 +82,25 @@ impl<C: Chain> TwammPool<C> {
         last_execution_time: u64,
         token0_sale_rate: u128,
         token1_sale_rate: u128,
-        virtual_order_deltas: Vec<TwammSaleRateDelta>,
+        virtual_order_deltas: Vec<TimeRateDelta>,
     ) -> Result<Self, TwammPoolConstructionError<C::FullRangePoolConstructionError>> {
         let mut last_time = last_execution_time;
         let mut sr0: u128 = token0_sale_rate;
         let mut sr1: u128 = token1_sale_rate;
 
-        for t in &virtual_order_deltas {
-            if t.time <= last_time {
+        for delta in &virtual_order_deltas {
+            if delta.time <= last_time {
                 return Err(TwammPoolConstructionError::SaleRateDeltasInvalid);
             }
-            last_time = t.time;
+            last_time = delta.time;
 
-            sr0 = if t.sale_rate_delta0 < 0 {
-                sr0.checked_sub(t.sale_rate_delta0.unsigned_abs())
-            } else {
-                sr0.checked_add(t.sale_rate_delta0.unsigned_abs())
-            }
-            .ok_or(TwammPoolConstructionError::SaleRateDeltasOverflowOrUnderflow)?;
+            sr0 = sr0
+                .checked_add_signed(delta.rate_delta0)
+                .ok_or(TwammPoolConstructionError::SaleRateDeltasOverflowOrUnderflow)?;
 
-            sr1 = if t.sale_rate_delta1 < 0 {
-                sr1.checked_sub(t.sale_rate_delta1.unsigned_abs())
-            } else {
-                sr1.checked_add(t.sale_rate_delta1.unsigned_abs())
-            }
-            .ok_or(TwammPoolConstructionError::SaleRateDeltasOverflowOrUnderflow)?;
+            sr1 = sr1
+                .checked_add_signed(delta.rate_delta1)
+                .ok_or(TwammPoolConstructionError::SaleRateDeltasOverflowOrUnderflow)?;
         }
 
         if !(sr0.is_zero() && sr1.is_zero()) {
@@ -142,7 +134,7 @@ impl<C: Chain> TwammPool<C> {
     }
 
     /// Returns the list of sale rate deltas
-    pub fn sale_rate_deltas(&self) -> &Vec<TwammSaleRateDelta> {
+    pub fn sale_rate_deltas(&self) -> &Vec<TimeRateDelta> {
         &self.virtual_order_deltas
     }
 }
@@ -318,15 +310,15 @@ impl<C: Chain> Pool for TwammPool<C> {
 
             if let Some(next_delta) = sale_rate_delta {
                 if next_delta.time == next_execution_time {
-                    token0_sale_rate = if next_delta.sale_rate_delta0 < 0 {
-                        token0_sale_rate - next_delta.sale_rate_delta0.unsigned_abs()
+                    token0_sale_rate = if next_delta.rate_delta0 < 0 {
+                        token0_sale_rate - next_delta.rate_delta0.unsigned_abs()
                     } else {
-                        token0_sale_rate + next_delta.sale_rate_delta0.unsigned_abs()
+                        token0_sale_rate + next_delta.rate_delta0.unsigned_abs()
                     };
-                    token1_sale_rate = if next_delta.sale_rate_delta1 < 0 {
-                        token1_sale_rate - next_delta.sale_rate_delta1.unsigned_abs()
+                    token1_sale_rate = if next_delta.rate_delta1 < 0 {
+                        token1_sale_rate - next_delta.rate_delta1.unsigned_abs()
                     } else {
-                        token1_sale_rate + next_delta.sale_rate_delta1.unsigned_abs()
+                        token1_sale_rate + next_delta.rate_delta1.unsigned_abs()
                     };
                     next_sale_rate_delta_index += 1;
                     virtual_order_delta_times_crossed += 1;
@@ -352,14 +344,16 @@ impl<C: Chain> Pool for TwammPool<C> {
             calculated_amount: final_quote.calculated_amount,
             fees_paid: final_quote.fees_paid,
             execution_resources: TwammPoolResources {
-                full_range_pool_resources: full_range_pool_execution_resources
-                    + final_quote.execution_resources,
-                virtual_order_seconds_executed: (current_time - initial_state.last_execution_time)
-                    as u32,
-                virtual_order_delta_times_crossed,
-                virtual_orders_executed: u32::from(
-                    current_time > initial_state.last_execution_time,
-                ),
+                full_range: full_range_pool_execution_resources + final_quote.execution_resources,
+                twamm: TwammStandalonePoolResources {
+                    virtual_order_seconds_executed: (current_time
+                        - initial_state.last_execution_time)
+                        as u32,
+                    virtual_order_delta_times_crossed,
+                    virtual_orders_executed: u32::from(
+                        current_time > initial_state.last_execution_time,
+                    ),
+                },
             },
             state_after: TwammPoolState {
                 full_range_pool_state: final_quote.state_after,
@@ -424,7 +418,7 @@ mod tests {
         last_execution_time: u64,
         token0_sale_rate: u128,
         token1_sale_rate: u128,
-        deltas: Vec<TwammSaleRateDelta>,
+        deltas: Vec<TimeRateDelta>,
     ) -> Result<TwammPool<C>, TwammPoolConstructionError<C::FullRangePoolConstructionError>> {
         TwammPool::new(
             C::zero_address(),
@@ -446,7 +440,7 @@ mod tests {
         last_execution_time: u64,
         token0_sale_rate: u128,
         token1_sale_rate: u128,
-        deltas: Vec<TwammSaleRateDelta>,
+        deltas: Vec<TimeRateDelta>,
     ) -> TwammPool<C> {
         try_build_pool(
             sqrt_ratio,
@@ -505,10 +499,10 @@ mod tests {
                 0,
                 0,
                 0,
-                vec![TwammSaleRateDelta {
+                vec![TimeRateDelta {
                     time: 0,
-                    sale_rate_delta0: 0,
-                    sale_rate_delta1: 0,
+                    rate_delta0: 0,
+                    rate_delta1: 0,
                 }],
             );
             assert!(matches!(
@@ -525,15 +519,15 @@ mod tests {
                 0,
                 0,
                 vec![
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: 2,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 0,
+                        rate_delta0: 0,
+                        rate_delta1: 0,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: 1,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 0,
+                        rate_delta0: 0,
+                        rate_delta1: 0,
                     },
                 ],
             );
@@ -551,15 +545,15 @@ mod tests {
                 54,
                 2,
                 vec![
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: 1,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 1,
+                        rate_delta0: 0,
+                        rate_delta1: 1,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: 2,
-                        sale_rate_delta0: 1,
-                        sale_rate_delta1: 0,
+                        rate_delta0: 1,
+                        rate_delta1: 0,
                     },
                 ],
             );
@@ -577,15 +571,15 @@ mod tests {
                 23,
                 35,
                 vec![
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: 1,
-                        sale_rate_delta0: -23,
-                        sale_rate_delta1: 0,
+                        rate_delta0: -23,
+                        rate_delta1: 0,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: 2,
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: -35,
+                        rate_delta0: 0,
+                        rate_delta1: -35,
                     },
                 ],
             );
@@ -617,8 +611,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (999, 32, 0)
         );
@@ -649,8 +649,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (990, 32, 0)
         );
@@ -663,10 +669,10 @@ mod tests {
             0,
             0,
             1 << 32,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: 0,
-                sale_rate_delta1: -(1 << 32),
+                rate_delta0: 0,
+                rate_delta1: -(1 << 32),
             }],
         );
 
@@ -685,8 +691,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (998, 32, 0)
         );
@@ -699,10 +711,10 @@ mod tests {
             0,
             1 << 32,
             0,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: -(1 << 32),
-                sale_rate_delta1: 0,
+                rate_delta0: -(1 << 32),
+                rate_delta1: 0,
             }],
         );
 
@@ -721,8 +733,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (999, 32, 0)
         );
@@ -735,10 +753,10 @@ mod tests {
             0,
             0,
             1 << 32,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: 0,
-                sale_rate_delta1: -(1 << 32),
+                rate_delta0: 0,
+                rate_delta1: -(1 << 32),
             }],
         );
 
@@ -757,8 +775,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (0, 32, 0)
         );
@@ -773,15 +797,15 @@ mod tests {
                 0,
                 1 << 32,
                 vec![
-                    TwammSaleRateDelta {
-                        sale_rate_delta0: 100_000i128 * (1 << 32),
-                        sale_rate_delta1: 0,
+                    TimeRateDelta {
+                        rate_delta0: 100_000i128 * (1 << 32),
+                        rate_delta1: 0,
                         time: 16,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: u64::MAX,
-                        sale_rate_delta0: -100_000 * (1 << 32),
-                        sale_rate_delta1: -(1 << 32),
+                        rate_delta0: -100_000 * (1 << 32),
+                        rate_delta1: -(1 << 32),
                     },
                 ],
             );
@@ -801,8 +825,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (2555, 32, 1)
             );
@@ -819,15 +849,15 @@ mod tests {
                 1 << 32,
                 0,
                 vec![
-                    TwammSaleRateDelta {
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 100_000 * (1 << 32),
+                    TimeRateDelta {
+                        rate_delta0: 0,
+                        rate_delta1: 100_000 * (1 << 32),
                         time: 16,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: u64::MAX,
-                        sale_rate_delta0: -(1 << 32),
-                        sale_rate_delta1: -100_000 * (1 << 32),
+                        rate_delta0: -(1 << 32),
+                        rate_delta1: -100_000 * (1 << 32),
                     },
                 ],
             );
@@ -847,8 +877,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (390, 32, 1)
             );
@@ -865,15 +901,15 @@ mod tests {
                 0,
                 1 << 32,
                 vec![
-                    TwammSaleRateDelta {
-                        sale_rate_delta0: 100_000 * (1 << 32),
-                        sale_rate_delta1: 0,
+                    TimeRateDelta {
+                        rate_delta0: 100_000 * (1 << 32),
+                        rate_delta1: 0,
                         time: 16,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: u64::MAX,
-                        sale_rate_delta0: -100_000 * (1 << 32),
-                        sale_rate_delta1: -(1 << 32),
+                        rate_delta0: -100_000 * (1 << 32),
+                        rate_delta1: -(1 << 32),
                     },
                 ],
             );
@@ -893,8 +929,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (390, 32, 1)
             );
@@ -911,15 +953,15 @@ mod tests {
                 1 << 32,
                 0,
                 vec![
-                    TwammSaleRateDelta {
-                        sale_rate_delta0: 0,
-                        sale_rate_delta1: 100_000 * (1 << 32),
+                    TimeRateDelta {
+                        rate_delta0: 0,
+                        rate_delta1: 100_000 * (1 << 32),
                         time: 16,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: u64::MAX,
-                        sale_rate_delta0: -(1 << 32),
-                        sale_rate_delta1: -100_000 * (1 << 32),
+                        rate_delta0: -(1 << 32),
+                        rate_delta1: -100_000 * (1 << 32),
                     },
                 ],
             );
@@ -939,8 +981,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (2555, 32, 1)
             );
@@ -954,10 +1002,10 @@ mod tests {
             0,
             1 << 32,
             1 << 32,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: -(1 << 32),
-                sale_rate_delta1: -(1 << 32),
+                rate_delta0: -(1 << 32),
+                rate_delta1: -(1 << 32),
             }],
         );
 
@@ -976,8 +1024,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (990, 32, 0)
         );
@@ -990,10 +1044,10 @@ mod tests {
             0,
             1 << 32,
             1 << 32,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: -(1 << 32),
-                sale_rate_delta1: -(1 << 32),
+                rate_delta0: -(1 << 32),
+                rate_delta1: -(1 << 32),
             }],
         );
 
@@ -1012,8 +1066,14 @@ mod tests {
         assert_eq!(
             (
                 quote.calculated_amount,
-                quote.execution_resources.virtual_order_seconds_executed,
-                quote.execution_resources.virtual_order_delta_times_crossed
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_seconds_executed,
+                quote
+                    .execution_resources
+                    .twamm
+                    .virtual_order_delta_times_crossed
             ),
             (989, 32, 0)
         );
@@ -1028,10 +1088,10 @@ mod tests {
                 0,
                 10 << 32,
                 1 << 32,
-                vec![TwammSaleRateDelta {
+                vec![TimeRateDelta {
                     time: u64::MAX,
-                    sale_rate_delta0: -(10 << 32),
-                    sale_rate_delta1: -(1 << 32),
+                    rate_delta0: -(10 << 32),
+                    rate_delta1: -(1 << 32),
                 }],
             );
 
@@ -1050,8 +1110,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (717, 32, 0)
             );
@@ -1067,10 +1133,10 @@ mod tests {
                 0,
                 1 << 32,
                 10 << 32,
-                vec![TwammSaleRateDelta {
+                vec![TimeRateDelta {
                     time: u64::MAX,
-                    sale_rate_delta0: -(1 << 32),
-                    sale_rate_delta1: -(10 << 32),
+                    rate_delta0: -(1 << 32),
+                    rate_delta1: -(10 << 32),
                 }],
             );
 
@@ -1089,8 +1155,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (984, 32, 0)
             );
@@ -1106,10 +1178,10 @@ mod tests {
                 0,
                 10 << 32,
                 1 << 32,
-                vec![TwammSaleRateDelta {
+                vec![TimeRateDelta {
                     time: u64::MAX,
-                    sale_rate_delta0: -(10 << 32),
-                    sale_rate_delta1: -(1 << 32),
+                    rate_delta0: -(10 << 32),
+                    rate_delta1: -(1 << 32),
                 }],
             );
 
@@ -1128,8 +1200,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (983, 32, 0)
             );
@@ -1145,10 +1223,10 @@ mod tests {
                 0,
                 1 << 32,
                 10 << 32,
-                vec![TwammSaleRateDelta {
+                vec![TimeRateDelta {
                     time: u64::MAX,
-                    sale_rate_delta0: -(1 << 32),
-                    sale_rate_delta1: -(10 << 32),
+                    rate_delta0: -(1 << 32),
+                    rate_delta1: -(10 << 32),
                 }],
             );
 
@@ -1167,8 +1245,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (994, 32, 0)
             );
@@ -1184,9 +1268,9 @@ mod tests {
                 0,
                 1 << 32,
                 1 << 32,
-                vec![TwammSaleRateDelta {
-                    sale_rate_delta0: -((1u128 << 32) as i128),
-                    sale_rate_delta1: -((1u128 << 32) as i128),
+                vec![TimeRateDelta {
+                    rate_delta0: -((1u128 << 32) as i128),
+                    rate_delta1: -((1u128 << 32) as i128),
                     time: 16,
                 }],
             );
@@ -1206,8 +1290,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (989, 32, 1)
             );
@@ -1224,15 +1314,15 @@ mod tests {
                 1 << 32,
                 1 << 32,
                 vec![
-                    TwammSaleRateDelta {
-                        sale_rate_delta0: (1u128 << 32) as i128,
-                        sale_rate_delta1: (1u128 << 32) as i128,
+                    TimeRateDelta {
+                        rate_delta0: (1u128 << 32) as i128,
+                        rate_delta1: (1u128 << 32) as i128,
                         time: 16,
                     },
-                    TwammSaleRateDelta {
+                    TimeRateDelta {
                         time: u64::MAX,
-                        sale_rate_delta0: -(1 << 33),
-                        sale_rate_delta1: -(1 << 33),
+                        rate_delta0: -(1 << 33),
+                        rate_delta1: -(1 << 33),
                     },
                 ],
             );
@@ -1252,8 +1342,14 @@ mod tests {
             assert_eq!(
                 (
                     quote.calculated_amount,
-                    quote.execution_resources.virtual_order_seconds_executed,
-                    quote.execution_resources.virtual_order_delta_times_crossed
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_seconds_executed,
+                    quote
+                        .execution_resources
+                        .twamm
+                        .virtual_order_delta_times_crossed
                 ),
                 (989, 32, 1)
             );
@@ -1267,10 +1363,10 @@ mod tests {
             0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
-                sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
+                rate_delta0: -10_526_880_627_450_980_392_156_862_745,
+                rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
         );
 
@@ -1317,9 +1413,9 @@ mod tests {
             60,
             sale_rate,
             sale_rate,
-            vec![TwammSaleRateDelta {
-                sale_rate_delta0: -(sale_rate as i128),
-                sale_rate_delta1: -(sale_rate as i128),
+            vec![TimeRateDelta {
+                rate_delta0: -(sale_rate as i128),
+                rate_delta1: -(sale_rate as i128),
                 time: 120,
             }],
         );
@@ -1424,10 +1520,10 @@ mod tests {
             0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
-                sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
+                rate_delta0: -10_526_880_627_450_980_392_156_862_745,
+                rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
         );
 
@@ -1449,9 +1545,11 @@ mod tests {
                 first_swap.consumed_amount,
                 first_swap
                     .execution_resources
+                    .twamm
                     .virtual_order_seconds_executed,
                 first_swap
                     .execution_resources
+                    .twamm
                     .virtual_order_delta_times_crossed
             ),
             (
@@ -1483,9 +1581,11 @@ mod tests {
                 second_swap.consumed_amount,
                 second_swap
                     .execution_resources
+                    .twamm
                     .virtual_order_seconds_executed,
                 second_swap
                     .execution_resources
+                    .twamm
                     .virtual_order_delta_times_crossed
             ),
             (
@@ -1507,10 +1607,10 @@ mod tests {
             0,
             10_526_880_627_450_980_392_156_862_745,
             10_526_880_627_450_980_392_156_862_745,
-            vec![TwammSaleRateDelta {
+            vec![TimeRateDelta {
                 time: u64::MAX,
-                sale_rate_delta0: -10_526_880_627_450_980_392_156_862_745,
-                sale_rate_delta1: -10_526_880_627_450_980_392_156_862_745,
+                rate_delta0: -10_526_880_627_450_980_392_156_862_745,
+                rate_delta1: -10_526_880_627_450_980_392_156_862_745,
             }],
         );
 
@@ -1551,25 +1651,25 @@ mod tests {
             3728260255814876407785,
             1597830095238095,
             vec![
-                TwammSaleRateDelta {
+                TimeRateDelta {
                     time: 1_743_729_408,
-                    sale_rate_delta0: 0,
-                    sale_rate_delta1: -1_597_830_095_238_095,
+                    rate_delta0: 0,
+                    rate_delta1: -1_597_830_095_238_095,
                 },
-                TwammSaleRateDelta {
+                TimeRateDelta {
                     time: 1_743_847_424,
-                    sale_rate_delta0: -3_545_574_640_073_966_450_931,
-                    sale_rate_delta1: 0,
+                    rate_delta0: -3_545_574_640_073_966_450_931,
+                    rate_delta1: 0,
                 },
-                TwammSaleRateDelta {
+                TimeRateDelta {
                     time: 1_744_240_640,
-                    sale_rate_delta0: -155_475_198_893_155_900_840,
-                    sale_rate_delta1: 0,
+                    rate_delta0: -155_475_198_893_155_900_840,
+                    rate_delta1: 0,
                 },
-                TwammSaleRateDelta {
+                TimeRateDelta {
                     time: 1_759_510_528,
-                    sale_rate_delta0: -27_210_416_847_754_056_014,
-                    sale_rate_delta1: 0,
+                    rate_delta0: -27_210_416_847_754_056_014,
+                    rate_delta1: 0,
                 },
             ],
         )
