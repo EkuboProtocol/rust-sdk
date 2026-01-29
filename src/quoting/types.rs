@@ -1,7 +1,7 @@
 use num_traits::Zero;
 use ruint::aliases::U256;
 
-use crate::private;
+use crate::{private, quoting::util::real_last_time};
 use core::{
     error::Error,
     fmt::Debug,
@@ -88,6 +88,20 @@ pub struct Quote<R, S> {
     pub fees_paid: u128,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TimeRateDelta {
+    pub time: u64,
+    pub rate_delta0: i128,
+    pub rate_delta1: i128,
+}
+
+#[derive(Debug, Clone, Copy, Hash)]
+pub enum LastTimeInfo {
+    Stored { stored: u32, current: u64 },
+    Real(u64),
+}
+
 /// Commonly used as [`Pool::Meta`]
 pub type BlockTimestamp = u64;
 
@@ -135,6 +149,22 @@ pub trait Pool: private::Sealed + Debug {
 pub trait PoolState: private::Sealed {
     fn sqrt_ratio(&self) -> U256;
     fn liquidity(&self) -> u128;
+}
+
+impl LastTimeInfo {
+    pub fn stored_time(self) -> u32 {
+        match self {
+            Self::Stored { stored, current: _ } => stored,
+            Self::Real(real) => real as u32,
+        }
+    }
+
+    pub fn real_time(self) -> u64 {
+        match self {
+            Self::Stored { stored, current } => real_last_time(stored, current),
+            Self::Real(real) => real,
+        }
+    }
 }
 
 impl<A, F, C> PoolKey<A, F, C> {

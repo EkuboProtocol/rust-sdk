@@ -160,6 +160,10 @@ pub fn construct_sorted_ticks<C: Chain>(
     Ok(result)
 }
 
+pub fn real_last_time(stored: u32, current: u64) -> u64 {
+    current - (current.wrapping_sub(stored.into()) & u64::from(u32::MAX))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

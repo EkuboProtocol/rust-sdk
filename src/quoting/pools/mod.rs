@@ -1,5 +1,7 @@
 pub mod base;
 #[cfg(feature = "evm")]
+pub mod boosted_fees;
+#[cfg(feature = "evm")]
 pub mod full_range;
 #[cfg(feature = "starknet")]
 pub mod limit_order;

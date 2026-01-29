@@ -59,11 +59,19 @@ pub struct LimitOrderPoolState {
 /// Resources consumed during limit order quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct LimitOrderPoolResources {
-    /// Resources consumed by the underlying base pool.
-    pub base_pool_resources: BasePoolResources,
+pub struct LimitOrderStandalonePoolResources {
     /// Number of limit orders pulled (ticks crossed that were position boundaries).
     pub orders_pulled: u32,
+}
+
+/// Resources consumed during limit order quote execution.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LimitOrderPoolResources {
+    /// Resources consumed by the underlying base pool.
+    pub base: BasePoolResources,
+    /// Resources added by the limit order wrapper.
+    pub limit_order: LimitOrderStandalonePoolResources,
 }
 
 /// Errors that can occur when constructing a [`LimitOrderPool`].
@@ -397,8 +405,8 @@ impl Pool for LimitOrderPool {
             calculated_amount,
             consumed_amount,
             execution_resources: LimitOrderPoolResources {
-                base_pool_resources,
-                orders_pulled,
+                base: base_pool_resources,
+                limit_order: LimitOrderStandalonePoolResources { orders_pulled },
             },
             fees_paid,
             is_price_increasing: is_increasing,
@@ -606,7 +614,7 @@ mod tests {
             (
                 quote.consumed_amount,
                 quote.calculated_amount,
-                quote.execution_resources.orders_pulled,
+                quote.execution_resources.limit_order.orders_pulled,
             ),
             (641, 639, 1)
         );
@@ -631,24 +639,15 @@ mod tests {
             (
                 quote.consumed_amount,
                 quote.calculated_amount,
-                quote.execution_resources.orders_pulled,
+                quote.execution_resources.limit_order.orders_pulled,
             ),
             (1000, 997, 1)
         );
         assert_eq!(
             (
-                quote
-                    .execution_resources
-                    .base_pool_resources
-                    .initialized_ticks_crossed,
-                quote
-                    .execution_resources
-                    .base_pool_resources
-                    .no_override_price_change,
-                quote
-                    .execution_resources
-                    .base_pool_resources
-                    .tick_spacings_crossed,
+                quote.execution_resources.base.initialized_ticks_crossed,
+                quote.execution_resources.base.no_override_price_change,
+                quote.execution_resources.base.tick_spacings_crossed,
             ),
             (2, 1, 2)
         );
@@ -672,7 +671,7 @@ mod tests {
             (
                 quote0.state_after.base_pool_state.active_tick_index,
                 quote0.state_after.tick_indices_reached,
-                quote0.execution_resources.orders_pulled,
+                quote0.execution_resources.limit_order.orders_pulled,
             ),
             (Some(1), Some((Some(0), Some(1))), 1)
         );
