@@ -214,9 +214,7 @@ impl Pool for MevCapturePool {
                     consumed_amount: quote.consumed_amount,
                     execution_resources: MevCapturePoolResources {
                         base: quote.execution_resources,
-                        mev_capture: MevCaptureStandalonePoolResources {
-                            state_update_count,
-                        },
+                        mev_capture: MevCaptureStandalonePoolResources { state_update_count },
                     },
                     fees_paid: quote.fees_paid,
                     is_price_increasing: quote.is_price_increasing,
