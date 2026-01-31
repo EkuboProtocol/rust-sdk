@@ -1,6 +1,6 @@
 [package]
 name = "ekubo_sdk"
-version = "1.0.3"
+version = "2.0.0"
 authors = ["Mahmoud Salem <moody@ekubo.org>"]
 edition = "2021"
 license = "LGPL-2.1"
