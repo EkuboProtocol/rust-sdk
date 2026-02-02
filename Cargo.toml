@@ -1,7 +1,10 @@
 [package]
 name = "ekubo_sdk"
 version = "2.0.0"
-authors = ["Mahmoud Salem <moody@ekubo.org>"]
+authors = [
+    "Mahmoud Salem <moody@ekubo.org>",
+    "Die Herdplatte <die.herdplatte@gmail.com>",
+]
 edition = "2021"
 license = "LGPL-2.1"
 description = "Types for interacting with Ekubo Protocol on Starknet & EVM chains"
@@ -12,11 +15,19 @@ keywords = ["crypto", "ekubo", "protocol", "defi", "no_std"]
 
 [dependencies]
 alloy-primitives = { version = "1", optional = true, default-features = false }
-derive_more = { version = "2", features = ["add", "add_assign", "from"], default-features = false }
+derive_more = { version = "2", features = [
+    "add",
+    "add_assign",
+    "from",
+], default-features = false }
 libm = { version = "0.2", default-features = false, optional = true }
-num-traits = { version = "0.2.4", features = ["i128"], default-features = false }
+num-traits = { version = "0.2.4", features = [
+    "i128",
+], default-features = false }
 ruint = { version = "1.14.0", default-features = false }
-serde = { version = "1", features = ["derive"], optional = true, default-features = false }
+serde = { version = "1", features = [
+    "derive",
+], optional = true, default-features = false }
 starknet-types-core = { version = "1", optional = true, default-features = false }
 thiserror = { version = "2", default-features = false }
 
