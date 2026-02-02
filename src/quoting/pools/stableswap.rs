@@ -192,11 +192,14 @@ impl Pool for StableswapPool {
         let mut fees_paid = 0;
         let mut initialized_ticks_crossed = 0;
         let mut amount_remaining = amount;
+        let mut crossed_boundary = false;
         let starting_sqrt_ratio = sqrt_ratio;
 
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
             let mut step_liquidity = liquidity;
-            let in_range = sqrt_ratio < self.upper_price && sqrt_ratio > self.lower_price;
+            let in_range = sqrt_ratio < self.upper_price
+                && sqrt_ratio >= self.lower_price
+                && !crossed_boundary;
 
             let next_tick_sqrt_ratio = if in_range {
                 Some(if increasing {
@@ -207,7 +210,9 @@ impl Pool for StableswapPool {
             } else {
                 step_liquidity = 0;
 
-                if sqrt_ratio <= self.lower_price {
+                if crossed_boundary {
+                    None
+                } else if sqrt_ratio < self.lower_price {
                     increasing.then_some(self.lower_price)
                 } else {
                     (!increasing).then_some(self.upper_price)
@@ -235,10 +240,16 @@ impl Pool for StableswapPool {
             fees_paid += step.fee_amount;
             sqrt_ratio = step.sqrt_ratio_next;
 
-            if next_tick_sqrt_ratio
-                .is_some_and(|next_tick_sqrt_ratio| next_tick_sqrt_ratio == sqrt_ratio)
-            {
-                initialized_ticks_crossed += 1;
+            if let Some(next_tick_sqrt_ratio) = next_tick_sqrt_ratio {
+                if next_tick_sqrt_ratio == sqrt_ratio {
+                    initialized_ticks_crossed += 1;
+
+                    if sqrt_ratio == self.upper_price && increasing
+                        || sqrt_ratio == self.lower_price && !increasing
+                    {
+                        crossed_boundary = true;
+                    }
+                }
             }
         }
 
@@ -552,5 +563,67 @@ mod tests {
 
         assert_eq!(quote.consumed_amount, 0);
         assert_eq!(quote.calculated_amount, 0);
+    }
+
+    #[test]
+    fn exact_out_at_lower_boundary_does_not_hang() {
+        use std::{sync::mpsc, thread, time::Duration};
+
+        let amplification = 10;
+        let (lower, _) = active_range(0, amplification);
+        let sqrt_lower = to_sqrt_ratio::<Evm>(lower).unwrap();
+        let liquidity = minted_liquidity(0, amplification, lower);
+
+        let pool = StableswapPool::new(key(0, amplification), state(lower, liquidity)).unwrap();
+
+        let params = QuoteParams {
+            token_amount: TokenAmount {
+                token: Evm::zero_address(),
+                amount: -SMALL_AMOUNT,
+            },
+            sqrt_ratio_limit: None,
+            override_state: Some(FullRangePoolState {
+                sqrt_ratio: sqrt_lower,
+                liquidity,
+            }),
+            meta: (),
+        };
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let quote = pool.quote(params).unwrap();
+            tx.send(quote).ok();
+        });
+
+        let _quote = rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("exact-out quote should not hang at lower boundary");
+    }
+
+    #[test]
+    fn respects_sqrt_ratio_limit_inside_range() {
+        let amplification = 10;
+        let (lower, upper) = active_range(0, amplification);
+        let mid_tick = (lower + upper) / 2;
+        let limit_tick = mid_tick - 1;
+
+        let pool = build_pool(0, amplification, mid_tick);
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    token: Evm::zero_address(),
+                    amount: i128::MAX,
+                },
+                sqrt_ratio_limit: Some(to_sqrt_ratio::<Evm>(limit_tick).unwrap()),
+                override_state: None,
+                meta: (),
+            })
+            .unwrap();
+
+        assert_eq!(
+            quote.state_after.sqrt_ratio,
+            to_sqrt_ratio::<Evm>(limit_tick).unwrap()
+        );
     }
 }
