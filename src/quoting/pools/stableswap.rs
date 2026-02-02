@@ -192,14 +192,14 @@ impl Pool for StableswapPool {
         let mut fees_paid = 0;
         let mut initialized_ticks_crossed = 0;
         let mut amount_remaining = amount;
-        let mut crossed_boundary = false;
+        let mut moved_out_of_boundary = false;
         let starting_sqrt_ratio = sqrt_ratio;
 
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
             let mut step_liquidity = liquidity;
-            let in_range = sqrt_ratio < self.upper_price
+            let in_range = sqrt_ratio <= self.upper_price
                 && sqrt_ratio >= self.lower_price
-                && !crossed_boundary;
+                && !moved_out_of_boundary;
 
             let next_tick_sqrt_ratio = if in_range {
                 Some(if increasing {
@@ -210,7 +210,7 @@ impl Pool for StableswapPool {
             } else {
                 step_liquidity = 0;
 
-                if crossed_boundary {
+                if moved_out_of_boundary {
                     None
                 } else if sqrt_ratio < self.lower_price {
                     increasing.then_some(self.lower_price)
@@ -247,7 +247,7 @@ impl Pool for StableswapPool {
                     if sqrt_ratio == self.upper_price && increasing
                         || sqrt_ratio == self.lower_price && !increasing
                     {
-                        crossed_boundary = true;
+                        moved_out_of_boundary = true;
                     }
                 }
             }
@@ -598,6 +598,42 @@ mod tests {
         let _quote = rx
             .recv_timeout(Duration::from_secs(1))
             .expect("exact-out quote should not hang at lower boundary");
+    }
+
+    #[test]
+    fn exact_out_above_upper_boundary_does_not_hang() {
+        use std::{sync::mpsc, thread, time::Duration};
+
+        let amplification = 26;
+        let (_, upper) = active_range(0, amplification);
+        let outside_tick = (upper + 1_000).min(Evm::max_tick());
+        let sqrt_upper = to_sqrt_ratio::<Evm>(upper).unwrap();
+        let liquidity = minted_liquidity(0, amplification, outside_tick);
+
+        let pool =
+            StableswapPool::new(key(0, amplification), state(outside_tick, liquidity)).unwrap();
+
+        let params = QuoteParams {
+            token_amount: TokenAmount {
+                token: Evm::one_address(),
+                amount: -SMALL_AMOUNT,
+            },
+            sqrt_ratio_limit: None,
+            override_state: Some(FullRangePoolState {
+                sqrt_ratio: sqrt_upper,
+                liquidity,
+            }),
+            meta: (),
+        };
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let quote = pool.quote(params).unwrap();
+            tx.send(quote).ok();
+        });
+
+        rx.recv_timeout(Duration::from_secs(1))
+            .expect("exact-out quote should not hang above upper boundary");
     }
 
     #[test]
