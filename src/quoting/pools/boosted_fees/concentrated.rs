@@ -12,26 +12,26 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 use crate::chain::evm::{
-    Evm, EvmBasePoolKey, EvmBasePoolQuoteError, EvmBasePoolResources, EvmBasePoolState,
-    EvmBasePoolTypeConfig,
+    Evm, EvmConcentratedPoolKey, EvmConcentratedPoolQuoteError, EvmConcentratedPoolResources,
+    EvmConcentratedPoolState, EvmConcentratedPoolTypeConfig,
 };
-use crate::quoting::pools::base::BasePool;
+use crate::quoting::pools::concentrated::ConcentratedPool;
 
 /// Boosted fees pool that wraps an underlying pool and tracks donation deltas.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedPool {
-    underlying_pool: BasePool<Evm>,
+    underlying_pool: ConcentratedPool<Evm>,
     last_donate_time: u32,
     donate_rate0: u128,
     donate_rate1: u128,
     donate_rate_deltas: Vec<TimeRateDelta>,
 }
 
-pub type BoostedFeesConcentratedPoolTypeConfig = <BasePool<Evm> as Pool>::PoolTypeConfig;
+pub type BoostedFeesConcentratedPoolTypeConfig = <ConcentratedPool<Evm> as Pool>::PoolTypeConfig;
 pub type BoostedFeesConcentratedPoolKey = PoolKey<
     <Evm as Chain>::Address,
-    <BasePool<Evm> as Pool>::Fee,
+    <ConcentratedPool<Evm> as Pool>::Fee,
     BoostedFeesConcentratedPoolTypeConfig,
 >;
 pub type BoostedFeesConcentratedPoolConfig<P> =
@@ -40,7 +40,7 @@ pub type BoostedFeesConcentratedPoolConfig<P> =
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedPoolState {
-    pub base_pool_state: EvmBasePoolState,
+    pub concentrated_pool_state: EvmConcentratedPoolState,
     pub last_donate_time: u32,
     pub donate_rate0: u128,
     pub donate_rate1: u128,
@@ -61,7 +61,7 @@ pub struct BoostedFeesConcentratedStandalonePoolResources {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedPoolResources {
-    pub base: EvmBasePoolResources,
+    pub concentrated: EvmConcentratedPoolResources,
     pub boosted_fees: BoostedFeesConcentratedStandalonePoolResources,
 }
 
@@ -79,7 +79,7 @@ pub enum BoostedFeesConcentratedPoolConstructionError {
 
 impl BoostedFeesConcentratedPool {
     pub fn new(
-        underlying_pool: BasePool<Evm>,
+        underlying_pool: ConcentratedPool<Evm>,
         last_donate_time_info: LastTimeInfo,
         donate_rate0: u128,
         donate_rate1: u128,
@@ -125,25 +125,25 @@ impl BoostedFeesConcentratedPool {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum BoostedFeesConcentratedPoolQuoteError {
     #[error("underlying pool quote error")]
-    UnderlyingPoolQuoteError(EvmBasePoolQuoteError),
+    UnderlyingPoolQuoteError(EvmConcentratedPoolQuoteError),
 }
 
 impl Pool for BoostedFeesConcentratedPool {
     type Address = <Evm as Chain>::Address;
     type Fee = <Evm as Chain>::Fee;
-    type PoolTypeConfig = EvmBasePoolTypeConfig;
+    type PoolTypeConfig = EvmConcentratedPoolTypeConfig;
     type Resources = BoostedFeesConcentratedPoolResources;
     type State = BoostedFeesConcentratedPoolState;
     type QuoteError = BoostedFeesConcentratedPoolQuoteError;
     type Meta = BlockTimestamp;
 
-    fn key(&self) -> EvmBasePoolKey {
+    fn key(&self) -> EvmConcentratedPoolKey {
         self.underlying_pool.key()
     }
 
     fn state(&self) -> Self::State {
         BoostedFeesConcentratedPoolState {
-            base_pool_state: self.underlying_pool.state(),
+            concentrated_pool_state: self.underlying_pool.state(),
             last_donate_time: self.last_donate_time,
             donate_rate0: self.donate_rate0,
             donate_rate1: self.donate_rate1,
@@ -160,7 +160,7 @@ impl Pool for BoostedFeesConcentratedPool {
         }: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let BoostedFeesConcentratedPoolState {
-            base_pool_state: underlying_pool_state,
+            concentrated_pool_state: underlying_pool_state,
             last_donate_time,
             mut donate_rate0,
             mut donate_rate1,
@@ -216,7 +216,7 @@ impl Pool for BoostedFeesConcentratedPool {
             calculated_amount,
             fees_paid,
             execution_resources: BoostedFeesConcentratedPoolResources {
-                base: underlying_execution_resources,
+                concentrated: underlying_execution_resources,
                 boosted_fees: BoostedFeesConcentratedStandalonePoolResources {
                     virtual_donate_seconds_executed: (current_time - real_last_donate_time) as u32,
                     virtual_donate_delta_times_crossed,
@@ -225,7 +225,7 @@ impl Pool for BoostedFeesConcentratedPool {
                 },
             },
             state_after: BoostedFeesConcentratedPoolState {
-                base_pool_state: underlying_state_after,
+                concentrated_pool_state: underlying_state_after,
                 last_donate_time: current_time as u32,
                 donate_rate0,
                 donate_rate1,
@@ -252,11 +252,11 @@ impl Pool for BoostedFeesConcentratedPool {
 
 impl PoolState for BoostedFeesConcentratedPoolState {
     fn sqrt_ratio(&self) -> U256 {
-        self.base_pool_state.sqrt_ratio()
+        self.concentrated_pool_state.sqrt_ratio()
     }
 
     fn liquidity(&self) -> u128 {
-        self.base_pool_state.liquidity()
+        self.concentrated_pool_state.liquidity()
     }
 }
 
@@ -270,14 +270,14 @@ mod tests {
         chain::{evm::Evm, tests::ChainTest as _},
         math::tick::to_sqrt_ratio,
         quoting::{
-            pools::base::{BasePool, BasePoolState, TickSpacing},
+            pools::concentrated::{ConcentratedPool, ConcentratedPoolState, TickSpacing},
             types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick, TokenAmount},
         },
     };
     use alloc::vec;
 
-    fn base_pool(liquidity: u128) -> BasePool<Evm> {
-        BasePool::new(
+    fn concentrated_pool(liquidity: u128) -> ConcentratedPool<Evm> {
+        ConcentratedPool::new(
             PoolKey {
                 token0: Evm::zero_address(),
                 token1: Evm::one_address(),
@@ -287,7 +287,7 @@ mod tests {
                     extension: Evm::zero_address(),
                 },
             },
-            BasePoolState {
+            ConcentratedPoolState {
                 sqrt_ratio: to_sqrt_ratio::<Evm>(0).expect("valid sqrt ratio"),
                 liquidity,
                 active_tick_index: Some(0),
@@ -303,7 +303,7 @@ mod tests {
                 },
             ],
         )
-        .expect("base pool construction succeeds")
+        .expect("concentrated pool construction succeeds")
     }
 
     fn boosted_pool(
@@ -313,7 +313,7 @@ mod tests {
         donate_rate_deltas: Vec<TimeRateDelta>,
     ) -> BoostedFeesConcentratedPool {
         BoostedFeesConcentratedPool::new(
-            base_pool(1_000_000),
+            concentrated_pool(1_000_000),
             last_donated_time_info,
             donate_rate0,
             donate_rate1,
@@ -351,7 +351,7 @@ mod tests {
         assert_eq!(resources.fees_accumulated, 0);
 
         let BoostedFeesConcentratedPoolState {
-            base_pool_state: _,
+            concentrated_pool_state: _,
             last_donate_time,
             donate_rate0,
             donate_rate1,
@@ -375,7 +375,7 @@ mod tests {
         assert_eq!(resources.fees_accumulated, 0);
 
         let BoostedFeesConcentratedPoolState {
-            base_pool_state: _,
+            concentrated_pool_state: _,
             last_donate_time,
             donate_rate0,
             donate_rate1,
@@ -410,7 +410,7 @@ mod tests {
         assert_eq!(resources.fees_accumulated, 1);
 
         let BoostedFeesConcentratedPoolState {
-            base_pool_state: _,
+            concentrated_pool_state: _,
             last_donate_time,
             donate_rate0,
             donate_rate1,
@@ -452,7 +452,7 @@ mod tests {
         assert_eq!(resources.fees_accumulated, 0);
 
         let BoostedFeesConcentratedPoolState {
-            base_pool_state: _,
+            concentrated_pool_state: _,
             last_donate_time,
             donate_rate0,
             donate_rate1,

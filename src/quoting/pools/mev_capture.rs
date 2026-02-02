@@ -10,9 +10,9 @@ use crate::{
         swap::{amount_before_fee, compute_fee},
     },
     private,
-    quoting::pools::base::{
-        BasePool, BasePoolQuoteError, BasePoolResources, BasePoolState, BasePoolTypeConfig,
-        TickSpacing,
+    quoting::pools::concentrated::{
+        ConcentratedPool, ConcentratedPoolQuoteError, ConcentratedPoolResources,
+        ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
     },
 };
 use crate::{
@@ -26,7 +26,7 @@ use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolStat
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MevCapturePool {
     /// Underlying concentrated liquidity pool.
-    base_pool: BasePool<Evm>,
+    concentrated_pool: ConcentratedPool<Evm>,
     /// Last update timestamp.
     last_update_time: u32,
     /// Current tick used for fixed-point fee calculation.
@@ -41,7 +41,7 @@ pub type MevCapturePoolConfig =
     PoolConfig<<Evm as Chain>::Address, <Evm as Chain>::Fee, MevCapturePoolTypeConfig>;
 
 /// Type config for a [`MevCapturePool`].
-pub type MevCapturePoolTypeConfig = BasePoolTypeConfig;
+pub type MevCapturePoolTypeConfig = ConcentratedPoolTypeConfig;
 
 /// State snapshot for a [`MevCapturePool`].
 #[derive(Clone, Debug, PartialEq, Eq, Copy, Hash)]
@@ -49,8 +49,8 @@ pub type MevCapturePoolTypeConfig = BasePoolTypeConfig;
 pub struct MevCapturePoolState {
     /// Last update timestamp.
     pub last_update_time: u32,
-    /// State of the underlying base pool.
-    pub base_pool_state: BasePoolState,
+    /// State of the underlying concentrated pool.
+    pub concentrated_pool_state: ConcentratedPoolState,
 }
 
 /// Resources consumed during MEV-capture quote execution.
@@ -65,8 +65,8 @@ pub struct MevCaptureStandalonePoolResources {
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MevCapturePoolResources {
-    /// Resources consumed by the underlying base pool.
-    pub base: BasePoolResources,
+    /// Resources consumed by the underlying concentrated pool.
+    pub concentrated: ConcentratedPoolResources,
     /// Resources added by the MEV-capture wrapper.
     pub mev_capture: MevCaptureStandalonePoolResources,
 }
@@ -85,9 +85,9 @@ pub enum MevCapturePoolConstructionError {
 }
 
 impl MevCapturePool {
-    // An MEV resist pool just wraps a base pool with some additional logic
+    // An MEV resist pool just wraps a concentrated pool with some additional logic
     pub fn new(
-        base_pool: BasePool<Evm>,
+        concentrated_pool: ConcentratedPool<Evm>,
         last_update_time: u32,
         tick: i32,
     ) -> Result<Self, MevCapturePoolConstructionError> {
@@ -95,7 +95,7 @@ impl MevCapturePool {
             fee,
             pool_type_config: TickSpacing(tick_spacing),
             extension,
-        } = base_pool.key().config;
+        } = concentrated_pool.key().config;
 
         if fee.is_zero() {
             return Err(MevCapturePoolConstructionError::FeeMustBeGreaterThanZero);
@@ -108,8 +108,8 @@ impl MevCapturePool {
         }
 
         // validates that the current tick is between the active tick and the active tick index + 1
-        if let Some(i) = base_pool.state().active_tick_index {
-            let sorted_ticks = base_pool.ticks();
+        if let Some(i) = concentrated_pool.state().active_tick_index {
+            let sorted_ticks = concentrated_pool.ticks();
             if let Some(t) = sorted_ticks.get(i) {
                 if t.index > tick {
                     return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
@@ -120,14 +120,14 @@ impl MevCapturePool {
                     return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
             }
-        } else if let Some(t) = base_pool.ticks().first() {
+        } else if let Some(t) = concentrated_pool.ticks().first() {
             if t.index <= tick {
                 return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
             }
         }
 
         Ok(Self {
-            base_pool,
+            concentrated_pool,
             last_update_time,
             tick,
         })
@@ -139,17 +139,17 @@ impl Pool for MevCapturePool {
     type Fee = <Evm as Chain>::Fee;
     type Resources = MevCapturePoolResources;
     type State = MevCapturePoolState;
-    type QuoteError = BasePoolQuoteError;
+    type QuoteError = ConcentratedPoolQuoteError;
     type Meta = BlockTimestamp;
     type PoolTypeConfig = MevCapturePoolTypeConfig;
 
     fn key(&self) -> MevCapturePoolKey {
-        self.base_pool.key()
+        self.concentrated_pool.key()
     }
 
     fn state(&self) -> Self::State {
         MevCapturePoolState {
-            base_pool_state: self.base_pool.state(),
+            concentrated_pool_state: self.concentrated_pool.state(),
             last_update_time: self.last_update_time,
         }
     }
@@ -158,10 +158,10 @@ impl Pool for MevCapturePool {
         &self,
         params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
-        match self.base_pool.quote(QuoteParams {
+        match self.concentrated_pool.quote(QuoteParams {
             token_amount: params.token_amount,
             sqrt_ratio_limit: params.sqrt_ratio_limit,
-            override_state: params.override_state.map(|o| o.base_pool_state),
+            override_state: params.override_state.map(|o| o.concentrated_pool_state),
             meta: (),
         }) {
             Ok(quote) => {
@@ -169,7 +169,7 @@ impl Pool for MevCapturePool {
 
                 let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
 
-                let pool_config = self.base_pool.key().config;
+                let pool_config = self.concentrated_pool.key().config;
                 let approximate_fee_multiplier = f64::from((tick_after_swap - self.tick).abs() + 1)
                     / f64::from(pool_config.pool_type_config.0);
 
@@ -203,7 +203,7 @@ impl Pool for MevCapturePool {
                         // exact output, compute the additional fee for the output
                         calculated_amount += fee;
                     } else {
-                        return Err(BasePoolQuoteError::FailedComputeSwapStep(
+                        return Err(ConcentratedPoolQuoteError::FailedComputeSwapStep(
                             crate::math::swap::ComputeStepError::AmountBeforeFeeOverflow,
                         ));
                     }
@@ -213,14 +213,14 @@ impl Pool for MevCapturePool {
                     calculated_amount,
                     consumed_amount: quote.consumed_amount,
                     execution_resources: MevCapturePoolResources {
-                        base: quote.execution_resources,
+                        concentrated: quote.execution_resources,
                         mev_capture: MevCaptureStandalonePoolResources { state_update_count },
                     },
                     fees_paid: quote.fees_paid,
                     is_price_increasing: quote.is_price_increasing,
                     state_after: MevCapturePoolState {
                         last_update_time: current_time,
-                        base_pool_state: quote.state_after,
+                        concentrated_pool_state: quote.state_after,
                     },
                 })
             }
@@ -229,15 +229,15 @@ impl Pool for MevCapturePool {
     }
 
     fn has_liquidity(&self) -> bool {
-        self.base_pool.has_liquidity()
+        self.concentrated_pool.has_liquidity()
     }
 
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.max_tick_with_liquidity()
+        self.concentrated_pool.max_tick_with_liquidity()
     }
 
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.min_tick_with_liquidity()
+        self.concentrated_pool.min_tick_with_liquidity()
     }
 
     fn is_path_dependent(&self) -> bool {
@@ -247,11 +247,11 @@ impl Pool for MevCapturePool {
 
 impl PoolState for MevCapturePoolState {
     fn sqrt_ratio(&self) -> U256 {
-        self.base_pool_state.sqrt_ratio()
+        self.concentrated_pool_state.sqrt_ratio()
     }
 
     fn liquidity(&self) -> u128 {
-        self.base_pool_state.liquidity()
+        self.concentrated_pool_state.liquidity()
     }
 }
 
@@ -295,7 +295,7 @@ mod tests {
         tick_entries: &[(i32, i128)],
     ) -> MevCapturePool {
         MevCapturePool::new(
-            BasePool::new(
+            ConcentratedPool::new(
                 PoolKey {
                     token0,
                     token1,
@@ -305,7 +305,7 @@ mod tests {
                         extension: Evm::one_address(),
                     },
                 },
-                BasePoolState {
+                ConcentratedPoolState {
                     active_tick_index: Some(0),
                     liquidity: liquidity as u128,
                     sqrt_ratio,

@@ -11,10 +11,6 @@ type U96 = ruint::Uint<96, 2>;
 #[cfg(feature = "evm-alloy-1")]
 use crate::alloy_primitives::aliases::U96;
 use crate::private;
-use crate::quoting::pools::base::{
-    BasePool, BasePoolConfig, BasePoolConstructionError, BasePoolKey, BasePoolQuoteError,
-    BasePoolResources, BasePoolState, BasePoolTypeConfig, TickSpacing,
-};
 use crate::quoting::pools::boosted_fees::concentrated::{
     BoostedFeesConcentratedPool, BoostedFeesConcentratedPoolConfig,
     BoostedFeesConcentratedPoolConstructionError, BoostedFeesConcentratedPoolKey,
@@ -33,6 +29,11 @@ use crate::quoting::pools::boosted_fees::stableswap::{
     BoostedFeesStableswapPoolConstructionError, BoostedFeesStableswapPoolKey,
     BoostedFeesStableswapPoolQuoteError, BoostedFeesStableswapPoolResources,
     BoostedFeesStableswapPoolState, BoostedFeesStableswapPoolTypeConfig,
+};
+use crate::quoting::pools::concentrated::{
+    ConcentratedPool, ConcentratedPoolConfig, ConcentratedPoolConstructionError,
+    ConcentratedPoolKey, ConcentratedPoolQuoteError, ConcentratedPoolResources,
+    ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
 };
 use crate::quoting::pools::full_range::{
     FullRangePool, FullRangePoolConfig, FullRangePoolConstructionError, FullRangePoolKey,
@@ -59,14 +60,14 @@ use crate::quoting::pools::twamm::{
 use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
 // Re-export pool types for ergonomic, chain-scoped usage.
-pub type EvmBasePool = BasePool<Evm>;
-pub type EvmBasePoolConstructionError = BasePoolConstructionError;
-pub type EvmBasePoolConfig = BasePoolConfig<Evm>;
-pub type EvmBasePoolKey = BasePoolKey<Evm>;
-pub type EvmBasePoolQuoteError = BasePoolQuoteError;
-pub type EvmBasePoolResources = BasePoolResources;
-pub type EvmBasePoolState = BasePoolState;
-pub type EvmBasePoolTypeConfig = BasePoolTypeConfig;
+pub type EvmConcentratedPool = ConcentratedPool<Evm>;
+pub type EvmConcentratedPoolConstructionError = ConcentratedPoolConstructionError;
+pub type EvmConcentratedPoolConfig = ConcentratedPoolConfig<Evm>;
+pub type EvmConcentratedPoolKey = ConcentratedPoolKey<Evm>;
+pub type EvmConcentratedPoolQuoteError = ConcentratedPoolQuoteError;
+pub type EvmConcentratedPoolResources = ConcentratedPoolResources;
+pub type EvmConcentratedPoolState = ConcentratedPoolState;
+pub type EvmConcentratedPoolTypeConfig = ConcentratedPoolTypeConfig;
 
 pub type EvmFullRangePool = FullRangePool;
 pub type EvmFullRangePoolConstructionError = FullRangePoolConstructionError;
@@ -90,7 +91,7 @@ pub type EvmMevCapturePool = MevCapturePool;
 pub type EvmMevCapturePoolConstructionError = MevCapturePoolConstructionError;
 pub type EvmMevCapturePoolConfig = MevCapturePoolConfig;
 pub type EvmMevCapturePoolKey = MevCapturePoolKey;
-pub type EvmMevCapturePoolQuoteError = BasePoolQuoteError;
+pub type EvmMevCapturePoolQuoteError = ConcentratedPoolQuoteError;
 pub type EvmMevCapturePoolResources = MevCapturePoolResources;
 pub type EvmMevCaptureStandalonePoolResources = MevCaptureStandalonePoolResources;
 pub type EvmMevCapturePoolState = MevCapturePoolState;
@@ -190,7 +191,7 @@ pub enum EvmPoolTypeConfig {
     /// Stableswap config for pegged assets.
     Stableswap(StableswapPoolTypeConfig),
     /// Concentrated liquidity config (tick spacing).
-    Concentrated(BasePoolTypeConfig),
+    Concentrated(ConcentratedPoolTypeConfig),
 }
 
 #[cfg(feature = "evm-alloy-1")]

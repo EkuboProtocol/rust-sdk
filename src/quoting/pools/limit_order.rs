@@ -1,19 +1,19 @@
 use crate::quoting::{
-    pools::base::{BasePoolConstructionError, BasePoolQuoteError},
+    pools::concentrated::{ConcentratedPoolConstructionError, ConcentratedPoolQuoteError},
     types::TokenAmount,
-    util::{approximate_number_of_tick_spacings_crossed, find_nearest_initialized_tick_index},
+    util::{approximate_extra_distinct_bitmap_lookups, find_nearest_initialized_tick_index},
 };
 use crate::quoting::{
-    pools::base::{BasePoolResources, BasePoolTypeConfig},
+    pools::concentrated::{ConcentratedPoolResources, ConcentratedPoolTypeConfig},
     types::PoolState,
 };
 use crate::{chain::starknet::Starknet, math::swap::is_price_increasing};
-use crate::{chain::Chain, quoting::pools::base::BasePoolState};
+use crate::{chain::Chain, quoting::pools::concentrated::ConcentratedPoolState};
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolConfig};
 use crate::{
     private,
     quoting::{
-        pools::base::{BasePool, TickSpacing},
+        pools::concentrated::{ConcentratedPool, TickSpacing},
         types::{Pool, PoolKey, Quote, QuoteParams, Tick},
     },
 };
@@ -28,18 +28,18 @@ use thiserror::Error;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPool {
-    /// Underlying base pool.
-    base_pool: BasePool<Starknet>,
+    /// Underlying concentrated pool.
+    concentrated_pool: ConcentratedPool<Starknet>,
 }
 
 /// Unique identifier for a [`LimitOrderPool`].
 pub type LimitOrderPoolKey =
-    PoolKey<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, BasePoolTypeConfig>;
+    PoolKey<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, ConcentratedPoolTypeConfig>;
 /// Pool configuration for a [`LimitOrderPool`].
 pub type LimitOrderPoolConfig =
-    PoolConfig<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, BasePoolTypeConfig>;
-/// [`BasePoolQuoteError`] re-exported with a pool-specific name.
-pub type LimitOrderPoolQuoteError = BasePoolQuoteError;
+    PoolConfig<<Starknet as Chain>::Address, <Starknet as Chain>::Fee, ConcentratedPoolTypeConfig>;
+/// [`ConcentratedPoolQuoteError`] re-exported with a pool-specific name.
+pub type LimitOrderPoolQuoteError = ConcentratedPoolQuoteError;
 
 /// Tick spacing required for limit order pools.
 pub const LIMIT_ORDER_TICK_SPACING: i32 = 128;
@@ -50,8 +50,8 @@ pub const DOUBLE_LIMIT_ORDER_TICK_SPACING: i32 = 2i32 * LIMIT_ORDER_TICK_SPACING
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPoolState {
-    /// State of the underlying base pool.
-    pub base_pool_state: BasePoolState,
+    /// State of the underlying concentrated pool.
+    pub concentrated_pool_state: ConcentratedPoolState,
     /// Minimum and maximum active tick indices observed since the last tick refresh.
     pub tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
 }
@@ -68,8 +68,8 @@ pub struct LimitOrderStandalonePoolResources {
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LimitOrderPoolResources {
-    /// Resources consumed by the underlying base pool.
-    pub base: BasePoolResources,
+    /// Resources consumed by the underlying concentrated pool.
+    pub concentrated: ConcentratedPoolResources,
     /// Resources added by the limit order wrapper.
     pub limit_order: LimitOrderStandalonePoolResources,
 }
@@ -77,8 +77,8 @@ pub struct LimitOrderPoolResources {
 /// Errors that can occur when constructing a [`LimitOrderPool`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum LimitOrderPoolConstructionError {
-    #[error("base pool error")]
-    BasePoolConstructionError(#[from] BasePoolConstructionError),
+    #[error("concentrated pool error")]
+    ConcentratedPoolConstructionError(#[from] ConcentratedPoolConstructionError),
     #[error("all ticks must have at least one neighbor")]
     AllTicksMustHaveNeighbor,
     #[error("last tick has no neighbor")]
@@ -117,7 +117,7 @@ impl LimitOrderPool {
         }
 
         Ok(LimitOrderPool {
-            base_pool: BasePool::new(
+            concentrated_pool: ConcentratedPool::new(
                 PoolKey {
                     token0,
                     token1,
@@ -127,14 +127,14 @@ impl LimitOrderPool {
                         extension,
                     },
                 },
-                BasePoolState {
+                ConcentratedPoolState {
                     sqrt_ratio,
                     liquidity,
                     active_tick_index,
                 },
                 sorted_ticks,
             )
-            .map_err(LimitOrderPoolConstructionError::BasePoolConstructionError)?,
+            .map_err(LimitOrderPoolConstructionError::ConcentratedPoolConstructionError)?,
         })
     }
 }
@@ -146,15 +146,15 @@ impl Pool for LimitOrderPool {
     type State = LimitOrderPoolState;
     type QuoteError = LimitOrderPoolQuoteError;
     type Meta = ();
-    type PoolTypeConfig = BasePoolTypeConfig;
+    type PoolTypeConfig = ConcentratedPoolTypeConfig;
 
     fn key(&self) -> LimitOrderPoolKey {
-        self.base_pool.key()
+        self.concentrated_pool.key()
     }
 
     fn state(&self) -> Self::State {
         LimitOrderPoolState {
-            base_pool_state: self.base_pool.state(),
+            concentrated_pool_state: self.concentrated_pool.state(),
             tick_indices_reached: None,
         }
     }
@@ -164,7 +164,7 @@ impl Pool for LimitOrderPool {
         params: QuoteParams<Self::Address, Self::State, Self::Meta>,
     ) -> Result<Quote<Self::Resources, Self::State>, Self::QuoteError> {
         let initial_state = params.override_state.unwrap_or_else(|| self.state());
-        let sorted_ticks = self.base_pool.ticks();
+        let sorted_ticks = self.concentrated_pool.ticks();
 
         let is_increasing = is_price_increasing(
             params.token_amount.amount,
@@ -174,10 +174,10 @@ impl Pool for LimitOrderPool {
         let mut calculated_amount = 0;
         let mut consumed_amount = 0;
         let mut fees_paid = 0;
-        let mut base_pool_resources = BasePoolResources::default();
-        let mut base_pool_state = initial_state.base_pool_state;
+        let mut concentrated_pool_resources = ConcentratedPoolResources::default();
+        let mut concentrated_pool_state = initial_state.concentrated_pool_state;
 
-        let active_tick_index = base_pool_state.active_tick_index;
+        let active_tick_index = concentrated_pool_state.active_tick_index;
 
         // if we need to skip one or more already pulled orders, this contains the tick index of the next unpulled order
         let next_unpulled_order_tick_index_after_skip = initial_state
@@ -221,13 +221,13 @@ impl Pool for LimitOrderPool {
                     .map_or_else(|| sorted_ticks.first(), |idx| sorted_ticks.get(idx + 1))
                     .map_or(Ok(Starknet::max_sqrt_ratio()), |next| {
                         to_sqrt_ratio::<Starknet>(next.index)
-                            .ok_or(BasePoolQuoteError::InvalidTick(next.index))
+                            .ok_or(ConcentratedPoolQuoteError::InvalidTick(next.index))
                     })
             } else {
                 active_tick_index.map_or(Ok(Starknet::min_sqrt_ratio()), |idx| {
                     let tick = sorted_ticks[idx]; // is always valid
                     to_sqrt_ratio::<Starknet>(tick.index)
-                        .ok_or(BasePoolQuoteError::InvalidTick(tick.index))
+                        .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))
                 })
             }?;
 
@@ -244,19 +244,19 @@ impl Pool for LimitOrderPool {
             };
 
             // swap to (at most) the boundary of the current active tick
-            let quote_to_active_tick_boundary = self.base_pool.quote(QuoteParams {
+            let quote_to_active_tick_boundary = self.concentrated_pool.quote(QuoteParams {
                 sqrt_ratio_limit: Some(active_tick_boundary_sqrt_ratio),
                 token_amount: params.token_amount,
-                override_state: Some(base_pool_state),
+                override_state: Some(concentrated_pool_state),
                 meta: (),
             })?;
 
             calculated_amount += quote_to_active_tick_boundary.calculated_amount;
             consumed_amount += quote_to_active_tick_boundary.consumed_amount;
             fees_paid += quote_to_active_tick_boundary.fees_paid;
-            base_pool_resources += quote_to_active_tick_boundary.execution_resources;
+            concentrated_pool_resources += quote_to_active_tick_boundary.execution_resources;
 
-            base_pool_state = quote_to_active_tick_boundary.state_after;
+            concentrated_pool_state = quote_to_active_tick_boundary.state_after;
 
             let amount_remaining = params.token_amount.amount - consumed_amount;
 
@@ -269,7 +269,7 @@ impl Pool for LimitOrderPool {
                             |idx| {
                                 let tick_index = sorted_ticks[idx].index;
                                 to_sqrt_ratio::<Starknet>(tick_index)
-                                    .ok_or(BasePoolQuoteError::InvalidTick(tick_index))
+                                    .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick_index))
                             },
                         )?
                         .min(params_sqrt_ratio_limit)
@@ -278,22 +278,22 @@ impl Pool for LimitOrderPool {
                         .map_or_else(|| sorted_ticks.first(), |idx| sorted_ticks.get(idx + 1))
                         .map_or(Ok(Starknet::min_sqrt_ratio()), |tick| {
                             to_sqrt_ratio::<Starknet>(tick.index)
-                                .ok_or(BasePoolQuoteError::InvalidTick(tick.index))
+                                .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))
                         })?
                         .max(params_sqrt_ratio_limit)
                 };
 
-                // account for the tick spacings of the uninitialized ticks that we will skip next
-                base_pool_resources.tick_spacings_crossed +=
-                    approximate_number_of_tick_spacings_crossed(
-                        base_pool_state.sqrt_ratio,
+                // account for the uninitialized ticks that we will skip next
+                concentrated_pool_resources.extra_distinct_bitmap_lookups +=
+                    approximate_extra_distinct_bitmap_lookups(
+                        concentrated_pool_state.sqrt_ratio,
                         skip_starting_sqrt_ratio,
                         LIMIT_ORDER_TICK_SPACING.unsigned_abs(),
                     );
 
                 let liquidity_at_next_unpulled_order_tick_index = {
-                    let mut current_liquidity = base_pool_state.liquidity;
-                    let mut current_active_tick_index = base_pool_state.active_tick_index;
+                    let mut current_liquidity = concentrated_pool_state.liquidity;
+                    let mut current_active_tick_index = concentrated_pool_state.active_tick_index;
 
                     // apply all liquidity_deltas in between the current active tick and the next unpulled order
                     loop {
@@ -334,13 +334,13 @@ impl Pool for LimitOrderPool {
                     current_liquidity
                 };
 
-                let quote_from_next_unpulled_order = self.base_pool.quote(QuoteParams {
+                let quote_from_next_unpulled_order = self.concentrated_pool.quote(QuoteParams {
                     sqrt_ratio_limit: params.sqrt_ratio_limit,
                     token_amount: TokenAmount {
                         amount: amount_remaining,
                         token: params.token_amount.token,
                     },
-                    override_state: Some(BasePoolState {
+                    override_state: Some(ConcentratedPoolState {
                         active_tick_index: next_unpulled_order_tick_index,
                         sqrt_ratio: skip_starting_sqrt_ratio,
                         liquidity: liquidity_at_next_unpulled_order_tick_index,
@@ -351,14 +351,14 @@ impl Pool for LimitOrderPool {
                 calculated_amount += quote_from_next_unpulled_order.calculated_amount;
                 consumed_amount += quote_from_next_unpulled_order.consumed_amount;
                 fees_paid += quote_from_next_unpulled_order.fees_paid;
-                base_pool_resources += quote_from_next_unpulled_order.execution_resources;
+                concentrated_pool_resources += quote_from_next_unpulled_order.execution_resources;
 
-                base_pool_state = quote_from_next_unpulled_order.state_after;
+                concentrated_pool_state = quote_from_next_unpulled_order.state_after;
             }
         } else {
-            let quote_simple = self.base_pool.quote(QuoteParams {
+            let quote_simple = self.concentrated_pool.quote(QuoteParams {
                 sqrt_ratio_limit: params.sqrt_ratio_limit,
-                override_state: Some(initial_state.base_pool_state),
+                override_state: Some(initial_state.concentrated_pool_state),
                 token_amount: params.token_amount,
                 meta: (),
             })?;
@@ -366,14 +366,14 @@ impl Pool for LimitOrderPool {
             calculated_amount += quote_simple.calculated_amount;
             consumed_amount += quote_simple.consumed_amount;
             fees_paid += quote_simple.fees_paid;
-            base_pool_resources += quote_simple.execution_resources;
+            concentrated_pool_resources += quote_simple.execution_resources;
 
-            base_pool_state = quote_simple.state_after;
+            concentrated_pool_state = quote_simple.state_after;
         }
 
         let (tick_index_before, tick_index_after) = (
-            initial_state.base_pool_state.active_tick_index,
-            base_pool_state.active_tick_index,
+            initial_state.concentrated_pool_state.active_tick_index,
+            concentrated_pool_state.active_tick_index,
         );
 
         let new_tick_indices_reached = if is_increasing {
@@ -391,7 +391,7 @@ impl Pool for LimitOrderPool {
         };
 
         let from_tick_index = next_unpulled_order_tick_index_after_skip
-            .unwrap_or(initial_state.base_pool_state.active_tick_index);
+            .unwrap_or(initial_state.concentrated_pool_state.active_tick_index);
         let to_tick_index = if is_increasing {
             Ord::max(from_tick_index, tick_index_after)
         } else {
@@ -405,28 +405,28 @@ impl Pool for LimitOrderPool {
             calculated_amount,
             consumed_amount,
             execution_resources: LimitOrderPoolResources {
-                base: base_pool_resources,
+                concentrated: concentrated_pool_resources,
                 limit_order: LimitOrderStandalonePoolResources { orders_pulled },
             },
             fees_paid,
             is_price_increasing: is_increasing,
             state_after: LimitOrderPoolState {
-                base_pool_state,
+                concentrated_pool_state,
                 tick_indices_reached: Some(new_tick_indices_reached),
             },
         })
     }
 
     fn has_liquidity(&self) -> bool {
-        self.base_pool.has_liquidity()
+        self.concentrated_pool.has_liquidity()
     }
 
     fn max_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.max_tick_with_liquidity()
+        self.concentrated_pool.max_tick_with_liquidity()
     }
 
     fn min_tick_with_liquidity(&self) -> Option<i32> {
-        self.base_pool.min_tick_with_liquidity()
+        self.concentrated_pool.min_tick_with_liquidity()
     }
 
     fn is_path_dependent(&self) -> bool {
@@ -436,11 +436,11 @@ impl Pool for LimitOrderPool {
 
 impl PoolState for LimitOrderPoolState {
     fn sqrt_ratio(&self) -> U256 {
-        self.base_pool_state.sqrt_ratio()
+        self.concentrated_pool_state.sqrt_ratio()
     }
 
     fn liquidity(&self) -> u128 {
-        self.base_pool_state.liquidity()
+        self.concentrated_pool_state.liquidity()
     }
 }
 
@@ -645,11 +645,20 @@ mod tests {
         );
         assert_eq!(
             (
-                quote.execution_resources.base.initialized_ticks_crossed,
-                quote.execution_resources.base.no_override_price_change,
-                quote.execution_resources.base.tick_spacings_crossed,
+                quote
+                    .execution_resources
+                    .concentrated
+                    .initialized_ticks_crossed,
+                quote
+                    .execution_resources
+                    .concentrated
+                    .no_override_price_change,
+                quote
+                    .execution_resources
+                    .concentrated
+                    .extra_distinct_bitmap_lookups,
             ),
-            (2, 1, 2)
+            (2, 1, 0)
         );
     }
 
@@ -669,7 +678,7 @@ mod tests {
         );
         assert_eq!(
             (
-                quote0.state_after.base_pool_state.active_tick_index,
+                quote0.state_after.concentrated_pool_state.active_tick_index,
                 quote0.state_after.tick_indices_reached,
                 quote0.execution_resources.limit_order.orders_pulled,
             ),
@@ -712,7 +721,10 @@ mod tests {
             to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING),
             None,
         );
-        assert_eq!(quote0.state_after.base_pool_state.active_tick_index, None);
+        assert_eq!(
+            quote0.state_after.concentrated_pool_state.active_tick_index,
+            None
+        );
         assert_eq!(
             quote0.state_after.tick_indices_reached,
             Some((None, Some(1)))
@@ -733,7 +745,7 @@ mod tests {
             Some(quote1.state_after),
         );
         assert_eq!((quote1.consumed_amount, quote2.consumed_amount), (0, 0));
-        assert_eq!(quote1.state_after.base_pool_state.liquidity, 0);
+        assert_eq!(quote1.state_after.concentrated_pool_state.liquidity, 0);
     }
 
     fn complex_pool() -> LimitOrderPool {
@@ -760,7 +772,7 @@ mod tests {
             None,
         );
         assert_eq!(
-            quote0.state_after.base_pool_state.active_tick_index,
+            quote0.state_after.concentrated_pool_state.active_tick_index,
             Some(5)
         );
         assert_eq!(
@@ -788,7 +800,7 @@ mod tests {
             (1_282, 1_278, Some((Some(0), Some(5))))
         );
         assert_eq!(
-            quote1.state_after.base_pool_state.sqrt_ratio,
+            quote1.state_after.concentrated_pool_state.sqrt_ratio,
             to_sqrt_ratio::<Starknet>(LIMIT_ORDER_TICK_SPACING * -5 / 2).unwrap()
         );
 
@@ -856,7 +868,7 @@ mod tests {
             (
                 quote2.consumed_amount,
                 quote2.calculated_amount,
-                quote2.state_after.base_pool_state.active_tick_index,
+                quote2.state_after.concentrated_pool_state.active_tick_index,
             ),
             (641, 639, Some(0))
         );
