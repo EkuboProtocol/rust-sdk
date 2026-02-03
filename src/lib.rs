@@ -9,7 +9,10 @@ compile_error!(r#"Either feature "std" or "no_std" must be enabled."#);
 // Enforce that exactly one alloy version is selected when EVM support is enabled.
 #[cfg(all(feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 compile_error!(r#"Features "evm-alloy-0_6" and "evm-alloy-1" are mutually exclusive."#);
-#[cfg(all(feature = "evm", not(any(feature = "evm-alloy-0_6", feature = "evm-alloy-1"))))]
+#[cfg(all(
+    feature = "evm",
+    not(any(feature = "evm-alloy-0_6", feature = "evm-alloy-1"))
+))]
 compile_error!(r#"Feature "evm" requires either "evm-alloy-0_6" or "evm-alloy-1"."#);
 
 extern crate alloc;
