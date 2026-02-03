@@ -1,16 +1,16 @@
 pub mod base;
-#[cfg(feature = "evm")]
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod boosted_fees;
-#[cfg(feature = "evm")]
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod full_range;
 #[cfg(feature = "starknet")]
 pub mod limit_order;
-#[cfg(feature = "evm")]
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod mev_capture;
 pub mod oracle;
 #[cfg(feature = "starknet")]
 pub mod spline;
-#[cfg(feature = "evm")]
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod stableswap;
 pub mod twamm;
 

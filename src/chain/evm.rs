@@ -1,11 +1,15 @@
-use alloy_primitives::aliases::U96;
-use alloy_primitives::{aliases::B32, fixed_bytes, Address, FixedBytes, B256, U256};
-use alloy_primitives::{uint, Keccak256};
+use crate::alloy_primitives::{aliases::B32, fixed_bytes, Address, FixedBytes, B256, U256};
+use crate::alloy_primitives::{uint, Keccak256};
 use derive_more::From;
 use num_traits::Zero as _;
 use thiserror::Error;
 
 use crate::chain::Chain;
+
+#[cfg(feature = "evm-alloy-0_6")]
+type U96 = ruint::Uint<96, 2>;
+#[cfg(feature = "evm-alloy-1")]
+use crate::alloy_primitives::aliases::U96;
 use crate::private;
 use crate::quoting::pools::base::{
     BasePool, BasePoolConfig, BasePoolConstructionError, BasePoolKey, BasePoolQuoteError,
@@ -189,6 +193,16 @@ pub enum EvmPoolTypeConfig {
     Concentrated(BasePoolTypeConfig),
 }
 
+#[cfg(feature = "evm-alloy-1")]
+const EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK: B32 = fixed_bytes!("0x80000000");
+#[cfg(feature = "evm-alloy-0_6")]
+const EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK: B32 = fixed_bytes!("80000000");
+
+#[cfg(feature = "evm-alloy-1")]
+const EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK: B32 = fixed_bytes!("0x7fffffff");
+#[cfg(feature = "evm-alloy-0_6")]
+const EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK: B32 = fixed_bytes!("7fffffff");
+
 /// Order identifier emitted by the TWAMM extension.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EvmOrderKey {
@@ -369,7 +383,7 @@ impl TryFrom<B32> for EvmPoolTypeConfig {
             return Ok(Self::FullRange(FullRangePoolTypeConfig));
         }
 
-        if value.bit_and(fixed_bytes!("0x80000000")) == B32::ZERO {
+        if value.bit_and(EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK) == B32::ZERO {
             let mut center_tick_bytes = [0u8; 4];
             center_tick_bytes[1..].copy_from_slice(&value.0[1..]);
             if value.0[1] & 0x80 != 0 {
@@ -392,7 +406,8 @@ impl TryFrom<B32> for EvmPoolTypeConfig {
                 amplification_factor,
             }))
         } else {
-            let tick_spacing = u32::from_be_bytes(value.bit_and(fixed_bytes!("0x7fffffff")).0);
+            let tick_spacing =
+                u32::from_be_bytes(value.bit_and(EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK).0);
 
             if tick_spacing > EVM_MAX_TICK_SPACING.0 || tick_spacing.is_zero() {
                 return Err(EvmPoolTypeConfigParseError::InvalidTickSpacing);
@@ -458,11 +473,47 @@ pub fn float_sqrt_ratio_to_fixed(sqrt_ratio_float: U96) -> U256 {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::address;
+    use crate::alloy_primitives::address;
 
     use crate::chain::tests::ChainTest;
 
     use super::*;
+
+    #[cfg(feature = "evm-alloy-1")]
+    const ONE_ADDRESS: Address = address!("0x0000000000000000000000000000000000000001");
+    #[cfg(feature = "evm-alloy-0_6")]
+    const ONE_ADDRESS: Address = address!("0000000000000000000000000000000000000001");
+
+    #[cfg(feature = "evm-alloy-1")]
+    const ORDER_CONFIG_RAW: B256 =
+        fixed_bytes!("0x01020304050607080100000000000000112233445566778899aabbccddeeff00");
+    #[cfg(feature = "evm-alloy-0_6")]
+    const ORDER_CONFIG_RAW: B256 =
+        fixed_bytes!("01020304050607080100000000000000112233445566778899aabbccddeeff00");
+
+    #[cfg(feature = "evm-alloy-1")]
+    const POOL_TOKEN0: Address = address!("0x37c8671A16E257eC501711Cc1d7eb8AF8544A69f");
+    #[cfg(feature = "evm-alloy-0_6")]
+    const POOL_TOKEN0: Address = address!("37c8671A16E257eC501711Cc1d7eb8AF8544A69f");
+
+    #[cfg(feature = "evm-alloy-1")]
+    const POOL_TOKEN1: Address = address!("0xeE8F2aA3e6864493BEae55E27bb5d8a7B57021F8");
+    #[cfg(feature = "evm-alloy-0_6")]
+    const POOL_TOKEN1: Address = address!("eE8F2aA3e6864493BEae55E27bb5d8a7B57021F8");
+
+    #[cfg(feature = "evm-alloy-1")]
+    const POOL_CONFIG_RAW: B256 =
+        fixed_bytes!("0x000000000000000000000000000000000000000040000000000000000d000000");
+    #[cfg(feature = "evm-alloy-0_6")]
+    const POOL_CONFIG_RAW: B256 =
+        fixed_bytes!("000000000000000000000000000000000000000040000000000000000d000000");
+
+    #[cfg(feature = "evm-alloy-1")]
+    const POOL_ID: B256 =
+        fixed_bytes!("0xa7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9");
+    #[cfg(feature = "evm-alloy-0_6")]
+    const POOL_ID: B256 =
+        fixed_bytes!("a7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9");
 
     impl ChainTest for Evm {
         fn zero_address() -> Self::Address {
@@ -470,15 +521,13 @@ mod tests {
         }
 
         fn one_address() -> Self::Address {
-            address!("0x0000000000000000000000000000000000000001")
+            ONE_ADDRESS
         }
     }
 
     #[test]
     fn order_config_round_trips_from_b256() {
-        let raw =
-            fixed_bytes!("0x01020304050607080100000000000000112233445566778899aabbccddeeff00");
-        let config = EvmOrderConfig::from(raw);
+        let config = EvmOrderConfig::from(ORDER_CONFIG_RAW);
 
         assert_eq!(config.fee, 0x0102_0304_0506_0708);
         assert!(config.is_token1);
@@ -486,7 +535,7 @@ mod tests {
         assert_eq!(config.end_time, 0x99aa_bbcc_ddee_ff00);
 
         let encoded: B256 = config.into();
-        assert_eq!(encoded, raw);
+        assert_eq!(encoded, ORDER_CONFIG_RAW);
     }
 
     #[test]
@@ -558,20 +607,13 @@ mod tests {
     #[test]
     fn pool_id() {
         let pool_key = PoolKey {
-            token0: address!("0x37c8671A16E257eC501711Cc1d7eb8AF8544A69f"),
-            token1: address!("0xeE8F2aA3e6864493BEae55E27bb5d8a7B57021F8"),
-            config: fixed_bytes!(
-                "0x000000000000000000000000000000000000000040000000000000000d000000"
-            )
-            .try_into()
-            .unwrap(),
+            token0: POOL_TOKEN0,
+            token1: POOL_TOKEN1,
+            config: POOL_CONFIG_RAW.try_into().unwrap(),
         };
 
         // https://sepolia.etherscan.io/tx/0xcc9c476c9a1ec9a28ecd1666c998c35e1255ce739993b1be68f4401c67f80ee9#eventlog
-        assert_eq!(
-            pool_key.pool_id(),
-            fixed_bytes!("0xa7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9")
-        );
+        assert_eq!(pool_key.pool_id(), POOL_ID);
     }
 
     #[test]

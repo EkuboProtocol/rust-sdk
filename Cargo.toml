@@ -14,7 +14,8 @@ readme = "README.md"
 keywords = ["crypto", "ekubo", "protocol", "defi", "no_std"]
 
 [dependencies]
-alloy-primitives = { version = "1", optional = true, default-features = false }
+alloy-primitives-0_6 = { package = "alloy-primitives", version = "0.6", optional = true, default-features = false }
+alloy-primitives-1 = { package = "alloy-primitives", version = "1", optional = true, default-features = false }
 derive_more = { version = "2", features = [
     "add",
     "add_assign",
@@ -34,7 +35,8 @@ thiserror = { version = "2", default-features = false }
 [features]
 default = ["std"]
 std = [
-    "alloy-primitives?/std",
+    "alloy-primitives-0_6?/std",
+    "alloy-primitives-1?/std",
     "derive_more/std",
     "num-traits/std",
     "ruint/std",
@@ -45,9 +47,12 @@ std = [
 no_std = ["dep:libm"]
 serde = [
     "dep:serde",
-    "alloy-primitives?/serde",
+    "alloy-primitives-0_6?/serde",
+    "alloy-primitives-1?/serde",
     "starknet-types-core?/serde",
     "ruint/serde",
 ]
 starknet = ["starknet-types-core"]
-evm = ["alloy-primitives"]
+evm = ["evm-alloy-1"]
+evm-alloy-0_6 = ["dep:alloy-primitives-0_6"]
+evm-alloy-1 = ["dep:alloy-primitives-1"]

@@ -267,7 +267,7 @@ mod tests {
         quoting::types::{Pool, PoolConfig, PoolKey, QuoteParams, Tick, TokenAmount},
     };
     use alloc::vec::Vec;
-    use alloy_primitives::Address;
+    use crate::alloy_primitives::Address;
     use ruint::uint;
 
     const DEFAULT_FEE: u64 = ((1u128 << 64) / 100) as u64;

@@ -297,7 +297,7 @@ impl private::Sealed for StableswapPool {}
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::Address;
+    use crate::alloy_primitives::Address;
 
     use super::*;
     use crate::{
