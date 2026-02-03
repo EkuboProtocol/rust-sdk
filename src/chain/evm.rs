@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::chain::Chain;
 
-#[cfg(feature = "evm-alloy-0_6")]
+#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
 type U96 = ruint::Uint<96, 2>;
 #[cfg(feature = "evm-alloy-1")]
 use crate::alloy_primitives::aliases::U96;
@@ -195,12 +195,12 @@ pub enum EvmPoolTypeConfig {
 
 #[cfg(feature = "evm-alloy-1")]
 const EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK: B32 = fixed_bytes!("0x80000000");
-#[cfg(feature = "evm-alloy-0_6")]
+#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
 const EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK: B32 = fixed_bytes!("80000000");
 
 #[cfg(feature = "evm-alloy-1")]
 const EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK: B32 = fixed_bytes!("0x7fffffff");
-#[cfg(feature = "evm-alloy-0_6")]
+#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
 const EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK: B32 = fixed_bytes!("7fffffff");
 
 /// Order identifier emitted by the TWAMM extension.
@@ -481,37 +481,37 @@ mod tests {
 
     #[cfg(feature = "evm-alloy-1")]
     const ONE_ADDRESS: Address = address!("0x0000000000000000000000000000000000000001");
-    #[cfg(feature = "evm-alloy-0_6")]
+    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
     const ONE_ADDRESS: Address = address!("0000000000000000000000000000000000000001");
 
     #[cfg(feature = "evm-alloy-1")]
     const ORDER_CONFIG_RAW: B256 =
         fixed_bytes!("0x01020304050607080100000000000000112233445566778899aabbccddeeff00");
-    #[cfg(feature = "evm-alloy-0_6")]
+    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
     const ORDER_CONFIG_RAW: B256 =
         fixed_bytes!("01020304050607080100000000000000112233445566778899aabbccddeeff00");
 
     #[cfg(feature = "evm-alloy-1")]
     const POOL_TOKEN0: Address = address!("0x37c8671A16E257eC501711Cc1d7eb8AF8544A69f");
-    #[cfg(feature = "evm-alloy-0_6")]
+    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
     const POOL_TOKEN0: Address = address!("37c8671A16E257eC501711Cc1d7eb8AF8544A69f");
 
     #[cfg(feature = "evm-alloy-1")]
     const POOL_TOKEN1: Address = address!("0xeE8F2aA3e6864493BEae55E27bb5d8a7B57021F8");
-    #[cfg(feature = "evm-alloy-0_6")]
+    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
     const POOL_TOKEN1: Address = address!("eE8F2aA3e6864493BEae55E27bb5d8a7B57021F8");
 
     #[cfg(feature = "evm-alloy-1")]
     const POOL_CONFIG_RAW: B256 =
         fixed_bytes!("0x000000000000000000000000000000000000000040000000000000000d000000");
-    #[cfg(feature = "evm-alloy-0_6")]
+    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
     const POOL_CONFIG_RAW: B256 =
         fixed_bytes!("000000000000000000000000000000000000000040000000000000000d000000");
 
     #[cfg(feature = "evm-alloy-1")]
     const POOL_ID: B256 =
         fixed_bytes!("0xa7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9");
-    #[cfg(feature = "evm-alloy-0_6")]
+    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
     const POOL_ID: B256 =
         fixed_bytes!("a7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9");
 

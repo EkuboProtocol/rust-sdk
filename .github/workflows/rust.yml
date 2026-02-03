@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -51,7 +51,7 @@ jobs:
         with:
           tool: cargo-hack
       - name: check
-        run: cargo hack check --feature-powerset --at-least-one-of std,no_std --mutually-exclusive-features std,no_std --group-features std,default --no-dev-deps --verbose
+        run: cargo hack check --feature-powerset --at-least-one-of std,no_std --mutually-exclusive-features std,no_std --mutually-exclusive-features evm-alloy-0_6,evm-alloy-1 --group-features std,default --no-dev-deps --verbose
 
   build-std:
     runs-on: ubuntu-latest
