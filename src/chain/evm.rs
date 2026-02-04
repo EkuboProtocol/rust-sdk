@@ -389,7 +389,7 @@ impl TryFrom<B32> for EvmPoolTypeConfig {
             if value.0[1] & 0x80 != 0 {
                 center_tick_bytes[0] = 0xff;
             }
-            let center_tick = i32::from_be_bytes(center_tick_bytes);
+            let center_tick = i32::from_be_bytes(center_tick_bytes) * 16;
 
             if !(EVM_MIN_TICK..=EVM_MAX_TICK).contains(&center_tick) {
                 return Err(EvmPoolTypeConfigParseError::InvalidCenterTick);
@@ -426,7 +426,7 @@ impl From<EvmPoolTypeConfig> for B32 {
                 center_tick,
                 amplification_factor,
             }) => {
-                let mut compressed = center_tick.to_be_bytes();
+                let mut compressed = (center_tick / 16).to_be_bytes();
                 compressed[0] = amplification_factor;
 
                 Self(compressed)
@@ -546,6 +546,7 @@ mod tests {
             (-1, 5u8),
             (1_000_000, 0u8),
             (-1_000_000, EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR),
+            (-27_631_040, 14),
         ];
 
         for (center_tick, amplification) in cases {
@@ -559,7 +560,7 @@ mod tests {
             assert_eq!(
                 decoded,
                 EvmPoolTypeConfig::Stableswap(StableswapPoolTypeConfig {
-                    center_tick,
+                    center_tick: center_tick - center_tick % 16,
                     amplification_factor: amplification
                 })
             );
