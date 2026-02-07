@@ -165,6 +165,9 @@ pub const EVM_FEE_BITS: u8 = 64;
 const TWO_POW_160: U256 = U256::from_limbs([0, 0, 0x100000000, 0]);
 const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 const TWO_POW_96: U256 = U256::from_limbs([0, 0x0100000000, 0, 0]);
+const TWO_POW_95: U256 = U256::from_limbs([0, 0x80000000, 0, 0]);
+const TWO_POW_94: U256 = U256::from_limbs([0, 0x40000000, 0, 0]);
+const TWO_POW_192: U256 = U256::from_limbs([0, 0, 0, 1]);
 
 const BIT_MASK: U96 = uint!(0xc00000000000000000000000_U96);
 const NOT_BIT_MASK: U96 = uint!(0x3fffffffffffffffffffffff_U96);
@@ -471,6 +474,21 @@ pub fn float_sqrt_ratio_to_fixed(sqrt_ratio_float: U96) -> U256 {
         << u8::try_from(uint!(2_U96) + ((sqrt_ratio_float & BIT_MASK) >> 89_u8)).unwrap()
 }
 
+/// Converts a fixed-point sqrt ratio into the compressed contract representation.
+pub fn fixed_sqrt_ratio_to_contract_sqrt_ratio(sqrt_ratio: U256) -> U256 {
+    if sqrt_ratio >= TWO_POW_192 {
+        panic!("failed to convert sqrt ratio limit");
+    } else if sqrt_ratio >= TWO_POW_160 {
+        (sqrt_ratio >> 98) + U256::from(BIT_MASK)
+    } else if sqrt_ratio >= TWO_POW_128 {
+        (sqrt_ratio >> 66) + TWO_POW_95
+    } else if sqrt_ratio >= TWO_POW_96 {
+        (sqrt_ratio >> 34) + TWO_POW_94
+    } else {
+        sqrt_ratio >> 2
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::alloy_primitives::address;
@@ -624,5 +642,25 @@ mod tests {
             super::float_sqrt_ratio_to_fixed(uint!(0x3ffffffffffffffff9ba1f6d_U96)),
             uint!(79228162514264337593122979252_U256)
         );
+    }
+
+    #[test]
+    fn fixed_sqrt_ratio_to_contract_sqrt_ratio_round_trips_with_float_conversion() {
+        let expected_contract_sqrt_ratio = uint!(0x3ffffffffffffffff9ba1f6d_U96);
+        let contract_sqrt_ratio =
+            super::fixed_sqrt_ratio_to_contract_sqrt_ratio(uint!(79228162514264337593122979252_U256));
+        assert_eq!(contract_sqrt_ratio, U256::from(expected_contract_sqrt_ratio));
+
+        let fixed_sqrt_ratio = super::float_sqrt_ratio_to_fixed(expected_contract_sqrt_ratio);
+        assert_eq!(
+            fixed_sqrt_ratio,
+            Evm::adjust_sqrt_ratio_precision(uint!(79228162514264337593122979252_U256))
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "failed to convert sqrt ratio limit")]
+    fn fixed_sqrt_ratio_to_contract_sqrt_ratio_rejects_too_large_ratio() {
+        let _ = super::fixed_sqrt_ratio_to_contract_sqrt_ratio(TWO_POW_192);
     }
 }
