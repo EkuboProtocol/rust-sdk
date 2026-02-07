@@ -1,6 +1,6 @@
 [package]
 name = "ekubo_sdk"
-version = "2.1.1"
+version = "2.1.2"
 authors = [
     "Mahmoud Salem <moody@ekubo.org>",
     "Die Herdplatte <die.herdplatte@gmail.com>",
