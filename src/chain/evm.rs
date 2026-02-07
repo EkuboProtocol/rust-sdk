@@ -647,9 +647,13 @@ mod tests {
     #[test]
     fn fixed_sqrt_ratio_to_contract_sqrt_ratio_round_trips_with_float_conversion() {
         let expected_contract_sqrt_ratio = uint!(0x3ffffffffffffffff9ba1f6d_U96);
-        let contract_sqrt_ratio =
-            super::fixed_sqrt_ratio_to_contract_sqrt_ratio(uint!(79228162514264337593122979252_U256));
-        assert_eq!(contract_sqrt_ratio, U256::from(expected_contract_sqrt_ratio));
+        let contract_sqrt_ratio = super::fixed_sqrt_ratio_to_contract_sqrt_ratio(uint!(
+            79228162514264337593122979252_U256
+        ));
+        assert_eq!(
+            contract_sqrt_ratio,
+            U256::from(expected_contract_sqrt_ratio)
+        );
 
         let fixed_sqrt_ratio = super::float_sqrt_ratio_to_fixed(expected_contract_sqrt_ratio);
         assert_eq!(
