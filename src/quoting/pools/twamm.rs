@@ -1,6 +1,7 @@
 use crate::quoting::types::{
     BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TimeRateDelta, TokenAmount,
 };
+use crate::quoting::util::approximate_extra_distinct_time_bitmap_lookups;
 use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
 use crate::{private, quoting::types::PoolState};
 
@@ -39,8 +40,8 @@ pub struct TwammPoolState<S> {
 #[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammStandalonePoolResources {
-    /// The number of seconds that passed since the last virtual order execution
-    pub virtual_order_seconds_executed: u32,
+    /// Number of additional distinct time bitmap lookups (besides the mandatory one).
+    pub extra_distinct_bitmap_lookups: u32,
     /// The amount of order updates that were applied to the sale rate
     pub virtual_order_delta_times_crossed: u32,
     /// Whether the virtual orders were executed or not (for a single swap, 1 or 0)
@@ -346,9 +347,10 @@ impl<C: Chain> Pool for TwammPool<C> {
             execution_resources: TwammPoolResources {
                 full_range: full_range_pool_execution_resources + final_quote.execution_resources,
                 twamm: TwammStandalonePoolResources {
-                    virtual_order_seconds_executed: (current_time
-                        - initial_state.last_execution_time)
-                        as u32,
+                    extra_distinct_bitmap_lookups: approximate_extra_distinct_time_bitmap_lookups(
+                        initial_state.last_execution_time,
+                        current_time,
+                    ),
                     virtual_order_delta_times_crossed,
                     virtual_orders_executed: u32::from(
                         current_time > initial_state.last_execution_time,
@@ -614,13 +616,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (999, 32, 0)
+            (999, 0, 0)
         );
     });
 
@@ -652,13 +654,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (990, 32, 0)
+            (990, 0, 0)
         );
     });
 
@@ -694,13 +696,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (998, 32, 0)
+            (998, 0, 0)
         );
     });
 
@@ -736,13 +738,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (999, 32, 0)
+            (999, 0, 0)
         );
     });
 
@@ -778,13 +780,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (0, 32, 0)
+            (0, 0, 0)
         );
     });
     chain_test!(
@@ -828,13 +830,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (2555, 32, 1)
+                (2555, 0, 1)
             );
         }
     );
@@ -880,13 +882,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (390, 32, 1)
+                (390, 0, 1)
             );
         }
     );
@@ -932,13 +934,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (390, 32, 1)
+                (390, 0, 1)
             );
         }
     );
@@ -984,13 +986,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (2555, 32, 1)
+                (2555, 0, 1)
             );
         }
     );
@@ -1027,13 +1029,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (990, 32, 0)
+            (990, 0, 0)
         );
     });
 
@@ -1069,13 +1071,13 @@ mod tests {
                 quote
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 quote
                     .execution_resources
                     .twamm
                     .virtual_order_delta_times_crossed
             ),
-            (989, 32, 0)
+            (989, 0, 0)
         );
     });
 
@@ -1113,13 +1115,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (717, 32, 0)
+                (717, 0, 0)
             );
         }
     );
@@ -1158,13 +1160,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (984, 32, 0)
+                (984, 0, 0)
             );
         }
     );
@@ -1203,13 +1205,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (983, 32, 0)
+                (983, 0, 0)
             );
         }
     );
@@ -1248,13 +1250,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (994, 32, 0)
+                (994, 0, 0)
             );
         }
     );
@@ -1293,13 +1295,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (989, 32, 1)
+                (989, 0, 1)
             );
         }
     );
@@ -1345,13 +1347,13 @@ mod tests {
                     quote
                         .execution_resources
                         .twamm
-                        .virtual_order_seconds_executed,
+                        .extra_distinct_bitmap_lookups,
                     quote
                         .execution_resources
                         .twamm
                         .virtual_order_delta_times_crossed
                 ),
-                (989, 32, 1)
+                (989, 0, 1)
             );
         }
     );
@@ -1546,7 +1548,7 @@ mod tests {
                 first_swap
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 first_swap
                     .execution_resources
                     .twamm
@@ -1558,7 +1560,7 @@ mod tests {
                     ChainEnum::Starknet => 19_993_991_114_278_789_950_510,
                 },
                 10_000_000_000_000_000_000_000,
-                2_040,
+                0,
                 0
             )
         );
@@ -1582,7 +1584,7 @@ mod tests {
                 second_swap
                     .execution_resources
                     .twamm
-                    .virtual_order_seconds_executed,
+                    .extra_distinct_bitmap_lookups,
                 second_swap
                     .execution_resources
                     .twamm
@@ -1594,7 +1596,7 @@ mod tests {
                     ChainEnum::Starknet => 19_985_938_387_207_961_531_114,
                 },
                 10_000_000_000_000_000_000_000,
-                60,
+                0,
                 0
             )
         );

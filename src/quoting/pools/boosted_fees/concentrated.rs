@@ -2,7 +2,7 @@ use crate::chain::Chain;
 use crate::quoting::types::{
     BlockTimestamp, LastTimeInfo, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TimeRateDelta,
 };
-use crate::quoting::util::real_last_time;
+use crate::quoting::util::{approximate_extra_distinct_time_bitmap_lookups, real_last_time};
 use crate::{private, quoting::types::PoolState};
 
 use alloc::vec::Vec;
@@ -49,8 +49,8 @@ pub struct BoostedFeesConcentratedPoolState {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedStandalonePoolResources {
-    /// The number of seconds that passed since the last donation accumulation
-    pub virtual_donate_seconds_executed: u32,
+    /// Number of additional distinct time bitmap lookups (besides the mandatory one).
+    pub extra_distinct_bitmap_lookups: u32,
     /// The amount of donate rate updates that were applied
     pub virtual_donate_delta_times_crossed: u32,
     /// Whether the donations were executed or not (for a single swap, 1 or 0)
@@ -171,7 +171,7 @@ impl Pool for BoostedFeesConcentratedPool {
         let real_last_donate_time;
 
         if current_time as u32 != last_donate_time {
-            real_last_donate_time = real_last_time(last_donate_time, current_time);
+            real_last_donate_time = real_last_time(current_time, last_donate_time);
             let mut time = real_last_donate_time;
 
             for delta in self
@@ -218,7 +218,10 @@ impl Pool for BoostedFeesConcentratedPool {
             execution_resources: BoostedFeesConcentratedPoolResources {
                 concentrated: underlying_execution_resources,
                 boosted_fees: BoostedFeesConcentratedStandalonePoolResources {
-                    virtual_donate_seconds_executed: (current_time - real_last_donate_time) as u32,
+                    extra_distinct_bitmap_lookups: approximate_extra_distinct_time_bitmap_lookups(
+                        real_last_donate_time,
+                        current_time,
+                    ),
                     virtual_donate_delta_times_crossed,
                     virtual_donations_executed: u32::from(current_time != real_last_donate_time),
                     fees_accumulated: u32::from(fees_accumulated),
@@ -345,7 +348,7 @@ mod tests {
 
         let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(resources.virtual_donate_seconds_executed, 0);
+        assert_eq!(resources.extra_distinct_bitmap_lookups, 0);
         assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
         assert_eq!(resources.virtual_donations_executed, 0);
         assert_eq!(resources.fees_accumulated, 0);
@@ -369,7 +372,7 @@ mod tests {
 
         let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(resources.virtual_donate_seconds_executed, 50);
+        assert_eq!(resources.extra_distinct_bitmap_lookups, 0);
         assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
         assert_eq!(resources.virtual_donations_executed, 1);
         assert_eq!(resources.fees_accumulated, 0);
@@ -404,7 +407,7 @@ mod tests {
 
         let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(resources.virtual_donate_seconds_executed, 300);
+        assert_eq!(resources.extra_distinct_bitmap_lookups, 0);
         assert_eq!(resources.virtual_donate_delta_times_crossed, 1);
         assert_eq!(resources.virtual_donations_executed, 1);
         assert_eq!(resources.fees_accumulated, 1);
@@ -446,7 +449,7 @@ mod tests {
 
         let resources = quote.execution_resources.boosted_fees;
 
-        assert_eq!(resources.virtual_donate_seconds_executed, 50);
+        assert_eq!(resources.extra_distinct_bitmap_lookups, 0);
         assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
         assert_eq!(resources.virtual_donations_executed, 1);
         assert_eq!(resources.fees_accumulated, 0);

@@ -1,7 +1,7 @@
 use crate::quoting::{
     pools::concentrated::{ConcentratedPoolConstructionError, ConcentratedPoolQuoteError},
     types::TokenAmount,
-    util::{approximate_extra_distinct_bitmap_lookups, find_nearest_initialized_tick_index},
+    util::{approximate_extra_distinct_tick_bitmap_lookups, find_nearest_initialized_tick_index},
 };
 use crate::quoting::{
     pools::concentrated::{ConcentratedPoolResources, ConcentratedPoolTypeConfig},
@@ -285,7 +285,7 @@ impl Pool for LimitOrderPool {
 
                 // account for the uninitialized ticks that we will skip next
                 concentrated_pool_resources.extra_distinct_bitmap_lookups +=
-                    approximate_extra_distinct_bitmap_lookups(
+                    approximate_extra_distinct_tick_bitmap_lookups(
                         concentrated_pool_state.sqrt_ratio,
                         skip_starting_sqrt_ratio,
                         LIMIT_ORDER_TICK_SPACING.unsigned_abs(),

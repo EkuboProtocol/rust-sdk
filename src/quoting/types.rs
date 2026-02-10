@@ -161,7 +161,7 @@ impl LastTimeInfo {
 
     pub fn real_time(self) -> u64 {
         match self {
-            Self::Stored { stored, current } => real_last_time(stored, current),
+            Self::Stored { stored, current } => real_last_time(current, stored),
             Self::Real(real) => real,
         }
     }

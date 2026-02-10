@@ -4,7 +4,8 @@ use crate::quoting::pools::{
 };
 use crate::quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
-    approximate_extra_distinct_bitmap_lookups, construct_sorted_ticks, ConstructSortedTicksError,
+    approximate_extra_distinct_tick_bitmap_lookups, construct_sorted_ticks,
+    ConstructSortedTicksError,
 };
 use crate::{
     chain::Chain,
@@ -464,7 +465,7 @@ impl<C: Chain> Pool for ConcentratedPool<C> {
                 starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
             ),
             initialized_ticks_crossed,
-            extra_distinct_bitmap_lookups: approximate_extra_distinct_bitmap_lookups(
+            extra_distinct_bitmap_lookups: approximate_extra_distinct_tick_bitmap_lookups(
                 starting_sqrt_ratio,
                 sqrt_ratio,
                 self.key.config.pool_type_config.0,
