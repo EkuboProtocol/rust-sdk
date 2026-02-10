@@ -1,8 +1,6 @@
+use crate::chain::Chain;
+use crate::math::tick::approximate_sqrt_ratio_to_tick;
 use crate::quoting::types::Tick;
-use crate::{
-    chain::Chain,
-    math::{facade::ln, uint::u256_to_float_base_x128},
-};
 use alloc::vec::Vec;
 use num_traits::Zero;
 use ruint::aliases::U256;
@@ -30,22 +28,50 @@ pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> 
     None
 }
 
-const LOG_BASE_SQRT_TICK_SIZE: f64 = 4.9999975000016666654166676666658333340476184226196031741031750577196410537756684185262518589393595459766211405607685305832e-7;
+const TICK_BITMAP_STORAGE_OFFSET: i32 = 89421695;
 
 #[must_use]
-pub fn approximate_number_of_tick_spacings_crossed(
+pub fn approximate_extra_distinct_tick_bitmap_lookups(
     starting_sqrt_ratio: U256,
     ending_sqrt_ratio: U256,
     tick_spacing: u32,
 ) -> u32 {
-    if tick_spacing == 0 {
+    if tick_spacing.is_zero() {
         return 0;
     }
 
-    let start: f64 = u256_to_float_base_x128(starting_sqrt_ratio);
-    let end: f64 = u256_to_float_base_x128(ending_sqrt_ratio);
-    let ticks_crossed = ((ln(start) - ln(end)).abs() / LOG_BASE_SQRT_TICK_SIZE) as u32;
-    ticks_crossed / tick_spacing
+    let tick_spacing = tick_spacing
+        .try_into()
+        .expect("tick spacing to fit into i32");
+
+    let (start_word, end_word) = (
+        bitmap_word_from_sqrt_ratio(starting_sqrt_ratio, tick_spacing),
+        bitmap_word_from_sqrt_ratio(ending_sqrt_ratio, tick_spacing),
+    );
+
+    start_word.abs_diff(end_word)
+}
+
+#[must_use]
+pub fn approximate_extra_distinct_time_bitmap_lookups(start_time: u64, end_time: u64) -> u32 {
+    u32::try_from(
+        bitmap_word_from_time(end_time)
+            .checked_sub(bitmap_word_from_time(start_time))
+            .expect("start_time to be lte end_time"),
+    )
+    .expect("time bitmap word diff to fit into u32")
+}
+
+fn bitmap_word_from_sqrt_ratio(sqrt_ratio: U256, tick_spacing: i32) -> u32 {
+    let tick = approximate_sqrt_ratio_to_tick(sqrt_ratio);
+    ((tick / tick_spacing) - i32::from((tick % tick_spacing).is_negative())
+        + TICK_BITMAP_STORAGE_OFFSET)
+        .cast_unsigned()
+        >> 8
+}
+
+fn bitmap_word_from_time(time: u64) -> u64 {
+    time >> 16
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
@@ -160,7 +186,7 @@ pub fn construct_sorted_ticks<C: Chain>(
     Ok(result)
 }
 
-pub fn real_last_time(stored: u32, current: u64) -> u64 {
+pub fn real_last_time(current: u64, stored: u32) -> u64 {
     current - (current.wrapping_sub(stored.into()) & u64::from(u32::MAX))
 }
 
@@ -169,7 +195,7 @@ mod tests {
     use super::*;
     use crate::{
         chain::{tests::run_for_all_chains, Chain},
-        math::sqrt_ratio::SQRT_RATIO_ONE,
+        math::tick::to_sqrt_ratio,
         quoting::types::Tick,
     };
     use alloc::vec;
@@ -284,70 +310,51 @@ mod tests {
         );
     }
 
-    chain_test!(approximate_number_of_tick_spacings_crossed_for_doubling, {
-        let min = ChainTy::min_sqrt_ratio();
-        let max = ChainTy::max_sqrt_ratio();
-        let cases = [
-            (min, min * U256::from(2), 0, 0),
-            (SQRT_RATIO_ONE, SQRT_RATIO_ONE * U256::from(2), 1, 1_386_295),
-            (min, min * U256::from(2), 1, 1_386_295),
-            (max, max / U256::from(2), 1, 1_386_295),
-        ];
+    chain_test!(approximate_extra_distinct_bitmap_lookups_word_boundaries, {
+        let spacing = 1u32;
+        let base = to_sqrt_ratio::<ChainTy>(0).unwrap();
+        let same_word = to_sqrt_ratio::<ChainTy>(128).unwrap();
+        let next_word = to_sqrt_ratio::<ChainTy>(129).unwrap();
 
-        for (start, end, spacing, expected) in cases {
-            assert_eq!(
-                approximate_number_of_tick_spacings_crossed(start, end, spacing),
-                expected
-            );
-        }
+        assert_eq!(
+            approximate_extra_distinct_tick_bitmap_lookups(base, same_word, spacing),
+            0
+        );
+        assert_eq!(
+            approximate_extra_distinct_tick_bitmap_lookups(base, next_word, spacing),
+            1
+        );
     });
 
-    chain_test!(
-        approximate_number_of_tick_spacings_crossed_for_doubling_big_tick_spacing,
-        {
-            let min = ChainTy::min_sqrt_ratio();
-            let max = ChainTy::max_sqrt_ratio();
-            let cases = [
-                (SQRT_RATIO_ONE, SQRT_RATIO_ONE * U256::from(2), 5, 277_259),
-                (min, min * U256::from(2), 3, 462_098),
-                (max, max / U256::from(2), 200, 6_931),
-            ];
+    chain_test!(approximate_extra_distinct_bitmap_lookups_negative_ticks, {
+        let spacing = 1u32;
+        let base = to_sqrt_ratio::<ChainTy>(0).unwrap();
+        let negative_same_word = to_sqrt_ratio::<ChainTy>(-1).unwrap();
+        let negative_prev_word = to_sqrt_ratio::<ChainTy>(-128).unwrap();
 
-            for (start, end, spacing, expected) in cases {
-                assert_eq!(
-                    approximate_number_of_tick_spacings_crossed(start, end, spacing),
-                    expected
-                );
-            }
-        }
-    );
+        assert_eq!(
+            approximate_extra_distinct_tick_bitmap_lookups(base, negative_same_word, spacing),
+            0
+        );
+        assert_eq!(
+            approximate_extra_distinct_tick_bitmap_lookups(base, negative_prev_word, spacing),
+            1
+        );
+    });
 
     #[test]
-    fn u256_to_fraction() {
+    fn approximate_extra_distinct_time_bitmap_lookups_word_boundaries() {
+        let base = 0_u64;
+        let same_word = (1_u64 << 16) - 1;
+        let next_word = 1_u64 << 16;
+
         assert_eq!(
-            u256_to_float_base_x128(U256::from_limbs([
-                16403144882676588163,
-                1525053501570699700,
-                35,
-                0
-            ])),
-            35.08267331597798
+            approximate_extra_distinct_time_bitmap_lookups(base, same_word),
+            0
         );
         assert_eq!(
-            u256_to_float_base_x128(U256::from_limbs([123456, 0, 0, 0])),
-            3.628045764377908e-34
-        );
-        assert_eq!(
-            u256_to_float_base_x128(U256::from_limbs([0, 123456, 0, 0])),
-            6.692563170318522e-15
-        );
-        assert_eq!(
-            u256_to_float_base_x128(U256::from_limbs([0, 0, 123456, 0])),
-            123456.0
-        );
-        assert_eq!(
-            u256_to_float_base_x128(U256::from_limbs([0, 0, 0, 123456])),
-            2.2773612363638864e24
+            approximate_extra_distinct_time_bitmap_lookups(base, next_word),
+            1
         );
     }
 

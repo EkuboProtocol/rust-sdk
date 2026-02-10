@@ -4,7 +4,8 @@ use crate::quoting::pools::{
 };
 use crate::quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
-    approximate_number_of_tick_spacings_crossed, construct_sorted_ticks, ConstructSortedTicksError,
+    approximate_extra_distinct_tick_bitmap_lookups, construct_sorted_ticks,
+    ConstructSortedTicksError,
 };
 use crate::{
     chain::Chain,
@@ -27,32 +28,33 @@ use thiserror::Error;
         deserialize = "C::Fee: serde::Deserialize<'de>, C::Address: serde::Deserialize<'de>"
     ))
 )]
-pub struct BasePool<C: Chain> {
+pub struct ConcentratedPool<C: Chain> {
     /// Immutable pool key identifying tokens and fee config.
-    key: BasePoolKey<C>,
+    key: ConcentratedPoolKey<C>,
     /// Current pool state (price, liquidity, active tick index).
-    state: BasePoolState,
+    state: ConcentratedPoolState,
     /// Sorted ticks defining liquidity changes across price ranges.
     sorted_ticks: Vec<Tick>,
 }
 
-/// Unique identifier for a [`BasePool`].
-pub type BasePoolKey<C> = PoolKey<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
-/// Pool configuration for a [`BasePool`].
-pub type BasePoolConfig<C> =
-    PoolConfig<<C as Chain>::Address, <C as Chain>::Fee, BasePoolTypeConfig>;
-/// Type configuration for a [`BasePool`], representing the tick spacing.
-pub type BasePoolTypeConfig = TickSpacing;
+/// Unique identifier for a [`ConcentratedPool`].
+pub type ConcentratedPoolKey<C> =
+    PoolKey<<C as Chain>::Address, <C as Chain>::Fee, ConcentratedPoolTypeConfig>;
+/// Pool configuration for a [`ConcentratedPool`].
+pub type ConcentratedPoolConfig<C> =
+    PoolConfig<<C as Chain>::Address, <C as Chain>::Fee, ConcentratedPoolTypeConfig>;
+/// Type configuration for a [`ConcentratedPool`], representing the tick spacing.
+pub type ConcentratedPoolTypeConfig = TickSpacing;
 
 /// Tick spacing for a concentrated pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TickSpacing(pub u32);
 
-/// Price/liquidity state for a [`BasePool`].
+/// Price/liquidity state for a [`ConcentratedPool`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasePoolState {
+pub struct ConcentratedPoolState {
     /// Current square root price ratio.
     pub sqrt_ratio: U256,
     /// Active liquidity at the current price.
@@ -64,18 +66,18 @@ pub struct BasePoolState {
 /// Resources consumed during swap execution
 #[derive(Clone, Copy, Default, Debug, PartialEq, Hash, Eq, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasePoolResources {
+pub struct ConcentratedPoolResources {
     /// Whether price changed when no override was provided.
     pub no_override_price_change: u32,
     /// Count of initialized ticks crossed during the quote.
     pub initialized_ticks_crossed: u32,
-    /// Count of tick spacings crossed during the quote.
-    pub tick_spacings_crossed: u32,
+    /// Number of additional distinct tick bitmap lookups (besides the mandatory one).
+    pub extra_distinct_bitmap_lookups: u32,
 }
 
-/// Errors that can occur when constructing a `BasePool`.
+/// Errors that can occur when constructing a `ConcentratedPool`.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-pub enum BasePoolConstructionError {
+pub enum ConcentratedPoolConstructionError {
     #[error(transparent)]
     Common(#[from] CommonPoolConstructionError),
     #[error("constructing ticks from partial data")]
@@ -116,7 +118,7 @@ pub enum BasePoolConstructionError {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
-pub enum BasePoolQuoteError {
+pub enum ConcentratedPoolQuoteError {
     #[error(transparent)]
     Common(#[from] CommonPoolQuoteError),
     #[error("invalid price limit")]
@@ -127,11 +129,11 @@ pub enum BasePoolQuoteError {
     FailedComputeSwapStep(#[from] ComputeStepError),
 }
 
-impl<C: Chain> BasePool<C> {
-    /// Creates a `BasePool` from partial tick data retrieved from a quote data fetcher lens contract.
+impl<C: Chain> ConcentratedPool<C> {
+    /// Creates a `ConcentratedPool` from partial tick data retrieved from a quote data fetcher lens contract.
     ///
     /// This helper constructor takes partial tick data along with min/max tick boundaries and constructs
-    /// a valid `BasePool` instance with properly balanced liquidity deltas.
+    /// a valid `ConcentratedPool` instance with properly balanced liquidity deltas.
     ///
     /// # Arguments
     ///
@@ -145,16 +147,16 @@ impl<C: Chain> BasePool<C> {
     ///
     /// # Returns
     ///
-    /// * `Result<Self, BasePoolConstructionError>` - A new `BasePool` instance or an error
+    /// * `Result<Self, ConcentratedPoolConstructionError>` - A new `ConcentratedPool` instance or an error
     pub fn from_partial_data(
-        key: BasePoolKey<C>,
+        key: ConcentratedPoolKey<C>,
         sqrt_ratio: U256,
         partial_ticks: Vec<Tick>,
         min_tick_searched: i32,
         max_tick_searched: i32,
         liquidity: u128,
         current_tick: i32,
-    ) -> Result<Self, BasePoolConstructionError> {
+    ) -> Result<Self, ConcentratedPoolConstructionError> {
         let tick_spacing = key.config.pool_type_config;
         let spacing_i32 = tick_spacing.0 as i32;
         let tick_spacing = tick_spacing.0;
@@ -168,12 +170,12 @@ impl<C: Chain> BasePool<C> {
             liquidity,
             current_tick,
         )
-        .map_err(BasePoolConstructionError::ConstructSortedTicksFromPartialDataError)?;
+        .map_err(ConcentratedPoolConstructionError::ConstructSortedTicksFromPartialDataError)?;
 
         // Ensure all ticks are multiples of tick spacing
         for tick in &sorted_ticks {
             if tick.index % spacing_i32 != 0 {
-                return Err(BasePoolConstructionError::TickNotMultipleOfSpacing);
+                return Err(ConcentratedPoolConstructionError::TickNotMultipleOfSpacing);
             }
         }
 
@@ -187,8 +189,8 @@ impl<C: Chain> BasePool<C> {
             }
         }
 
-        // Create the BasePoolState with the provided sqrt_ratio, liquidity, and computed active_tick_index
-        let state = BasePoolState {
+        // Create the ConcentratedPoolState with the provided sqrt_ratio, liquidity, and computed active_tick_index
+        let state = ConcentratedPoolState {
             sqrt_ratio,
             liquidity,
             active_tick_index,
@@ -199,20 +201,20 @@ impl<C: Chain> BasePool<C> {
     }
 
     pub fn new(
-        key: BasePoolKey<C>,
-        state: BasePoolState,
+        key: ConcentratedPoolKey<C>,
+        state: ConcentratedPoolState,
         sorted_ticks: Vec<Tick>,
-    ) -> Result<Self, BasePoolConstructionError> {
+    ) -> Result<Self, ConcentratedPoolConstructionError> {
         ensure_valid_token_order(&key)?;
 
         let tick_spacing = key.config.pool_type_config;
 
         if tick_spacing > C::max_tick_spacing() {
-            return Err(BasePoolConstructionError::TickSpacingTooLarge);
+            return Err(ConcentratedPoolConstructionError::TickSpacingTooLarge);
         }
 
         if tick_spacing.0.is_zero() {
-            return Err(BasePoolConstructionError::TickSpacingCannotBeZero);
+            return Err(ConcentratedPoolConstructionError::TickSpacingCannotBeZero);
         }
 
         // Check ticks are sorted in linear time
@@ -225,13 +227,13 @@ impl<C: Chain> BasePool<C> {
             // Verify ticks are sorted
             if let Some(last) = last_tick {
                 if tick.index <= last {
-                    return Err(BasePoolConstructionError::TicksNotSorted);
+                    return Err(ConcentratedPoolConstructionError::TicksNotSorted);
                 }
             }
 
             // Verify ticks are multiples of tick_spacing
             if !(tick.index % spacing_i32).is_zero() {
-                return Err(BasePoolConstructionError::TickNotMultipleOfSpacing);
+                return Err(ConcentratedPoolConstructionError::TickNotMultipleOfSpacing);
             }
 
             last_tick = Some(tick.index);
@@ -242,7 +244,7 @@ impl<C: Chain> BasePool<C> {
             } else {
                 total_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
             }
-            .ok_or(BasePoolConstructionError::ActiveLiquidityOverflow)?;
+            .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
 
             // Calculate active liquidity
             if let Some(active_index) = state.active_tick_index {
@@ -252,39 +254,41 @@ impl<C: Chain> BasePool<C> {
                     } else {
                         active_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
                     }
-                    .ok_or(BasePoolConstructionError::ActiveLiquidityOverflow)?;
+                    .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
                 }
             }
         }
 
         // Verify total liquidity is zero
         if !total_liquidity.is_zero() {
-            return Err(BasePoolConstructionError::TotalLiquidityNotZero);
+            return Err(ConcentratedPoolConstructionError::TotalLiquidityNotZero);
         }
 
         // Verify active liquidity matches state liquidity
         if active_liquidity != state.liquidity {
-            return Err(BasePoolConstructionError::ActiveLiquidityMismatch);
+            return Err(ConcentratedPoolConstructionError::ActiveLiquidityMismatch);
         }
 
         // Validate sqrt ratio against active or first tick
         if let Some(active) = state.active_tick_index {
             let tick = sorted_ticks
                 .get(active)
-                .ok_or(BasePoolConstructionError::ActiveTickIndexOutOfBounds)?;
+                .ok_or(ConcentratedPoolConstructionError::ActiveTickIndexOutOfBounds)?;
 
-            let active_tick_sqrt_ratio = to_sqrt_ratio::<C>(tick.index)
-                .ok_or(BasePoolConstructionError::InvalidTickIndex(tick.index))?;
+            let active_tick_sqrt_ratio = to_sqrt_ratio::<C>(tick.index).ok_or(
+                ConcentratedPoolConstructionError::InvalidTickIndex(tick.index),
+            )?;
 
             if active_tick_sqrt_ratio > state.sqrt_ratio {
-                return Err(BasePoolConstructionError::ActiveTickSqrtRatioInvalid);
+                return Err(ConcentratedPoolConstructionError::ActiveTickSqrtRatioInvalid);
             }
         } else if let Some(first) = sorted_ticks.first() {
-            let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index)
-                .ok_or(BasePoolConstructionError::InvalidTickIndex(first.index))?;
+            let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index).ok_or(
+                ConcentratedPoolConstructionError::InvalidTickIndex(first.index),
+            )?;
 
             if state.sqrt_ratio > first_tick_sqrt_ratio {
-                return Err(BasePoolConstructionError::SqrtRatioTooHighWithNoActiveTick);
+                return Err(ConcentratedPoolConstructionError::SqrtRatioTooHighWithNoActiveTick);
             }
         }
 
@@ -300,7 +304,7 @@ impl<C: Chain> BasePool<C> {
     }
 }
 
-impl PoolState for BasePoolState {
+impl PoolState for ConcentratedPoolState {
     fn sqrt_ratio(&self) -> U256 {
         self.sqrt_ratio
     }
@@ -310,14 +314,14 @@ impl PoolState for BasePoolState {
     }
 }
 
-impl<C: Chain> Pool for BasePool<C> {
+impl<C: Chain> Pool for ConcentratedPool<C> {
     type Address = C::Address;
     type Fee = C::Fee;
-    type Resources = BasePoolResources;
-    type State = BasePoolState;
-    type QuoteError = BasePoolQuoteError;
+    type Resources = ConcentratedPoolResources;
+    type State = ConcentratedPoolState;
+    type QuoteError = ConcentratedPoolQuoteError;
     type Meta = ();
-    type PoolTypeConfig = BasePoolTypeConfig;
+    type PoolTypeConfig = ConcentratedPoolTypeConfig;
 
     fn key(&self) -> PoolKey<C::Address, C::Fee, Self::PoolTypeConfig> {
         self.key
@@ -342,7 +346,7 @@ impl<C: Chain> Pool for BasePool<C> {
                 is_price_increasing: is_token1,
                 consumed_amount: 0,
                 calculated_amount: 0,
-                execution_resources: BasePoolResources::default(),
+                execution_resources: ConcentratedPoolResources::default(),
                 state_after: state,
                 fees_paid: 0,
             });
@@ -355,13 +359,13 @@ impl<C: Chain> Pool for BasePool<C> {
 
         let sqrt_ratio_limit = if let Some(limit) = params.sqrt_ratio_limit {
             if is_increasing && limit < sqrt_ratio {
-                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
+                return Err(ConcentratedPoolQuoteError::InvalidSqrtRatioLimit);
             }
             if !is_increasing && limit > sqrt_ratio {
-                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
+                return Err(ConcentratedPoolQuoteError::InvalidSqrtRatioLimit);
             }
             if limit < C::min_sqrt_ratio() || limit > C::max_sqrt_ratio() {
-                return Err(BasePoolQuoteError::InvalidSqrtRatioLimit);
+                return Err(ConcentratedPoolQuoteError::InvalidSqrtRatioLimit);
             }
             limit
         } else if is_increasing {
@@ -381,14 +385,14 @@ impl<C: Chain> Pool for BasePool<C> {
                 if let Some(index) = active_tick_index {
                     if let Some(tick) = self.sorted_ticks.get(index + 1) {
                         let ratio = to_sqrt_ratio::<C>(tick.index)
-                            .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?;
+                            .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))?;
                         Some((index + 1, tick, ratio))
                     } else {
                         None
                     }
                 } else if let Some(tick) = self.sorted_ticks.first() {
                     let ratio = to_sqrt_ratio::<C>(tick.index)
-                        .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?;
+                        .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))?;
                     Some((0, tick, ratio))
                 } else {
                     None
@@ -396,7 +400,7 @@ impl<C: Chain> Pool for BasePool<C> {
             } else if let Some(index) = active_tick_index {
                 if let Some(tick) = self.sorted_ticks.get(index) {
                     let ratio = to_sqrt_ratio::<C>(tick.index)
-                        .ok_or(BasePoolQuoteError::InvalidTick(tick.index))?;
+                        .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))?;
                     Some((index, tick, ratio))
                 } else {
                     None
@@ -424,7 +428,7 @@ impl<C: Chain> Pool for BasePool<C> {
                 is_token1,
                 self.key.config.fee,
             )
-            .map_err(BasePoolQuoteError::FailedComputeSwapStep)?;
+            .map_err(ConcentratedPoolQuoteError::FailedComputeSwapStep)?;
 
             amount_remaining -= step.consumed_amount;
             calculated_amount += step.calculated_amount;
@@ -456,19 +460,19 @@ impl<C: Chain> Pool for BasePool<C> {
             }
         }
 
-        let resources = BasePoolResources {
+        let resources = ConcentratedPoolResources {
             no_override_price_change: u32::from(
                 starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
             ),
             initialized_ticks_crossed,
-            tick_spacings_crossed: approximate_number_of_tick_spacings_crossed(
+            extra_distinct_bitmap_lookups: approximate_extra_distinct_tick_bitmap_lookups(
                 starting_sqrt_ratio,
                 sqrt_ratio,
                 self.key.config.pool_type_config.0,
             ),
         };
 
-        let state_after = BasePoolState {
+        let state_after = ConcentratedPoolState {
             sqrt_ratio,
             liquidity,
             active_tick_index,
@@ -501,8 +505,8 @@ impl<C: Chain> Pool for BasePool<C> {
     }
 }
 
-impl<C: Chain> private::Sealed for BasePool<C> {}
-impl private::Sealed for BasePoolState {}
+impl<C: Chain> private::Sealed for ConcentratedPool<C> {}
+impl private::Sealed for ConcentratedPoolState {}
 
 #[cfg(test)]
 mod tests {
@@ -518,7 +522,7 @@ mod tests {
     use alloc::vec;
     use num_traits::Zero;
 
-    fn pool_key<C: ChainTest>(tick_spacing: u32, fee: C::Fee) -> BasePoolKey<C> {
+    fn pool_key<C: ChainTest>(tick_spacing: u32, fee: C::Fee) -> ConcentratedPoolKey<C> {
         PoolKey {
             token0: C::zero_address(),
             token1: C::one_address(),
@@ -540,8 +544,12 @@ mod tests {
             .collect()
     }
 
-    fn pool_state(sqrt_ratio: U256, liquidity: u128, active: Option<usize>) -> BasePoolState {
-        BasePoolState {
+    fn pool_state(
+        sqrt_ratio: U256,
+        liquidity: u128,
+        active: Option<usize>,
+    ) -> ConcentratedPoolState {
+        ConcentratedPoolState {
             sqrt_ratio,
             liquidity,
             active_tick_index: active,
@@ -562,7 +570,7 @@ mod tests {
         #[test]
         fn token0_must_be_less_than_token1() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     PoolKey {
                         token0: ChainTy::zero_address(),
                         token1: ChainTy::zero_address(),
@@ -577,7 +585,7 @@ mod tests {
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::Common(
+                    ConcentratedPoolConstructionError::Common(
                         CommonPoolConstructionError::TokenOrderInvalid
                     )
                 );
@@ -587,14 +595,14 @@ mod tests {
         #[test]
         fn tick_spacing_zero_reverts() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(0, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE, 0, None),
                     vec![],
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::TickSpacingCannotBeZero
+                    ConcentratedPoolConstructionError::TickSpacingCannotBeZero
                 );
             });
         }
@@ -603,14 +611,14 @@ mod tests {
         fn tick_spacing_cannot_exceed_max() {
             run_for_all_chains!(ChainTy, _chain => {
                 if let Some(invalid) = ChainTy::max_tick_spacing().0.checked_add(1) {
-                    let result = BasePool::<ChainTy>::new(
+                    let result = ConcentratedPool::<ChainTy>::new(
                         pool_key::<ChainTy>(invalid, zero_fee::<ChainTy>()),
                         pool_state(SQRT_RATIO_ONE, 0, None),
                         vec![],
                     );
                     assert_eq!(
                         result.unwrap_err(),
-                        BasePoolConstructionError::TickSpacingTooLarge
+                        ConcentratedPoolConstructionError::TickSpacingTooLarge
                     );
                 }
             });
@@ -619,14 +627,14 @@ mod tests {
         #[test]
         fn ticks_must_be_sorted() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(ChainTy::max_tick(), 0), (0, 0)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::TicksNotSorted
+                    ConcentratedPoolConstructionError::TicksNotSorted
                 );
             });
         }
@@ -635,14 +643,14 @@ mod tests {
         fn ticks_must_align_with_spacing() {
             run_for_all_chains!(ChainTy, _chain => {
                 let spacing = ChainTy::max_tick_spacing();
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(spacing.0, zero_fee::<ChainTy>()),
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(-1, 1), (ChainTy::max_tick() - 1, -1)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::TickNotMultipleOfSpacing
+                    ConcentratedPoolConstructionError::TickNotMultipleOfSpacing
                 );
             });
         }
@@ -650,14 +658,14 @@ mod tests {
         #[test]
         fn total_liquidity_must_sum_to_zero() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(sqrt_ratio::<ChainTy>(0), 1, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -1)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::TotalLiquidityNotZero
+                    ConcentratedPoolConstructionError::TotalLiquidityNotZero
                 );
             });
         }
@@ -665,14 +673,14 @@ mod tests {
         #[test]
         fn active_tick_index_within_bounds() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(sqrt_ratio::<ChainTy>(0), 0, Some(2)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::ActiveTickIndexOutOfBounds
+                    ConcentratedPoolConstructionError::ActiveTickIndexOutOfBounds
                 );
             });
         }
@@ -680,14 +688,14 @@ mod tests {
         #[test]
         fn active_liquidity_must_match_sum_before_active_tick() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE, 0, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::ActiveLiquidityMismatch
+                    ConcentratedPoolConstructionError::ActiveLiquidityMismatch
                 );
             });
         }
@@ -695,14 +703,14 @@ mod tests {
         #[test]
         fn active_tick_sqrt_ratio_cannot_exceed_state() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE - U256::ONE, 2, Some(0)),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::ActiveTickSqrtRatioInvalid
+                    ConcentratedPoolConstructionError::ActiveTickSqrtRatioInvalid
                 );
             });
         }
@@ -710,14 +718,14 @@ mod tests {
         #[test]
         fn sqrt_ratio_must_be_below_first_tick_when_no_active_tick() {
             run_for_all_chains!(ChainTy, _chain => {
-                let result = BasePool::<ChainTy>::new(
+                let result = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE + U256::ONE, 0, None),
                     ticks(&[(0, 2), (ChainTy::max_tick(), -2)]),
                 );
                 assert_eq!(
                     result.unwrap_err(),
-                    BasePoolConstructionError::SqrtRatioTooHighWithNoActiveTick
+                    ConcentratedPoolConstructionError::SqrtRatioTooHighWithNoActiveTick
                 );
             });
         }
@@ -729,7 +737,7 @@ mod tests {
         #[test]
         fn zero_liquidity_token1_input() {
             run_for_all_chains!(ChainTy, _chain => {
-                let pool = BasePool::<ChainTy>::new(
+                let pool = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE, 0, None),
                     vec![],
@@ -758,7 +766,7 @@ mod tests {
         #[test]
         fn zero_liquidity_token0_input() {
             run_for_all_chains!(ChainTy, _chain => {
-                let pool = BasePool::<ChainTy>::new(
+                let pool = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE, 0, None),
                     vec![],
@@ -787,7 +795,7 @@ mod tests {
         #[test]
         fn liquidity_token1_input() {
             run_for_all_chains!(ChainTy, _chain => {
-                let pool = BasePool::<ChainTy>::new(
+                let pool = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(SQRT_RATIO_ONE, 1_000_000_000, Some(0)),
                     ticks(&[(0, 1_000_000_000), (1, -1_000_000_000)]),
@@ -816,7 +824,7 @@ mod tests {
         #[test]
         fn liquidity_token0_input() {
             run_for_all_chains!(ChainTy, _chain => {
-                let pool = BasePool::<ChainTy>::new(
+                let pool = ConcentratedPool::<ChainTy>::new(
                     pool_key::<ChainTy>(1, zero_fee::<ChainTy>()),
                     pool_state(sqrt_ratio::<ChainTy>(1), 0, Some(1)),
                     ticks(&[(0, 1_000_000_000), (1, -1_000_000_000)]),
@@ -844,9 +852,9 @@ mod tests {
 
         #[test]
         fn example_failing_quote_starknet_only() {
-            let pool = BasePool::<Starknet>::new(
+            let pool = ConcentratedPool::<Starknet>::new(
                 pool_key::<Starknet>(100, 17014118346046923988514818429550592u128),
-                BasePoolState {
+                ConcentratedPoolState {
                     sqrt_ratio: U256::from_limbs([16035209758820767612, 757181812420893, 0, 0]),
                     liquidity: 99999,
                     active_tick_index: Some(16),

@@ -6,9 +6,10 @@ use thiserror::Error;
 
 use crate::chain::Chain;
 use crate::private;
-use crate::quoting::pools::base::{
-    BasePool, BasePoolConfig, BasePoolConstructionError, BasePoolKey, BasePoolQuoteError,
-    BasePoolResources, BasePoolState, BasePoolTypeConfig, TickSpacing,
+use crate::quoting::pools::concentrated::{
+    ConcentratedPool, ConcentratedPoolConfig, ConcentratedPoolConstructionError,
+    ConcentratedPoolKey, ConcentratedPoolQuoteError, ConcentratedPoolResources,
+    ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
 };
 use crate::quoting::pools::limit_order::{
     LimitOrderPool, LimitOrderPoolConfig, LimitOrderPoolConstructionError, LimitOrderPoolKey,
@@ -29,20 +30,20 @@ use crate::quoting::pools::twamm::{
 use crate::quoting::types::{PoolConfig, PoolKey, Tick, TokenAmount};
 
 // Re-export pool types for ergonomic, chain-scoped usage.
-pub type StarknetBasePool = BasePool<Starknet>;
-pub type StarknetBasePoolConstructionError = BasePoolConstructionError;
-pub type StarknetBasePoolConfig = BasePoolConfig<Starknet>;
-pub type StarknetBasePoolKey = BasePoolKey<Starknet>;
-pub type StarknetBasePoolQuoteError = BasePoolQuoteError;
-pub type StarknetBasePoolResources = BasePoolResources;
-pub type StarknetBasePoolState = BasePoolState;
-pub type StarknetBasePoolTypeConfig = BasePoolTypeConfig;
+pub type StarknetConcentratedPool = ConcentratedPool<Starknet>;
+pub type StarknetConcentratedPoolConstructionError = ConcentratedPoolConstructionError;
+pub type StarknetConcentratedPoolConfig = ConcentratedPoolConfig<Starknet>;
+pub type StarknetConcentratedPoolKey = ConcentratedPoolKey<Starknet>;
+pub type StarknetConcentratedPoolQuoteError = ConcentratedPoolQuoteError;
+pub type StarknetConcentratedPoolResources = ConcentratedPoolResources;
+pub type StarknetConcentratedPoolState = ConcentratedPoolState;
+pub type StarknetConcentratedPoolTypeConfig = ConcentratedPoolTypeConfig;
 
 pub type StarknetLimitOrderPool = LimitOrderPool;
 pub type StarknetLimitOrderPoolConstructionError = LimitOrderPoolConstructionError;
 pub type StarknetLimitOrderPoolConfig = LimitOrderPoolConfig;
 pub type StarknetLimitOrderPoolKey = LimitOrderPoolKey;
-pub type StarknetLimitOrderPoolQuoteError = BasePoolQuoteError;
+pub type StarknetLimitOrderPoolQuoteError = ConcentratedPoolQuoteError;
 pub type StarknetLimitOrderPoolResources = LimitOrderPoolResources;
 pub type StarknetLimitOrderStandalonePoolResources = LimitOrderStandalonePoolResources;
 pub type StarknetLimitOrderPoolState = LimitOrderPoolState;
@@ -52,14 +53,14 @@ pub type StarknetOraclePoolConstructionError =
     OraclePoolConstructionError<FullRangePoolConstructionError>;
 pub type StarknetOraclePoolConfig = OraclePoolConfig<Starknet>;
 pub type StarknetOraclePoolKey = OraclePoolKey<Starknet>;
-pub type StarknetOraclePoolQuoteError = BasePoolQuoteError;
-pub type StarknetOraclePoolResources = OraclePoolResources<BasePoolResources>;
+pub type StarknetOraclePoolQuoteError = ConcentratedPoolQuoteError;
+pub type StarknetOraclePoolResources = OraclePoolResources<ConcentratedPoolResources>;
 pub type StarknetOracleStandalonePoolResources = OracleStandalonePoolResources;
-pub type StarknetOraclePoolState = OraclePoolState<BasePoolState>;
+pub type StarknetOraclePoolState = OraclePoolState<ConcentratedPoolState>;
 pub type StarknetOraclePoolTypeConfig = OraclePoolTypeConfig<Starknet>;
 
 pub type StarknetSplinePool = SplinePool;
-pub type StarknetSplinePoolConstructionError = BasePoolConstructionError;
+pub type StarknetSplinePoolConstructionError = ConcentratedPoolConstructionError;
 pub type StarknetSplinePoolConfig = SplinePoolConfig;
 pub type StarknetSplinePoolKey = SplinePoolKey;
 pub type StarknetSplinePoolResources = SplinePoolResources;
@@ -71,10 +72,10 @@ pub type StarknetTwammPoolConstructionError =
     TwammPoolConstructionError<FullRangePoolConstructionError>;
 pub type StarknetTwammPoolConfig = TwammPoolConfig<Starknet>;
 pub type StarknetTwammPoolKey = TwammPoolKey<Starknet>;
-pub type StarknetTwammPoolQuoteError = TwammPoolQuoteError<BasePoolQuoteError>;
-pub type StarknetTwammPoolResources = TwammPoolResources<BasePoolResources>;
+pub type StarknetTwammPoolQuoteError = TwammPoolQuoteError<ConcentratedPoolQuoteError>;
+pub type StarknetTwammPoolResources = TwammPoolResources<ConcentratedPoolResources>;
 pub type StarknetTwammStandalonePoolResources = TwammStandalonePoolResources;
-pub type StarknetTwammPoolState = TwammPoolState<BasePoolState>;
+pub type StarknetTwammPoolState = TwammPoolState<ConcentratedPoolState>;
 pub type StarknetTwammPoolTypeConfig = TwammPoolTypeConfig<Starknet>;
 
 pub const STARKNET_MAX_TICK_SPACING: TickSpacing = TickSpacing(354892);
@@ -121,8 +122,8 @@ pub type StarknetTokenAmount = TokenAmount<<Starknet as Chain>::Address>;
 /// Errors constructing a Starknet full range pool from inputs.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum FullRangePoolConstructionError {
-    #[error("base pool error")]
-    BasePoolConstructionError(#[from] BasePoolConstructionError),
+    #[error("concentrated pool error")]
+    ConcentratedPoolConstructionError(#[from] ConcentratedPoolConstructionError),
     #[error("active liquidity does not fit into signed integer")]
     ActiveLiquidityDoesNotFitSignedInteger,
 }
@@ -130,7 +131,7 @@ pub enum FullRangePoolConstructionError {
 impl Chain for Starknet {
     type Fee = u128;
 
-    type FullRangePool = BasePool<Self>;
+    type FullRangePool = ConcentratedPool<Self>;
     type FullRangePoolConstructionError = FullRangePoolConstructionError;
 
     fn max_tick_spacing() -> TickSpacing {
@@ -218,20 +219,20 @@ impl Chain for Starknet {
             extension,
         };
 
-        BasePool::new(
+        ConcentratedPool::new(
             PoolKey {
                 token0,
                 token1,
                 config,
             },
-            BasePoolState {
+            ConcentratedPoolState {
                 sqrt_ratio,
                 liquidity,
                 active_tick_index,
             },
             sorted_ticks,
         )
-        .map_err(FullRangePoolConstructionError::BasePoolConstructionError)
+        .map_err(FullRangePoolConstructionError::ConcentratedPoolConstructionError)
     }
 
     type Address = Felt;

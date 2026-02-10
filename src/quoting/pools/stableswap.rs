@@ -46,8 +46,6 @@ pub struct StableswapPool {
 pub struct StableswapPoolResources {
     /// Whether price changed when no override was provided.
     pub no_override_price_change: u32,
-    /// Count of initialized ticks crossed.
-    pub initialized_ticks_crossed: u32,
 }
 
 /// Unique identifier for a [`StableswapPool`].
@@ -190,7 +188,6 @@ impl Pool for StableswapPool {
 
         let mut calculated_amount = 0;
         let mut fees_paid = 0;
-        let mut initialized_ticks_crossed = 0;
         let mut amount_remaining = amount;
         let mut moved_out_of_boundary = false;
         let starting_sqrt_ratio = sqrt_ratio;
@@ -240,16 +237,12 @@ impl Pool for StableswapPool {
             fees_paid += step.fee_amount;
             sqrt_ratio = step.sqrt_ratio_next;
 
-            if let Some(next_tick_sqrt_ratio) = next_tick_sqrt_ratio {
-                if next_tick_sqrt_ratio == sqrt_ratio {
-                    initialized_ticks_crossed += 1;
-
-                    if sqrt_ratio == self.upper_price && increasing
-                        || sqrt_ratio == self.lower_price && !increasing
-                    {
-                        moved_out_of_boundary = true;
-                    }
-                }
+            if next_tick_sqrt_ratio.is_some_and(|next_tick_sqrt_ratio| {
+                next_tick_sqrt_ratio == sqrt_ratio
+                    && (sqrt_ratio == self.upper_price && increasing
+                        || sqrt_ratio == self.lower_price && !increasing)
+            }) {
+                moved_out_of_boundary = true;
             }
         }
 
@@ -257,7 +250,6 @@ impl Pool for StableswapPool {
             no_override_price_change: u32::from(
                 starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
             ),
-            initialized_ticks_crossed,
         };
 
         Ok(Quote {
@@ -510,7 +502,6 @@ mod tests {
         assert!(quote.consumed_amount > 0);
         assert!(quote.calculated_amount > 0);
         assert!(quote.state_after.sqrt_ratio <= to_sqrt_ratio::<Evm>(lower + 10).unwrap());
-        assert_eq!(quote.execution_resources.initialized_ticks_crossed, 0);
     }
 
     #[test]

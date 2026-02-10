@@ -1,6 +1,6 @@
 use crate::{
     private,
-    quoting::{pools::base::TickSpacing, types::Pool},
+    quoting::{pools::concentrated::TickSpacing, types::Pool},
 };
 use core::hash::Hash;
 use core::{

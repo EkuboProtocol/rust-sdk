@@ -1,16 +1,5 @@
 //! Thin facades over std/libm so float operations work in `no_std` mode.
 use ruint::aliases::U256;
-#[inline]
-pub fn ln(value: f64) -> f64 {
-    #[cfg(feature = "std")]
-    {
-        value.ln()
-    }
-    #[cfg(feature = "no_std")]
-    {
-        libm::log(value)
-    }
-}
 
 #[inline]
 pub fn log_base(value: f64, base: f64) -> f64 {
@@ -20,7 +9,7 @@ pub fn log_base(value: f64, base: f64) -> f64 {
     }
     #[cfg(feature = "no_std")]
     {
-        ln(value) / ln(base)
+        libm::log(value) / libm::log(base)
     }
 }
 
