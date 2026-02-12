@@ -1,3 +1,5 @@
+use core::iter::once;
+
 use crate::chain::Chain;
 use crate::quoting::types::{
     BlockTimestamp, LastTimeInfo, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TimeRateDelta,
@@ -170,7 +172,9 @@ impl Pool for BoostedFeesConcentratedPool {
         let mut fees_accumulated = false;
         let real_last_donate_time;
 
-        if current_time as u32 != last_donate_time {
+        let virtual_donations_executed = current_time as u32 != last_donate_time;
+
+        if virtual_donations_executed {
             real_last_donate_time = real_last_time(current_time, last_donate_time);
             let mut time = real_last_donate_time;
 
@@ -179,15 +183,22 @@ impl Pool for BoostedFeesConcentratedPool {
                 .iter()
                 .skip_while(|delta| delta.time <= real_last_donate_time)
                 .take_while(|delta| delta.time <= current_time)
+                .map(Some)
+                .chain(once(None))
             {
-                fees_accumulated |= (((donate_rate0 * u128::from(delta.time - time)) >> 32) != 0)
-                    || (((donate_rate1 * u128::from(delta.time - time)) >> 32) != 0);
+                let next_donate_time = delta.map_or(current_time, |trd| trd.time);
+                let time_elapsed = u128::from(next_donate_time - time);
 
-                donate_rate0 = donate_rate0.strict_add_signed(delta.rate_delta0);
-                donate_rate1 = donate_rate1.strict_add_signed(delta.rate_delta1);
+                fees_accumulated |= (((donate_rate0 * time_elapsed) >> 32) != 0)
+                    || (((donate_rate1 * time_elapsed) >> 32) != 0);
 
-                time = delta.time;
-                virtual_donate_delta_times_crossed += 1;
+                if let Some(delta) = delta {
+                    donate_rate0 = donate_rate0.strict_add_signed(delta.rate_delta0);
+                    donate_rate1 = donate_rate1.strict_add_signed(delta.rate_delta1);
+
+                    time = delta.time;
+                    virtual_donate_delta_times_crossed += 1;
+                }
             }
         } else {
             real_last_donate_time = current_time;
@@ -223,7 +234,7 @@ impl Pool for BoostedFeesConcentratedPool {
                         current_time,
                     ),
                     virtual_donate_delta_times_crossed,
-                    virtual_donations_executed: u32::from(current_time != real_last_donate_time),
+                    virtual_donations_executed: u32::from(virtual_donations_executed),
                     fees_accumulated: u32::from(fees_accumulated),
                 },
             },
@@ -464,5 +475,56 @@ mod tests {
         assert_eq!(last_donate_time, 150);
         assert_eq!(donate_rate0, 0);
         assert_eq!(donate_rate1, 0);
+    }
+
+    #[test]
+    fn marks_fees_accumulated_when_time_passes_without_crossing_delta() {
+        let rate = 1u128 << 32;
+        let pool = boosted_pool(
+            LastTimeInfo::Real(100),
+            rate,
+            0,
+            vec![TimeRateDelta {
+                time: 300,
+                rate_delta0: -(rate as i128),
+                rate_delta1: 0,
+            }],
+        );
+
+        let quote = quote_at(&pool, 200);
+        let resources = quote.execution_resources.boosted_fees;
+
+        assert_eq!(resources.virtual_donate_delta_times_crossed, 0);
+        assert_eq!(resources.virtual_donations_executed, 1);
+        assert_eq!(resources.fees_accumulated, 1);
+    }
+
+    #[test]
+    fn marks_fees_accumulated_for_trailing_segment_after_last_crossed_delta() {
+        let rate = 1u128 << 32;
+        let pool = boosted_pool(
+            LastTimeInfo::Real(0),
+            0,
+            0,
+            vec![
+                TimeRateDelta {
+                    time: 100,
+                    rate_delta0: rate as i128,
+                    rate_delta1: 0,
+                },
+                TimeRateDelta {
+                    time: 300,
+                    rate_delta0: -(rate as i128),
+                    rate_delta1: 0,
+                },
+            ],
+        );
+
+        let quote = quote_at(&pool, 250);
+        let resources = quote.execution_resources.boosted_fees;
+
+        assert_eq!(resources.virtual_donate_delta_times_crossed, 1);
+        assert_eq!(resources.virtual_donations_executed, 1);
+        assert_eq!(resources.fees_accumulated, 1);
     }
 }
