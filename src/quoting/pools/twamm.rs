@@ -6,6 +6,7 @@ use crate::{chain::Chain, math::twamm::sqrt_ratio::calculate_next_sqrt_ratio};
 use crate::{private, quoting::types::PoolState};
 
 use alloc::vec::Vec;
+use core::iter::once;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::{ToPrimitive, Zero};
 use ruint::aliases::U256;
@@ -194,19 +195,13 @@ impl<C: Chain> Pool for TwammPool<C> {
         let mut next_sqrt_ratio = initial_state.full_range_pool_state.sqrt_ratio();
         let mut token0_sale_rate = initial_state.token0_sale_rate;
         let mut token1_sale_rate = initial_state.token1_sale_rate;
-        let mut last_execution_time = initial_state.last_execution_time;
+        let last_execution_time = initial_state.last_execution_time;
 
         if current_time < last_execution_time {
             return Err(TwammPoolQuoteError::ExecutionTimeExceedsBlockTime);
         }
 
         let mut virtual_order_delta_times_crossed = 0;
-        let mut next_sale_rate_delta_index = self
-            .virtual_order_deltas
-            .iter()
-            .position(|srd| srd.time > last_execution_time)
-            .unwrap_or(self.virtual_order_deltas.len());
-
         let mut full_range_pool_state_override = override_state.map(|s| s.full_range_pool_state);
         let mut full_range_pool_execution_resources =
             <C::FullRangePool as Pool>::Resources::default();
@@ -217,13 +212,19 @@ impl<C: Chain> Pool for TwammPool<C> {
             config: PoolConfig { fee, .. },
         } = self.full_range_pool.key();
 
-        while last_execution_time != current_time {
-            let sale_rate_delta = self.virtual_order_deltas.get(next_sale_rate_delta_index);
+        let mut time = last_execution_time;
 
-            let next_execution_time =
-                sale_rate_delta.map_or(current_time, |srd| srd.time.min(current_time));
+        for sale_rate_delta in self
+            .virtual_order_deltas
+            .iter()
+            .skip_while(|srd| srd.time <= last_execution_time)
+            .take_while(|srd| srd.time <= current_time)
+            .map(Some)
+            .chain(once(None))
+        {
+            let next_execution_time = sale_rate_delta.map_or(current_time, |srd| srd.time);
 
-            let time_elapsed = next_execution_time - last_execution_time;
+            let time_elapsed = next_execution_time - time;
             if time_elapsed > u32::MAX.into() {
                 return Err(TwammPoolQuoteError::TooMuchTimePassedSinceLastExecution);
             }
@@ -310,23 +311,12 @@ impl<C: Chain> Pool for TwammPool<C> {
             }
 
             if let Some(next_delta) = sale_rate_delta {
-                if next_delta.time == next_execution_time {
-                    token0_sale_rate = if next_delta.rate_delta0 < 0 {
-                        token0_sale_rate - next_delta.rate_delta0.unsigned_abs()
-                    } else {
-                        token0_sale_rate + next_delta.rate_delta0.unsigned_abs()
-                    };
-                    token1_sale_rate = if next_delta.rate_delta1 < 0 {
-                        token1_sale_rate - next_delta.rate_delta1.unsigned_abs()
-                    } else {
-                        token1_sale_rate + next_delta.rate_delta1.unsigned_abs()
-                    };
-                    next_sale_rate_delta_index += 1;
-                    virtual_order_delta_times_crossed += 1;
-                }
+                token0_sale_rate = token0_sale_rate.strict_add_signed(next_delta.rate_delta0);
+                token1_sale_rate = token1_sale_rate.strict_add_signed(next_delta.rate_delta1);
+                virtual_order_delta_times_crossed += 1;
             }
 
-            last_execution_time = next_execution_time;
+            time = next_execution_time;
         }
 
         let final_quote = self

@@ -239,22 +239,16 @@ impl<C: Chain> ConcentratedPool<C> {
             last_tick = Some(tick.index);
 
             // Calculate total liquidity
-            total_liquidity = if tick.liquidity_delta < 0 {
-                total_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
-            } else {
-                total_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
-            }
-            .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
+            total_liquidity = total_liquidity
+                .checked_add_signed(tick.liquidity_delta)
+                .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
 
             // Calculate active liquidity
             if let Some(active_index) = state.active_tick_index {
                 if i <= active_index {
-                    active_liquidity = if tick.liquidity_delta > 0 {
-                        active_liquidity.checked_add(tick.liquidity_delta.unsigned_abs())
-                    } else {
-                        active_liquidity.checked_sub(tick.liquidity_delta.unsigned_abs())
-                    }
-                    .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
+                    active_liquidity = active_liquidity
+                        .checked_add_signed(tick.liquidity_delta)
+                        .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
                 }
             }
         }
