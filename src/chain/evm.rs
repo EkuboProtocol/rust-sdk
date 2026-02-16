@@ -6,9 +6,6 @@ use thiserror::Error;
 
 use crate::chain::Chain;
 
-#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-type U96 = ruint::Uint<96, 2>;
-#[cfg(feature = "evm-alloy-1")]
 use crate::alloy_primitives::aliases::U96;
 use crate::private;
 use crate::quoting::pools::boosted_fees::concentrated::{
@@ -197,15 +194,9 @@ pub enum EvmPoolTypeConfig {
     Concentrated(ConcentratedPoolTypeConfig),
 }
 
-#[cfg(feature = "evm-alloy-1")]
 const EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK: B32 = fixed_bytes!("0x80000000");
-#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-const EVM_POOL_TYPE_CONFIG_CONCENTRATED_MASK: B32 = fixed_bytes!("80000000");
 
-#[cfg(feature = "evm-alloy-1")]
 const EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK: B32 = fixed_bytes!("0x7fffffff");
-#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-const EVM_POOL_TYPE_CONFIG_TICK_SPACING_MASK: B32 = fixed_bytes!("7fffffff");
 
 /// Order identifier emitted by the TWAMM extension.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -312,19 +303,12 @@ impl Chain for Evm {
         active_liquidity: u128,
     ) -> Result<Self::FullRangePool, Self::FullRangePoolConstructionError> {
         FullRangePool::new(
-            PoolKey {
+            PoolKey::new(
                 token0,
                 token1,
-                config: PoolConfig {
-                    fee,
-                    pool_type_config: FullRangePoolTypeConfig,
-                    extension,
-                },
-            },
-            FullRangePoolState {
-                sqrt_ratio,
-                liquidity: active_liquidity,
-            },
+                PoolConfig::new(extension, fee, FullRangePoolTypeConfig),
+            ),
+            FullRangePoolState::new(sqrt_ratio, active_liquidity),
         )
     }
 }
@@ -469,13 +453,16 @@ impl TryFrom<B256> for EvmPoolConfig {
 
 impl private::Sealed for Evm {}
 
-/// Converts a compressed sqrt ratio into a fixed-point sqrt ratio.
+/// 96-bit contract `sqrtPrice` to canonical SDK `U256 sqrt_ratio`.
+///
+/// The on-chain value is a compact float-like encoding (`uint96` payload) used for calldata/storage
+/// efficiency. All quote logic in the SDK uses the expanded fixed `U256` representation.
 pub fn float_sqrt_ratio_to_fixed(sqrt_ratio_float: U96) -> U256 {
     U256::from(sqrt_ratio_float & NOT_BIT_MASK)
         << u8::try_from(uint!(2_U96) + ((sqrt_ratio_float & BIT_MASK) >> 89_u8)).unwrap()
 }
 
-/// Converts a fixed-point sqrt ratio into the compressed contract representation.
+/// Canonical SDK `U256 sqrt_ratio` to compact contract `sqrtPrice` payload.
 pub fn fixed_sqrt_ratio_to_contract_sqrt_ratio(sqrt_ratio: U256) -> U256 {
     if sqrt_ratio >= TWO_POW_192 {
         panic!("failed to convert sqrt ratio limit");
@@ -498,41 +485,20 @@ mod tests {
 
     use super::*;
 
-    #[cfg(feature = "evm-alloy-1")]
     const ONE_ADDRESS: Address = address!("0x0000000000000000000000000000000000000001");
-    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-    const ONE_ADDRESS: Address = address!("0000000000000000000000000000000000000001");
 
-    #[cfg(feature = "evm-alloy-1")]
     const ORDER_CONFIG_RAW: B256 =
         fixed_bytes!("0x01020304050607080100000000000000112233445566778899aabbccddeeff00");
-    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-    const ORDER_CONFIG_RAW: B256 =
-        fixed_bytes!("01020304050607080100000000000000112233445566778899aabbccddeeff00");
 
-    #[cfg(feature = "evm-alloy-1")]
     const POOL_TOKEN0: Address = address!("0x37c8671A16E257eC501711Cc1d7eb8AF8544A69f");
-    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-    const POOL_TOKEN0: Address = address!("37c8671A16E257eC501711Cc1d7eb8AF8544A69f");
 
-    #[cfg(feature = "evm-alloy-1")]
     const POOL_TOKEN1: Address = address!("0xeE8F2aA3e6864493BEae55E27bb5d8a7B57021F8");
-    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-    const POOL_TOKEN1: Address = address!("eE8F2aA3e6864493BEae55E27bb5d8a7B57021F8");
 
-    #[cfg(feature = "evm-alloy-1")]
     const POOL_CONFIG_RAW: B256 =
         fixed_bytes!("0x000000000000000000000000000000000000000040000000000000000d000000");
-    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-    const POOL_CONFIG_RAW: B256 =
-        fixed_bytes!("000000000000000000000000000000000000000040000000000000000d000000");
 
-    #[cfg(feature = "evm-alloy-1")]
     const POOL_ID: B256 =
         fixed_bytes!("0xa7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9");
-    #[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-    const POOL_ID: B256 =
-        fixed_bytes!("a7dfc779e04825212b0daf2a2272e9574a1cc54cd3ff26f590a1b2789677b3c9");
 
     impl ChainTest for Evm {
         fn zero_address() -> Self::Address {

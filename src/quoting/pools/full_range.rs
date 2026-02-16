@@ -47,6 +47,15 @@ pub struct FullRangePoolState {
     pub liquidity: u128,
 }
 
+impl FullRangePoolState {
+    pub const fn new(sqrt_ratio: U256, liquidity: u128) -> Self {
+        Self {
+            sqrt_ratio,
+            liquidity,
+        }
+    }
+}
+
 /// Resources consumed during full range swap execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -88,10 +97,7 @@ impl FullRangePool {
 
         Ok(Self {
             key,
-            state: FullRangePoolState {
-                sqrt_ratio: state.sqrt_ratio,
-                liquidity: state.liquidity,
-            },
+            state: FullRangePoolState::new(state.sqrt_ratio, state.liquidity),
         })
     }
 }
@@ -198,10 +204,7 @@ impl Pool for FullRangePool {
             ),
         };
 
-        let state_after = FullRangePoolState {
-            sqrt_ratio,
-            liquidity,
-        };
+        let state_after = FullRangePoolState::new(sqrt_ratio, liquidity);
 
         Ok(Quote {
             is_price_increasing: is_increasing,

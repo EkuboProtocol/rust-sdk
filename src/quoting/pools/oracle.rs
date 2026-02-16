@@ -17,6 +17,15 @@ pub struct OraclePoolState<S> {
     pub last_snapshot_time: u64,
 }
 
+impl<S> OraclePoolState<S> {
+    pub const fn new(full_range_pool_state: S, last_snapshot_time: u64) -> Self {
+        Self {
+            full_range_pool_state,
+            last_snapshot_time,
+        }
+    }
+}
+
 /// Resources consumed during oracle quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -98,10 +107,7 @@ impl<C: Chain> Pool for OraclePool<C> {
     }
 
     fn state(&self) -> Self::State {
-        OraclePoolState {
-            full_range_pool_state: self.full_range_pool.state(),
-            last_snapshot_time: self.last_snapshot_time,
-        }
+        OraclePoolState::new(self.full_range_pool.state(), self.last_snapshot_time)
     }
 
     fn quote(
@@ -131,10 +137,7 @@ impl<C: Chain> Pool for OraclePool<C> {
             },
             fees_paid: result.fees_paid,
             is_price_increasing: result.is_price_increasing,
-            state_after: OraclePoolState {
-                full_range_pool_state: result.state_after,
-                last_snapshot_time: block_time,
-            },
+            state_after: OraclePoolState::new(result.state_after, block_time),
         })
     }
 

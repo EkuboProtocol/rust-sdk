@@ -56,6 +56,18 @@ pub struct LimitOrderPoolState {
     pub tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
 }
 
+impl LimitOrderPoolState {
+    pub const fn new(
+        concentrated_pool_state: ConcentratedPoolState,
+        tick_indices_reached: Option<(Option<usize>, Option<usize>)>,
+    ) -> Self {
+        Self {
+            concentrated_pool_state,
+            tick_indices_reached,
+        }
+    }
+}
+
 /// Resources consumed during limit order quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -86,19 +98,12 @@ pub enum LimitOrderPoolConstructionError {
 }
 
 impl LimitOrderPool {
-    pub fn new(
-        token0: Felt,
-        token1: Felt,
-        extension: Felt,
-        sqrt_ratio: U256,
-        tick: i32,
-        liquidity: u128,
-        sorted_ticks: Vec<Tick>,
-    ) -> Result<Self, LimitOrderPoolConstructionError> {
+    fn validate_ticks_have_neighbors(
+        sorted_ticks: &[Tick],
+    ) -> Result<(), LimitOrderPoolConstructionError> {
         // check that each tick has at least 1 neighbor within 128 ticks
-        let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
         let mut maybe_last: Option<(&Tick, usize)> = None;
-        for t in &sorted_ticks {
+        for t in sorted_ticks {
             if let Some((last, count)) = maybe_last {
                 if t.index == last.index + LIMIT_ORDER_TICK_SPACING {
                     maybe_last = Some((t, count + 1));
@@ -115,27 +120,64 @@ impl LimitOrderPool {
         if maybe_last.is_some_and(|(_, count)| count.is_zero()) {
             return Err(LimitOrderPoolConstructionError::LastTickHasNoNeighbor);
         }
+        Ok(())
+    }
+
+    pub fn new(
+        token0: Felt,
+        token1: Felt,
+        extension: Felt,
+        sqrt_ratio: U256,
+        tick: i32,
+        liquidity: u128,
+        sorted_ticks: Vec<Tick>,
+    ) -> Result<Self, LimitOrderPoolConstructionError> {
+        let key = PoolKey::new(
+            token0,
+            token1,
+            PoolConfig::new(
+                extension,
+                0,
+                TickSpacing(LIMIT_ORDER_TICK_SPACING.unsigned_abs()),
+            ),
+        );
+
+        let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
+        Self::validate_ticks_have_neighbors(&sorted_ticks)?;
 
         Ok(LimitOrderPool {
             concentrated_pool: ConcentratedPool::new(
-                PoolKey {
-                    token0,
-                    token1,
-                    config: PoolConfig {
-                        fee: 0,
-                        pool_type_config: TickSpacing(LIMIT_ORDER_TICK_SPACING.unsigned_abs()),
-                        extension,
-                    },
-                },
-                ConcentratedPoolState {
-                    sqrt_ratio,
-                    liquidity,
-                    active_tick_index,
-                },
+                key,
+                ConcentratedPoolState::new(sqrt_ratio, liquidity, active_tick_index),
                 sorted_ticks,
             )
             .map_err(LimitOrderPoolConstructionError::ConcentratedPoolConstructionError)?,
         })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_partial_data(
+        key: LimitOrderPoolKey,
+        sqrt_ratio: U256,
+        partial_ticks: Vec<Tick>,
+        min_tick_searched: i32,
+        max_tick_searched: i32,
+        liquidity: u128,
+        current_tick: i32,
+    ) -> Result<Self, LimitOrderPoolConstructionError> {
+        let concentrated_pool = ConcentratedPool::from_partial_data(
+            key,
+            sqrt_ratio,
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            liquidity,
+            current_tick,
+        )?;
+
+        Self::validate_ticks_have_neighbors(concentrated_pool.ticks())?;
+
+        Ok(Self { concentrated_pool })
     }
 }
 
@@ -153,10 +195,7 @@ impl Pool for LimitOrderPool {
     }
 
     fn state(&self) -> Self::State {
-        LimitOrderPoolState {
-            concentrated_pool_state: self.concentrated_pool.state(),
-            tick_indices_reached: None,
-        }
+        LimitOrderPoolState::new(self.concentrated_pool.state(), None)
     }
 
     fn quote(

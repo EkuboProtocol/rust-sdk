@@ -26,6 +26,15 @@ pub struct StableswapPoolTypeConfig {
     pub amplification_factor: u8,
 }
 
+impl StableswapPoolTypeConfig {
+    pub const fn new(center_tick: i32, amplification_factor: u8) -> Self {
+        Self {
+            center_tick,
+            amplification_factor,
+        }
+    }
+}
+
 /// Stableswap pool specialized for tightly-pegged assets.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -109,10 +118,7 @@ impl StableswapPool {
 
         Ok(Self {
             key,
-            state: FullRangePoolState {
-                sqrt_ratio: state.sqrt_ratio,
-                liquidity: state.liquidity,
-            },
+            state: FullRangePoolState::new(state.sqrt_ratio, state.liquidity),
             lower_price: {
                 let lower_tick = center_tick - liquidity_width;
 
@@ -257,10 +263,7 @@ impl Pool for StableswapPool {
             consumed_amount: amount - amount_remaining,
             calculated_amount,
             execution_resources: resources,
-            state_after: FullRangePoolState {
-                sqrt_ratio,
-                liquidity,
-            },
+            state_after: FullRangePoolState::new(sqrt_ratio, liquidity),
             fees_paid,
         })
     }

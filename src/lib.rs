@@ -6,22 +6,14 @@ compile_error!(r#"Features "std" and "no_std" are mutually exclusive."#);
 #[cfg(not(any(feature = "std", feature = "no_std")))]
 compile_error!(r#"Either feature "std" or "no_std" must be enabled."#);
 
-#[cfg(all(
-    feature = "evm",
-    not(any(feature = "evm-alloy-0_6", feature = "evm-alloy-1"))
-))]
-compile_error!(r#"Feature "evm" requires either "evm-alloy-0_6" or "evm-alloy-1"."#);
-
 extern crate alloc;
 #[cfg(any(test, feature = "std"))]
 extern crate std;
 
 pub use ruint::aliases::U256;
 
-#[cfg(all(feature = "evm-alloy-0_6", not(feature = "evm-alloy-1")))]
-pub use alloy_primitives_0_6 as alloy_primitives;
-#[cfg(feature = "evm-alloy-1")]
-pub use alloy_primitives_1 as alloy_primitives;
+#[cfg(feature = "evm")]
+pub use alloy_primitives;
 
 pub mod chain;
 pub mod math;
