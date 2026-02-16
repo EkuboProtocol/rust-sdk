@@ -167,7 +167,25 @@ impl LastTimeInfo {
     }
 }
 
+impl<A, F, C> PoolConfig<A, F, C> {
+    pub fn new(extension: A, fee: F, pool_type_config: C) -> Self {
+        Self {
+            extension,
+            fee,
+            pool_type_config,
+        }
+    }
+}
+
 impl<A, F, C> PoolKey<A, F, C> {
+    pub fn new(token0: A, token1: A, config: PoolConfig<A, F, C>) -> Self {
+        Self {
+            token0,
+            token1,
+            config,
+        }
+    }
+
     /// Convenience function to map pool type configs using their [`From`] implementations.
     pub fn map_into_config<T: From<C>>(self) -> PoolKey<A, F, T> {
         let Self {
@@ -189,6 +207,37 @@ impl<A, F, C> PoolKey<A, F, C> {
                 fee,
                 pool_type_config: pool_type_config.into(),
             },
+        }
+    }
+}
+
+impl Tick {
+    pub fn new(index: i32, liquidity_delta: i128) -> Self {
+        Self {
+            index,
+            liquidity_delta,
+        }
+    }
+}
+
+impl<A> TokenAmount<A> {
+    pub fn new(token: A, amount: i128) -> Self {
+        Self { token, amount }
+    }
+}
+
+impl<A, S, M> QuoteParams<A, S, M> {
+    pub fn new(
+        token_amount: TokenAmount<A>,
+        sqrt_ratio_limit: Option<U256>,
+        override_state: Option<S>,
+        meta: M,
+    ) -> Self {
+        Self {
+            token_amount,
+            sqrt_ratio_limit,
+            override_state,
+            meta,
         }
     }
 }

@@ -38,6 +38,22 @@ pub struct TwammPoolState<S> {
     pub last_execution_time: u64,
 }
 
+impl<S> TwammPoolState<S> {
+    pub const fn new(
+        full_range_pool_state: S,
+        token0_sale_rate: u128,
+        token1_sale_rate: u128,
+        last_execution_time: u64,
+    ) -> Self {
+        Self {
+            full_range_pool_state,
+            token0_sale_rate,
+            token1_sale_rate,
+            last_execution_time,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TwammStandalonePoolResources {
@@ -170,12 +186,12 @@ impl<C: Chain> Pool for TwammPool<C> {
     }
 
     fn state(&self) -> Self::State {
-        TwammPoolState {
-            full_range_pool_state: self.full_range_pool.state(),
-            last_execution_time: self.last_execution_time,
-            token0_sale_rate: self.token0_sale_rate,
-            token1_sale_rate: self.token1_sale_rate,
-        }
+        TwammPoolState::new(
+            self.full_range_pool.state(),
+            self.token0_sale_rate,
+            self.token1_sale_rate,
+            self.last_execution_time,
+        )
     }
 
     fn quote(

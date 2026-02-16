@@ -2,7 +2,8 @@ use core::iter::once;
 
 use crate::chain::Chain;
 use crate::quoting::types::{
-    BlockTimestamp, LastTimeInfo, Pool, PoolConfig, PoolKey, Quote, QuoteParams, TimeRateDelta,
+    BlockTimestamp, LastTimeInfo, Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick,
+    TimeRateDelta,
 };
 use crate::quoting::util::{approximate_extra_distinct_time_bitmap_lookups, real_last_time};
 use crate::{private, quoting::types::PoolState};
@@ -48,6 +49,22 @@ pub struct BoostedFeesConcentratedPoolState {
     pub donate_rate1: u128,
 }
 
+impl BoostedFeesConcentratedPoolState {
+    pub const fn new(
+        concentrated_pool_state: EvmConcentratedPoolState,
+        last_donate_time: u32,
+        donate_rate0: u128,
+        donate_rate1: u128,
+    ) -> Self {
+        Self {
+            concentrated_pool_state,
+            last_donate_time,
+            donate_rate0,
+            donate_rate1,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoostedFeesConcentratedStandalonePoolResources {
@@ -77,6 +94,18 @@ pub enum BoostedFeesConcentratedPoolConstructionError {
     DonateRateDeltaSumNonZero,
     #[error("pool type does not match boosted fees version")]
     IncorrectPoolType,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum BoostedFeesConcentratedPoolFromPartialDataError {
+    #[error("concentrated pool construction error")]
+    ConcentratedPoolConstructionError(
+        #[from] crate::quoting::pools::concentrated::ConcentratedPoolConstructionError,
+    ),
+    #[error("boosted-fees concentrated pool construction error")]
+    BoostedFeesConcentratedPoolConstructionError(
+        #[from] BoostedFeesConcentratedPoolConstructionError,
+    ),
 }
 
 impl BoostedFeesConcentratedPool {
@@ -122,6 +151,40 @@ impl BoostedFeesConcentratedPool {
     pub fn donate_rate_deltas(&self) -> &Vec<TimeRateDelta> {
         &self.donate_rate_deltas
     }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_partial_data(
+        key: EvmConcentratedPoolKey,
+        sqrt_ratio: U256,
+        partial_ticks: Vec<Tick>,
+        min_tick_searched: i32,
+        max_tick_searched: i32,
+        liquidity: u128,
+        current_tick: i32,
+        last_donate_time_info: LastTimeInfo,
+        donate_rate0: u128,
+        donate_rate1: u128,
+        donate_rate_deltas: Vec<TimeRateDelta>,
+    ) -> Result<Self, BoostedFeesConcentratedPoolFromPartialDataError> {
+        let underlying_pool = ConcentratedPool::from_partial_data(
+            key,
+            sqrt_ratio,
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            liquidity,
+            current_tick,
+        )?;
+
+        Self::new(
+            underlying_pool,
+            last_donate_time_info,
+            donate_rate0,
+            donate_rate1,
+            donate_rate_deltas,
+        )
+        .map_err(Into::into)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
@@ -144,12 +207,12 @@ impl Pool for BoostedFeesConcentratedPool {
     }
 
     fn state(&self) -> Self::State {
-        BoostedFeesConcentratedPoolState {
-            concentrated_pool_state: self.underlying_pool.state(),
-            last_donate_time: self.last_donate_time,
-            donate_rate0: self.donate_rate0,
-            donate_rate1: self.donate_rate1,
-        }
+        BoostedFeesConcentratedPoolState::new(
+            self.underlying_pool.state(),
+            self.last_donate_time,
+            self.donate_rate0,
+            self.donate_rate1,
+        )
     }
 
     fn quote(
@@ -238,12 +301,12 @@ impl Pool for BoostedFeesConcentratedPool {
                     fees_accumulated: u32::from(fees_accumulated),
                 },
             },
-            state_after: BoostedFeesConcentratedPoolState {
-                concentrated_pool_state: underlying_state_after,
-                last_donate_time: current_time as u32,
+            state_after: BoostedFeesConcentratedPoolState::new(
+                underlying_state_after,
+                current_time as u32,
                 donate_rate0,
                 donate_rate1,
-            },
+            ),
         })
     }
 

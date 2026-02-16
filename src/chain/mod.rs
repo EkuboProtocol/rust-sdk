@@ -10,7 +10,7 @@ use core::{
 use num_traits::Zero;
 use ruint::aliases::U256;
 
-#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
+#[cfg(feature = "evm")]
 pub mod evm;
 #[cfg(feature = "starknet")]
 pub mod starknet;

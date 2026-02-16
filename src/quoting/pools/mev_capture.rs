@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 use ruint::aliases::U256;
@@ -17,7 +18,7 @@ use crate::{
 };
 use crate::{
     chain::Chain,
-    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams},
+    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick},
 };
 use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
 
@@ -53,6 +54,18 @@ pub struct MevCapturePoolState {
     pub concentrated_pool_state: ConcentratedPoolState,
 }
 
+impl MevCapturePoolState {
+    pub const fn new(
+        last_update_time: u32,
+        concentrated_pool_state: ConcentratedPoolState,
+    ) -> Self {
+        Self {
+            last_update_time,
+            concentrated_pool_state,
+        }
+    }
+}
+
 /// Resources consumed during MEV-capture quote execution.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -82,6 +95,16 @@ pub enum MevCapturePoolConstructionError {
     MissingExtension,
     #[error("current tick is invalid")]
     InvalidCurrentTick,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
+pub enum MevCapturePoolFromPartialDataError {
+    #[error("concentrated pool construction error")]
+    ConcentratedPoolConstructionError(
+        #[from] crate::quoting::pools::concentrated::ConcentratedPoolConstructionError,
+    ),
+    #[error("mev-capture pool construction error")]
+    MevCapturePoolConstructionError(#[from] MevCapturePoolConstructionError),
 }
 
 impl MevCapturePool {
@@ -132,6 +155,30 @@ impl MevCapturePool {
             tick,
         })
     }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_partial_data(
+        key: MevCapturePoolKey,
+        sqrt_ratio: U256,
+        partial_ticks: Vec<Tick>,
+        min_tick_searched: i32,
+        max_tick_searched: i32,
+        liquidity: u128,
+        current_tick: i32,
+        last_update_time: u32,
+    ) -> Result<Self, MevCapturePoolFromPartialDataError> {
+        let concentrated_pool = ConcentratedPool::from_partial_data(
+            key,
+            sqrt_ratio,
+            partial_ticks,
+            min_tick_searched,
+            max_tick_searched,
+            liquidity,
+            current_tick,
+        )?;
+
+        Self::new(concentrated_pool, last_update_time, current_tick).map_err(Into::into)
+    }
 }
 
 impl Pool for MevCapturePool {
@@ -148,10 +195,7 @@ impl Pool for MevCapturePool {
     }
 
     fn state(&self) -> Self::State {
-        MevCapturePoolState {
-            concentrated_pool_state: self.concentrated_pool.state(),
-            last_update_time: self.last_update_time,
-        }
+        MevCapturePoolState::new(self.last_update_time, self.concentrated_pool.state())
     }
 
     fn quote(
@@ -218,10 +262,7 @@ impl Pool for MevCapturePool {
                     },
                     fees_paid: quote.fees_paid,
                     is_price_increasing: quote.is_price_increasing,
-                    state_after: MevCapturePoolState {
-                        last_update_time: current_time,
-                        concentrated_pool_state: quote.state_after,
-                    },
+                    state_after: MevCapturePoolState::new(current_time, quote.state_after),
                 })
             }
             Err(err) => Err(err),

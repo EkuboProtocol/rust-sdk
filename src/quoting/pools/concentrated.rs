@@ -63,6 +63,22 @@ pub struct ConcentratedPoolState {
     pub active_tick_index: Option<usize>,
 }
 
+impl TickSpacing {
+    pub const fn new(tick_spacing: u32) -> Self {
+        Self(tick_spacing)
+    }
+}
+
+impl ConcentratedPoolState {
+    pub const fn new(sqrt_ratio: U256, liquidity: u128, active_tick_index: Option<usize>) -> Self {
+        Self {
+            sqrt_ratio,
+            liquidity,
+            active_tick_index,
+        }
+    }
+}
+
 /// Resources consumed during swap execution
 #[derive(Clone, Copy, Default, Debug, PartialEq, Hash, Eq, Add, AddAssign, Sub, SubAssign)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -190,11 +206,7 @@ impl<C: Chain> ConcentratedPool<C> {
         }
 
         // Create the ConcentratedPoolState with the provided sqrt_ratio, liquidity, and computed active_tick_index
-        let state = ConcentratedPoolState {
-            sqrt_ratio,
-            liquidity,
-            active_tick_index,
-        };
+        let state = ConcentratedPoolState::new(sqrt_ratio, liquidity, active_tick_index);
 
         // Call the existing constructor with the prepared parameters
         Self::new(key, state, sorted_ticks)
