@@ -82,6 +82,30 @@ impl<C: Chain> OraclePool<C> {
             last_snapshot_time,
         })
     }
+
+    pub fn full_range_pool(&self) -> &C::FullRangePool {
+        &self.full_range_pool
+    }
+}
+
+impl<C: Chain> AsRef<C::FullRangePool> for OraclePool<C> {
+    fn as_ref(&self) -> &C::FullRangePool {
+        self.full_range_pool()
+    }
+}
+
+#[cfg(feature = "evm")]
+impl AsRef<Self> for OraclePool<crate::chain::evm::Evm> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
+#[cfg(feature = "starknet")]
+impl AsRef<Self> for OraclePool<crate::chain::starknet::Starknet> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 impl<C: Chain> Pool for OraclePool<C> {

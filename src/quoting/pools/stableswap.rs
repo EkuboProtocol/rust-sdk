@@ -135,6 +135,12 @@ impl StableswapPool {
     }
 }
 
+impl AsRef<Self> for StableswapPool {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
 impl Pool for StableswapPool {
     type Address = <Evm as Chain>::Address;
     type Fee = <Evm as Chain>::Fee;

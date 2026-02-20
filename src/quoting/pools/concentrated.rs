@@ -298,6 +298,12 @@ impl<C: Chain> ConcentratedPool<C> {
     }
 }
 
+impl<C: Chain> AsRef<Self> for ConcentratedPool<C> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
 impl PoolState for ConcentratedPoolState {
     fn sqrt_ratio(&self) -> U256 {
         self.sqrt_ratio

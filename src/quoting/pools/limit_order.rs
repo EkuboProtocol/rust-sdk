@@ -137,6 +137,22 @@ impl LimitOrderPool {
             .map_err(LimitOrderPoolConstructionError::ConcentratedPoolConstructionError)?,
         })
     }
+
+    pub fn concentrated_pool(&self) -> &ConcentratedPool<Starknet> {
+        &self.concentrated_pool
+    }
+}
+
+impl AsRef<ConcentratedPool<Starknet>> for LimitOrderPool {
+    fn as_ref(&self) -> &ConcentratedPool<Starknet> {
+        self.concentrated_pool()
+    }
+}
+
+impl AsRef<Self> for LimitOrderPool {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 impl Pool for LimitOrderPool {

@@ -96,6 +96,12 @@ impl FullRangePool {
     }
 }
 
+impl AsRef<Self> for FullRangePool {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
 impl Pool for FullRangePool {
     type Address = <Evm as Chain>::Address;
     type Fee = <Evm as Chain>::Fee;

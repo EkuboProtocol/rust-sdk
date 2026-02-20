@@ -139,6 +139,30 @@ impl<C: Chain> TwammPool<C> {
     pub fn sale_rate_deltas(&self) -> &Vec<TimeRateDelta> {
         &self.virtual_order_deltas
     }
+
+    pub fn full_range_pool(&self) -> &C::FullRangePool {
+        &self.full_range_pool
+    }
+}
+
+impl<C: Chain> AsRef<C::FullRangePool> for TwammPool<C> {
+    fn as_ref(&self) -> &C::FullRangePool {
+        self.full_range_pool()
+    }
+}
+
+#[cfg(feature = "evm")]
+impl AsRef<Self> for TwammPool<crate::chain::evm::Evm> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
+#[cfg(feature = "starknet")]
+impl AsRef<Self> for TwammPool<crate::chain::starknet::Starknet> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]

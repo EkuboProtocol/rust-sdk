@@ -122,6 +122,22 @@ impl BoostedFeesConcentratedPool {
     pub fn donate_rate_deltas(&self) -> &Vec<TimeRateDelta> {
         &self.donate_rate_deltas
     }
+
+    pub fn concentrated_pool(&self) -> &ConcentratedPool<Evm> {
+        &self.underlying_pool
+    }
+}
+
+impl AsRef<ConcentratedPool<Evm>> for BoostedFeesConcentratedPool {
+    fn as_ref(&self) -> &ConcentratedPool<Evm> {
+        self.concentrated_pool()
+    }
+}
+
+impl AsRef<Self> for BoostedFeesConcentratedPool {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]

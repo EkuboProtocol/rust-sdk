@@ -132,6 +132,22 @@ impl MevCapturePool {
             tick,
         })
     }
+
+    pub fn concentrated_pool(&self) -> &ConcentratedPool<Evm> {
+        &self.concentrated_pool
+    }
+}
+
+impl AsRef<ConcentratedPool<Evm>> for MevCapturePool {
+    fn as_ref(&self) -> &ConcentratedPool<Evm> {
+        self.concentrated_pool()
+    }
+}
+
+impl AsRef<Self> for MevCapturePool {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 impl Pool for MevCapturePool {
