@@ -46,13 +46,12 @@ pub fn to_sqrt_ratio<C: Chain>(tick: i32) -> Option<U256> {
     }
 
     let mut ratio = SQRT_RATIO_ONE;
+    let mut tick_abs = tick.unsigned_abs();
 
-    let tick_abs = tick.abs();
-
-    for (i, mask) in MASKS.iter().enumerate() {
-        if (tick_abs & (1 << i)) != 0 {
-            ratio = (ratio * mask) >> 128;
-        }
+    while tick_abs != 0 {
+        let bit = tick_abs.trailing_zeros() as usize;
+        ratio = (ratio * MASKS[bit]) >> 128;
+        tick_abs &= tick_abs - 1;
     }
 
     if tick > 0 {

@@ -88,13 +88,19 @@ pub fn compute_step<C: Chain>(
         return Ok(no_op(sqrt_ratio_limit));
     }
 
-    let price_impact_amount = if amount < 0 {
+    let amount_negative = amount < 0;
+    let amount_abs = amount.unsigned_abs();
+    let exact_input_fee_amount = if amount_negative {
+        0
+    } else {
+        compute_fee::<C>(amount_abs, fee)
+    };
+
+    let price_impact_amount = if amount_negative {
         amount
     } else {
         // compute_fee always returns a value less than amount so we can just unwrap
-        let fee: i128 = compute_fee::<C>(amount.unsigned_abs(), fee)
-            .try_into()
-            .unwrap();
+        let fee: i128 = exact_input_fee_amount.try_into().unwrap();
         amount - fee
     };
 
@@ -113,19 +119,19 @@ pub fn compute_step<C: Chain>(
                 return Ok(SwapResult {
                     consumed_amount: amount,
                     calculated_amount: 0,
-                    fee_amount: amount.unsigned_abs(),
+                    fee_amount: amount_abs,
                     sqrt_ratio_next: sqrt_ratio,
                 });
             }
 
             let calculated_amount_excluding_fee = if is_token1 {
-                amount0_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount < 0)
+                amount0_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount_negative)
             } else {
-                amount1_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount < 0)
+                amount1_delta(sqrt_ratio_next, sqrt_ratio, liquidity, amount_negative)
             }
             .map_err(ComputeStepError::AmountDelta)?;
 
-            return if amount < 0 {
+            return if amount_negative {
                 let including_fee = amount_before_fee::<C>(calculated_amount_excluding_fee, fee)
                     .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
                 Ok(SwapResult {
@@ -139,7 +145,7 @@ pub fn compute_step<C: Chain>(
                     consumed_amount: amount,
                     calculated_amount: calculated_amount_excluding_fee,
                     sqrt_ratio_next,
-                    fee_amount: amount.unsigned_abs() - price_impact_amount.unsigned_abs(),
+                    fee_amount: exact_input_fee_amount,
                 })
             };
         }
@@ -148,17 +154,17 @@ pub fn compute_step<C: Chain>(
     // this branch is only reached if we are trading all the way up to the limit
     let (specified_amount_delta, calculated_amount_delta) = if is_token1 {
         (
-            amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount > 0),
-            amount0_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount < 0),
+            amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, !amount_negative),
+            amount0_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount_negative),
         )
     } else {
         (
-            amount0_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount > 0),
-            amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount < 0),
+            amount0_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, !amount_negative),
+            amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, amount_negative),
         )
     };
 
-    if amount < 0 {
+    if amount_negative {
         let amount_after_fee = calculated_amount_delta.map_err(ComputeStepError::AmountDelta)?;
         let before_fee = amount_before_fee::<C>(amount_after_fee, fee)
             .ok_or(ComputeStepError::AmountBeforeFeeOverflow)?;
