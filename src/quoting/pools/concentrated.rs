@@ -35,6 +35,8 @@ pub struct ConcentratedPool<C: Chain> {
     state: ConcentratedPoolState,
     /// Sorted ticks defining liquidity changes across price ranges.
     sorted_ticks: Vec<Tick>,
+    /// Cached sqrt ratios for `sorted_ticks`, aligned by index.
+    sorted_tick_sqrt_ratios: Vec<U256>,
 }
 
 /// Unique identifier for a [`ConcentratedPool`].
@@ -222,6 +224,7 @@ impl<C: Chain> ConcentratedPool<C> {
         let mut total_liquidity: u128 = 0;
         let mut active_liquidity: u128 = 0;
         let spacing_i32 = tick_spacing.0 as i32;
+        let mut sorted_tick_sqrt_ratios = Vec::with_capacity(sorted_ticks.len());
 
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
@@ -237,6 +240,9 @@ impl<C: Chain> ConcentratedPool<C> {
             }
 
             last_tick = Some(tick.index);
+            sorted_tick_sqrt_ratios.push(to_sqrt_ratio::<C>(tick.index).ok_or(
+                ConcentratedPoolConstructionError::InvalidTickIndex(tick.index),
+            )?);
 
             // Calculate total liquidity
             total_liquidity = total_liquidity
@@ -265,19 +271,15 @@ impl<C: Chain> ConcentratedPool<C> {
 
         // Validate sqrt ratio against active or first tick
         if let Some(active) = state.active_tick_index {
-            let tick = sorted_ticks
+            let active_tick_sqrt_ratio = *sorted_tick_sqrt_ratios
                 .get(active)
                 .ok_or(ConcentratedPoolConstructionError::ActiveTickIndexOutOfBounds)?;
-
-            let active_tick_sqrt_ratio = to_sqrt_ratio::<C>(tick.index).ok_or(
-                ConcentratedPoolConstructionError::InvalidTickIndex(tick.index),
-            )?;
 
             if active_tick_sqrt_ratio > state.sqrt_ratio {
                 return Err(ConcentratedPoolConstructionError::ActiveTickSqrtRatioInvalid);
             }
         } else if let Some(first) = sorted_ticks.first() {
-            let first_tick_sqrt_ratio = to_sqrt_ratio::<C>(first.index).ok_or(
+            let first_tick_sqrt_ratio = *sorted_tick_sqrt_ratios.first().ok_or(
                 ConcentratedPoolConstructionError::InvalidTickIndex(first.index),
             )?;
 
@@ -290,6 +292,7 @@ impl<C: Chain> ConcentratedPool<C> {
             key,
             state,
             sorted_ticks,
+            sorted_tick_sqrt_ratios,
         })
     }
 
@@ -383,25 +386,28 @@ impl<C: Chain> Pool for ConcentratedPool<C> {
         while amount_remaining != 0 && sqrt_ratio != sqrt_ratio_limit {
             let next_initialized_tick = if is_increasing {
                 if let Some(index) = active_tick_index {
-                    if let Some(tick) = self.sorted_ticks.get(index + 1) {
-                        let ratio = to_sqrt_ratio::<C>(tick.index)
-                            .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))?;
-                        Some((index + 1, tick, ratio))
+                    if let (Some(tick), Some(ratio)) = (
+                        self.sorted_ticks.get(index + 1),
+                        self.sorted_tick_sqrt_ratios.get(index + 1),
+                    ) {
+                        Some((index + 1, tick, *ratio))
                     } else {
                         None
                     }
-                } else if let Some(tick) = self.sorted_ticks.first() {
-                    let ratio = to_sqrt_ratio::<C>(tick.index)
-                        .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))?;
-                    Some((0, tick, ratio))
+                } else if let (Some(tick), Some(ratio)) = (
+                    self.sorted_ticks.first(),
+                    self.sorted_tick_sqrt_ratios.first(),
+                ) {
+                    Some((0, tick, *ratio))
                 } else {
                     None
                 }
             } else if let Some(index) = active_tick_index {
-                if let Some(tick) = self.sorted_ticks.get(index) {
-                    let ratio = to_sqrt_ratio::<C>(tick.index)
-                        .ok_or(ConcentratedPoolQuoteError::InvalidTick(tick.index))?;
-                    Some((index, tick, ratio))
+                if let (Some(tick), Some(ratio)) = (
+                    self.sorted_ticks.get(index),
+                    self.sorted_tick_sqrt_ratios.get(index),
+                ) {
+                    Some((index, tick, *ratio))
                 } else {
                     None
                 }

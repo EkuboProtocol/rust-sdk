@@ -17,15 +17,22 @@ pub fn muldiv(x: U256, y: U256, d: U256, round_up: bool) -> Result<U256, MuldivE
         return Err(MuldivError::DenominatorZero);
     }
 
+    if let Some(intermediate) = x.checked_mul(y) {
+        let (quotient, remainder) = intermediate.div_rem(d);
+        return if round_up && !remainder.is_zero() {
+            quotient.checked_add(U256::ONE).ok_or(MuldivError::Overflow)
+        } else {
+            Ok(quotient)
+        };
+    }
+
     let intermediate: U512 = U512::from(x) * U512::from(y);
     let (quotient, remainder) = intermediate.div_rem(U512::from(d));
-
     let result = if round_up && !remainder.is_zero() {
         quotient + U512::ONE
     } else {
         quotient
     };
-
     U256::uint_try_from(result).map_err(|_| MuldivError::Overflow)
 }
 
