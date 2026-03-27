@@ -194,7 +194,7 @@ pub fn real_last_time(current: u64, stored: u32) -> u64 {
 mod tests {
     use super::*;
     use crate::{
-        chain::{tests::run_for_all_chains, Chain},
+        chain::{Chain, tests::run_for_all_chains},
         math::tick::to_sqrt_ratio,
         quoting::types::Tick,
     };

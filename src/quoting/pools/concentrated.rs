@@ -1,15 +1,15 @@
 use crate::private;
 use crate::quoting::pools::{
-    ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
+    CommonPoolConstructionError, CommonPoolQuoteError, ensure_valid_token_order, is_token1,
 };
 use crate::quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
-    approximate_extra_distinct_tick_bitmap_lookups, construct_sorted_ticks,
-    ConstructSortedTicksError,
+    ConstructSortedTicksError, approximate_extra_distinct_tick_bitmap_lookups,
+    construct_sorted_ticks,
 };
 use crate::{
     chain::Chain,
-    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+    math::swap::{ComputeStepError, compute_step, is_price_increasing},
 };
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
 use alloc::vec::Vec;
@@ -520,7 +520,7 @@ mod tests {
     use crate::{
         chain::{
             starknet::Starknet,
-            tests::{run_for_all_chains, ChainTest},
+            tests::{ChainTest, run_for_all_chains},
         },
         math::sqrt_ratio::SQRT_RATIO_ONE,
         quoting::types::{PoolConfig, TokenAmount},

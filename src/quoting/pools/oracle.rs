@@ -197,13 +197,13 @@ mod tests {
     use super::*;
     use crate::{
         chain::{
-            starknet::{
-                Starknet, STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                STARKNET_MAX_TICK_AT_MAX_TICK_SPACING, STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING,
-                STARKNET_MIN_TICK_AT_MAX_TICK_SPACING,
-            },
-            tests::{chain_test, ChainTest},
             Chain,
+            starknet::{
+                STARKNET_MAX_SQRT_RATIO_AT_MAX_TICK_SPACING, STARKNET_MAX_TICK_AT_MAX_TICK_SPACING,
+                STARKNET_MIN_SQRT_RATIO_AT_MAX_TICK_SPACING, STARKNET_MIN_TICK_AT_MAX_TICK_SPACING,
+                Starknet,
+            },
+            tests::{ChainTest, chain_test},
         },
         math::tick::to_sqrt_ratio,
         quoting::types::{Pool, PoolState, QuoteParams, TokenAmount},

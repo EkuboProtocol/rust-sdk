@@ -1,13 +1,13 @@
 use crate::{
-    chain::evm::Evm,
-    math::swap::{compute_step, is_price_increasing, ComputeStepError},
-};
-use crate::{
     chain::Chain,
     quoting::pools::{
-        ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
+        CommonPoolConstructionError, CommonPoolQuoteError, ensure_valid_token_order, is_token1,
     },
     quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams},
+};
+use crate::{
+    chain::evm::Evm,
+    math::swap::{ComputeStepError, compute_step, is_price_increasing},
 };
 use crate::{private, quoting::types::PoolState};
 use derive_more::{Add, AddAssign, Sub, SubAssign};

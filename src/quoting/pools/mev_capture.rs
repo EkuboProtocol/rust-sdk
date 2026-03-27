@@ -4,7 +4,11 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 use crate::{
-    chain::evm::{Evm, EVM_FULL_RANGE_TICK_SPACING},
+    chain::Chain,
+    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams},
+};
+use crate::{
+    chain::evm::{EVM_FULL_RANGE_TICK_SPACING, Evm},
     math::{
         facade::round_f64,
         swap::{amount_before_fee, compute_fee},
@@ -14,10 +18,6 @@ use crate::{
         ConcentratedPool, ConcentratedPoolQuoteError, ConcentratedPoolResources,
         ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
     },
-};
-use crate::{
-    chain::Chain,
-    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams},
 };
 use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
 
