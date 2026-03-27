@@ -416,7 +416,7 @@ mod tests {
     use crate::{
         chain::{
             evm::Evm,
-            tests::{run_for_all_chains, ChainEnum, ChainTest},
+            tests::{ChainEnum, ChainTest, run_for_all_chains},
         },
         math::tick::to_sqrt_ratio,
         quoting::types::{Pool, QuoteParams, TokenAmount},

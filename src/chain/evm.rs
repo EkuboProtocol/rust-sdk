@@ -1,5 +1,5 @@
-use crate::alloy_primitives::{aliases::B32, fixed_bytes, Address, FixedBytes, B256, U256};
-use crate::alloy_primitives::{uint, Keccak256};
+use crate::alloy_primitives::{Address, B256, FixedBytes, U256, aliases::B32, fixed_bytes};
+use crate::alloy_primitives::{Keccak256, uint};
 use derive_more::From;
 use num_traits::Zero as _;
 use thiserror::Error;
