@@ -110,21 +110,18 @@ impl MevCapturePool {
         // validates that the current tick is between the active tick and the active tick index + 1
         if let Some(i) = concentrated_pool.state().active_tick_index {
             let sorted_ticks = concentrated_pool.ticks();
-            if let Some(t) = sorted_ticks.get(i) {
-                if t.index > tick {
+            if let Some(t) = sorted_ticks.get(i)
+                && t.index > tick {
                     return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
-            }
-            if let Some(t) = sorted_ticks.get(i + 1) {
-                if t.index <= tick {
+            if let Some(t) = sorted_ticks.get(i + 1)
+                && t.index <= tick {
                     return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
                 }
-            }
-        } else if let Some(t) = concentrated_pool.ticks().first() {
-            if t.index <= tick {
+        } else if let Some(t) = concentrated_pool.ticks().first()
+            && t.index <= tick {
                 return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
             }
-        }
 
         Ok(Self {
             concentrated_pool,

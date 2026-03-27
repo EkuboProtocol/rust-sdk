@@ -228,11 +228,10 @@ impl<C: Chain> ConcentratedPool<C> {
 
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
-            if let Some(last) = last_tick {
-                if tick.index <= last {
+            if let Some(last) = last_tick
+                && tick.index <= last {
                     return Err(ConcentratedPoolConstructionError::TicksNotSorted);
                 }
-            }
 
             // Verify ticks are multiples of tick_spacing
             if !(tick.index % spacing_i32).is_zero() {
@@ -250,13 +249,12 @@ impl<C: Chain> ConcentratedPool<C> {
                 .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
 
             // Calculate active liquidity
-            if let Some(active_index) = state.active_tick_index {
-                if i <= active_index {
+            if let Some(active_index) = state.active_tick_index
+                && i <= active_index {
                     active_liquidity = active_liquidity
                         .checked_add_signed(tick.liquidity_delta)
                         .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
                 }
-            }
         }
 
         // Verify total liquidity is zero
