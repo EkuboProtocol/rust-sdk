@@ -214,16 +214,14 @@ impl<C: Chain> Pool for TwammPool<C> {
         } = params;
 
         let current_time = meta;
-        let initial_state = override_state.unwrap_or_else(|| self.state());
+        let TwammPoolState {
+            full_range_pool_state,
+            mut token0_sale_rate,
+            mut token1_sale_rate,
+            last_execution_time,
+        } = override_state.unwrap_or_else(|| self.state());
 
-        let mut next_sqrt_ratio = initial_state.full_range_pool_state.sqrt_ratio();
-        let mut token0_sale_rate = initial_state.token0_sale_rate;
-        let mut token1_sale_rate = initial_state.token1_sale_rate;
-        let last_execution_time = initial_state.last_execution_time;
-
-        if current_time < last_execution_time {
-            return Err(TwammPoolQuoteError::ExecutionTimeExceedsBlockTime);
-        }
+        let mut next_sqrt_ratio = full_range_pool_state.sqrt_ratio();
 
         let mut virtual_order_delta_times_crossed = 0;
         let mut full_range_pool_state_override = override_state.map(|s| s.full_range_pool_state);
@@ -235,6 +233,13 @@ impl<C: Chain> Pool for TwammPool<C> {
             token1,
             config: PoolConfig { fee, .. },
         } = self.full_range_pool.key();
+
+        let last_execution_time =
+            C::real_last_virtual_order_execution_time(current_time, last_execution_time);
+
+        if current_time < last_execution_time {
+            return Err(TwammPoolQuoteError::ExecutionTimeExceedsBlockTime);
+        }
 
         let mut time = last_execution_time;
 
@@ -362,13 +367,11 @@ impl<C: Chain> Pool for TwammPool<C> {
                 full_range: full_range_pool_execution_resources + final_quote.execution_resources,
                 twamm: TwammStandalonePoolResources {
                     extra_distinct_bitmap_lookups: approximate_extra_distinct_time_bitmap_lookups(
-                        initial_state.last_execution_time,
+                        last_execution_time,
                         current_time,
                     ),
                     virtual_order_delta_times_crossed,
-                    virtual_orders_executed: u32::from(
-                        current_time > initial_state.last_execution_time,
-                    ),
+                    virtual_orders_executed: u32::from(current_time > last_execution_time),
                 },
             },
             state_after: TwammPoolState {
@@ -1653,6 +1656,38 @@ mod tests {
         })
         .unwrap();
     });
+
+    #[test]
+    fn evm_quote_uses_truncated_last_execution_time() {
+        let last_execution_time = 100;
+        let current_time = last_execution_time + (1u64 << 32);
+
+        let pool = build_pool::<Evm>(
+            to_sqrt_ratio::<Evm>(1).unwrap(),
+            0,
+            last_execution_time,
+            0,
+            0,
+            vec![],
+        );
+
+        let quote = pool
+            .quote(QuoteParams {
+                token_amount: TokenAmount {
+                    amount: 0,
+                    token: Evm::zero_address(),
+                },
+                sqrt_ratio_limit: None,
+                meta: current_time,
+                override_state: None,
+            })
+            .unwrap();
+
+        // The untruncated time is updated...
+        assert_eq!(quote.state_after.last_execution_time, current_time);
+        // ...but since the u32 suffix of the last_execution_time and the current_time match, orders aren't executed
+        assert_eq!(quote.execution_resources.twamm.virtual_orders_executed, 0);
+    }
 
     #[test]
     fn example_from_production_sepolia() {
