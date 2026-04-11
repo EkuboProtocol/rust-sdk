@@ -1,7 +1,7 @@
 use core::ops::Not;
 
 use crate::math::{
-    muldiv::{muldiv, MuldivError},
+    muldiv::{MuldivError, muldiv},
     sqrt_ratio::SQRT_RATIO_ONE,
 };
 use num_traits::Zero;
@@ -83,10 +83,10 @@ fn sort_ratios(sqrt_ratio_a: U256, sqrt_ratio_b: U256) -> Option<(U256, U256)> {
 mod tests {
     use super::*;
     use crate::chain::{
+        Chain,
         evm::Evm,
         starknet::Starknet,
-        tests::{ChainEnum, CHAINS},
-        Chain,
+        tests::{CHAINS, ChainEnum},
     };
     use ruint::uint;
 
