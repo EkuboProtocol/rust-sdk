@@ -1,5 +1,6 @@
 use crate::alloy_primitives::{Address, B256, FixedBytes, U256, aliases::B32, fixed_bytes};
 use crate::alloy_primitives::{Keccak256, uint};
+use crate::quoting::util::real_last_time;
 use derive_more::From;
 use num_traits::Zero as _;
 use thiserror::Error;
@@ -326,6 +327,13 @@ impl Chain for Evm {
                 liquidity: active_liquidity,
             },
         )
+    }
+
+    fn real_last_virtual_order_execution_time(
+        block_timestamp: u64,
+        last_execution_time: u64,
+    ) -> u64 {
+        real_last_time(block_timestamp, last_execution_time as u32)
     }
 }
 

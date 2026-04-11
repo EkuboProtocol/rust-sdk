@@ -236,6 +236,14 @@ impl Chain for Starknet {
     }
 
     type Address = Felt;
+
+    fn real_last_virtual_order_execution_time(
+        _block_timestamp: u64,
+        last_execution_time: u64,
+    ) -> u64 {
+        // We store the untruncated u64 on Starknet
+        last_execution_time
+    }
 }
 
 impl private::Sealed for Starknet {}
