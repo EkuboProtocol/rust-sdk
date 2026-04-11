@@ -1,5 +1,5 @@
 use crate::{
-    chain::{starknet::Starknet, Chain},
+    chain::{Chain, starknet::Starknet},
     quoting::pools::concentrated::{
         ConcentratedPool, ConcentratedPoolConstructionError, ConcentratedPoolKey,
         ConcentratedPoolQuoteError, ConcentratedPoolResources, ConcentratedPoolState,
