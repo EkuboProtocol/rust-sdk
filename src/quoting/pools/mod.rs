@@ -13,6 +13,8 @@ pub mod spline;
 #[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod stableswap;
 pub mod twamm;
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
+pub mod ve33;
 
 use crate::quoting::types::PoolKey;
 use thiserror::Error;

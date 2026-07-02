@@ -58,6 +58,10 @@ use crate::quoting::pools::twamm::{
     TwammPool, TwammPoolConfig, TwammPoolConstructionError, TwammPoolKey, TwammPoolQuoteError,
     TwammPoolResources, TwammPoolState, TwammPoolTypeConfig, TwammStandalonePoolResources,
 };
+use crate::quoting::pools::ve33::{
+    Ve33Pool, Ve33PoolConfig, Ve33PoolConstructionError, Ve33PoolKey, Ve33PoolQuoteError,
+    Ve33PoolResources, Ve33PoolState, Ve33StandalonePoolResources,
+};
 use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
 // Re-export pool types for ergonomic, chain-scoped usage.
@@ -148,6 +152,39 @@ pub type EvmBoostedFeesStableswapPoolResources = BoostedFeesStableswapPoolResour
 pub type EvmBoostedFeesStableswapPoolState = BoostedFeesStableswapPoolState;
 pub type EvmBoostedFeesStableswapPoolQuoteError = BoostedFeesStableswapPoolQuoteError;
 pub type EvmBoostedFeesStableswapPoolTypeConfig = BoostedFeesStableswapPoolTypeConfig;
+
+pub type EvmVe33ConcentratedPool = Ve33Pool<ConcentratedPool<Evm>>;
+pub type EvmVe33ConcentratedPoolConstructionError = Ve33PoolConstructionError;
+pub type EvmVe33ConcentratedPoolConfig = Ve33PoolConfig<ConcentratedPool<Evm>>;
+pub type EvmVe33ConcentratedPoolKey = Ve33PoolKey<ConcentratedPool<Evm>>;
+pub type EvmVe33ConcentratedPoolQuoteError =
+    Ve33PoolQuoteError<<ConcentratedPool<Evm> as crate::quoting::types::Pool>::QuoteError>;
+pub type EvmVe33ConcentratedPoolResources = Ve33PoolResources<ConcentratedPoolResources>;
+pub type EvmVe33ConcentratedPoolState = Ve33PoolState<ConcentratedPoolState>;
+pub type EvmVe33ConcentratedStandalonePoolResources = Ve33StandalonePoolResources;
+pub type EvmVe33ConcentratedPoolTypeConfig = ConcentratedPoolTypeConfig;
+
+pub type EvmVe33FullRangePool = Ve33Pool<FullRangePool>;
+pub type EvmVe33FullRangePoolConstructionError = Ve33PoolConstructionError;
+pub type EvmVe33FullRangePoolConfig = Ve33PoolConfig<FullRangePool>;
+pub type EvmVe33FullRangePoolKey = Ve33PoolKey<FullRangePool>;
+pub type EvmVe33FullRangePoolQuoteError =
+    Ve33PoolQuoteError<<FullRangePool as crate::quoting::types::Pool>::QuoteError>;
+pub type EvmVe33FullRangePoolResources = Ve33PoolResources<FullRangePoolResources>;
+pub type EvmVe33FullRangePoolState = Ve33PoolState<FullRangePoolState>;
+pub type EvmVe33FullRangeStandalonePoolResources = Ve33StandalonePoolResources;
+pub type EvmVe33FullRangePoolTypeConfig = FullRangePoolTypeConfig;
+
+pub type EvmVe33StableswapPool = Ve33Pool<StableswapPool>;
+pub type EvmVe33StableswapPoolConstructionError = Ve33PoolConstructionError;
+pub type EvmVe33StableswapPoolConfig = Ve33PoolConfig<StableswapPool>;
+pub type EvmVe33StableswapPoolKey = Ve33PoolKey<StableswapPool>;
+pub type EvmVe33StableswapPoolQuoteError =
+    Ve33PoolQuoteError<<StableswapPool as crate::quoting::types::Pool>::QuoteError>;
+pub type EvmVe33StableswapPoolResources = Ve33PoolResources<StableswapPoolResources>;
+pub type EvmVe33StableswapPoolState = Ve33PoolState<StableswapPoolState>;
+pub type EvmVe33StableswapStandalonePoolResources = Ve33StandalonePoolResources;
+pub type EvmVe33StableswapPoolTypeConfig = StableswapPoolTypeConfig;
 
 pub const EVM_NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
 pub const EVM_MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);
