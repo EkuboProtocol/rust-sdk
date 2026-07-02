@@ -5,7 +5,7 @@ use num_traits::Zero as _;
 use ruint::aliases::U256;
 
 use crate::{
-    chain::{evm::Evm, Chain},
+    chain::{Chain, evm::Evm},
     math::swap::{amount_before_fee, compute_fee},
     private,
     quoting::types::{Pool, PoolConfig, PoolKey, PoolState, Quote, QuoteParams},
