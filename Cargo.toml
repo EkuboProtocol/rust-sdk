@@ -5,7 +5,7 @@ authors = [
     "Mahmoud Salem <moody@ekubo.org>",
     "Die Herdplatte <die.herdplatte@gmail.com>",
 ]
-edition = "2021"
+edition = "2024"
 license = "LGPL-2.1"
 description = "Types for interacting with Ekubo Protocol on Starknet & EVM chains"
 homepage = "https://ekubo.org"

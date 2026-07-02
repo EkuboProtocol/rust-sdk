@@ -1,16 +1,16 @@
 use crate::{
-    chain::evm::{Evm, EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR},
-    math::swap::{compute_step, is_price_increasing, ComputeStepError},
-    private,
-    quoting::pools::full_range::FullRangePoolState,
-};
-use crate::{
     chain::Chain,
     math::tick::to_sqrt_ratio,
     quoting::pools::{
-        ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
+        CommonPoolConstructionError, CommonPoolQuoteError, ensure_valid_token_order, is_token1,
     },
     quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, TokenAmount},
+};
+use crate::{
+    chain::evm::{EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR, Evm},
+    math::swap::{ComputeStepError, compute_step, is_price_increasing},
+    private,
+    quoting::pools::full_range::FullRangePoolState,
 };
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use ruint::aliases::U256;

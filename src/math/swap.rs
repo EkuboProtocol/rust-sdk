@@ -1,7 +1,7 @@
 use crate::math::sqrt_ratio::{next_sqrt_ratio_from_amount0, next_sqrt_ratio_from_amount1};
 use crate::{
     chain::Chain,
-    math::delta::{amount0_delta, amount1_delta, AmountDeltaError},
+    math::delta::{AmountDeltaError, amount0_delta, amount1_delta},
 };
 use num_traits::Zero;
 use ruint::aliases::U256;
@@ -200,7 +200,7 @@ mod tests {
         chain::{
             evm::Evm,
             starknet::Starknet,
-            tests::{ChainEnum, CHAINS},
+            tests::{CHAINS, ChainEnum},
         },
         math::sqrt_ratio::SQRT_RATIO_ONE,
     };

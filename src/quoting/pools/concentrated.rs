@@ -1,15 +1,15 @@
 use crate::private;
 use crate::quoting::pools::{
-    ensure_valid_token_order, is_token1, CommonPoolConstructionError, CommonPoolQuoteError,
+    CommonPoolConstructionError, CommonPoolQuoteError, ensure_valid_token_order, is_token1,
 };
 use crate::quoting::types::{Pool, PoolConfig, PoolKey, Quote, QuoteParams, Tick};
 use crate::quoting::util::{
-    approximate_extra_distinct_tick_bitmap_lookups, construct_sorted_ticks,
-    ConstructSortedTicksError,
+    ConstructSortedTicksError, approximate_extra_distinct_tick_bitmap_lookups,
+    construct_sorted_ticks,
 };
 use crate::{
     chain::Chain,
-    math::swap::{compute_step, is_price_increasing, ComputeStepError},
+    math::swap::{ComputeStepError, compute_step, is_price_increasing},
 };
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolState};
 use alloc::vec::Vec;
@@ -228,10 +228,10 @@ impl<C: Chain> ConcentratedPool<C> {
 
         for (i, tick) in sorted_ticks.iter().enumerate() {
             // Verify ticks are sorted
-            if let Some(last) = last_tick {
-                if tick.index <= last {
-                    return Err(ConcentratedPoolConstructionError::TicksNotSorted);
-                }
+            if let Some(last) = last_tick
+                && tick.index <= last
+            {
+                return Err(ConcentratedPoolConstructionError::TicksNotSorted);
             }
 
             // Verify ticks are multiples of tick_spacing
@@ -250,12 +250,12 @@ impl<C: Chain> ConcentratedPool<C> {
                 .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
 
             // Calculate active liquidity
-            if let Some(active_index) = state.active_tick_index {
-                if i <= active_index {
-                    active_liquidity = active_liquidity
-                        .checked_add_signed(tick.liquidity_delta)
-                        .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
-                }
+            if let Some(active_index) = state.active_tick_index
+                && i <= active_index
+            {
+                active_liquidity = active_liquidity
+                    .checked_add_signed(tick.liquidity_delta)
+                    .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
             }
         }
 
@@ -520,7 +520,7 @@ mod tests {
     use crate::{
         chain::{
             starknet::Starknet,
-            tests::{run_for_all_chains, ChainTest},
+            tests::{ChainTest, run_for_all_chains},
         },
         math::sqrt_ratio::SQRT_RATIO_ONE,
         quoting::types::{PoolConfig, TokenAmount},

@@ -1,4 +1,4 @@
-use crate::math::muldiv::{muldiv, MuldivError};
+use crate::math::muldiv::{MuldivError, muldiv};
 use num_traits::Zero;
 use ruint::aliases::U256;
 use thiserror::Error;

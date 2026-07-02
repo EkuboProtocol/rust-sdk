@@ -78,7 +78,7 @@ mod tests {
     use crate::chain::{
         evm::Evm,
         starknet::Starknet,
-        tests::{ChainEnum, CHAINS},
+        tests::{CHAINS, ChainEnum},
     };
 
     mod to_sqrt_ratio {

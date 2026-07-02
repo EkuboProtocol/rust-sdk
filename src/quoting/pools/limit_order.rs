@@ -7,8 +7,8 @@ use crate::quoting::{
     pools::concentrated::{ConcentratedPoolResources, ConcentratedPoolTypeConfig},
     types::PoolState,
 };
-use crate::{chain::starknet::Starknet, math::swap::is_price_increasing};
 use crate::{chain::Chain, quoting::pools::concentrated::ConcentratedPoolState};
+use crate::{chain::starknet::Starknet, math::swap::is_price_increasing};
 use crate::{math::tick::to_sqrt_ratio, quoting::types::PoolConfig};
 use crate::{
     private,

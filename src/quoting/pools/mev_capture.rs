@@ -4,7 +4,11 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 use crate::{
-    chain::evm::{Evm, EVM_FULL_RANGE_TICK_SPACING},
+    chain::Chain,
+    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams},
+};
+use crate::{
+    chain::evm::{EVM_FULL_RANGE_TICK_SPACING, Evm},
     math::{
         facade::round_f64,
         swap::{amount_before_fee, compute_fee},
@@ -14,10 +18,6 @@ use crate::{
         ConcentratedPool, ConcentratedPoolQuoteError, ConcentratedPoolResources,
         ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
     },
-};
-use crate::{
-    chain::Chain,
-    quoting::types::{BlockTimestamp, Pool, PoolConfig, PoolKey, Quote, QuoteParams},
 };
 use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
 
@@ -110,20 +110,20 @@ impl MevCapturePool {
         // validates that the current tick is between the active tick and the active tick index + 1
         if let Some(i) = concentrated_pool.state().active_tick_index {
             let sorted_ticks = concentrated_pool.ticks();
-            if let Some(t) = sorted_ticks.get(i) {
-                if t.index > tick {
-                    return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
-                }
-            }
-            if let Some(t) = sorted_ticks.get(i + 1) {
-                if t.index <= tick {
-                    return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
-                }
-            }
-        } else if let Some(t) = concentrated_pool.ticks().first() {
-            if t.index <= tick {
+            if let Some(t) = sorted_ticks.get(i)
+                && t.index > tick
+            {
                 return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
             }
+            if let Some(t) = sorted_ticks.get(i + 1)
+                && t.index <= tick
+            {
+                return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
+            }
+        } else if let Some(t) = concentrated_pool.ticks().first()
+            && t.index <= tick
+        {
+            return Err(MevCapturePoolConstructionError::InvalidCurrentTick);
         }
 
         Ok(Self {

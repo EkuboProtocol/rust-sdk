@@ -1,6 +1,6 @@
 use ruint::{
-    aliases::{U256, U512},
     UintTryFrom,
+    aliases::{U256, U512},
 };
 use thiserror::Error;
 

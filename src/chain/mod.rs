@@ -48,6 +48,11 @@ pub trait Chain:
         sqrt_ratio: U256,
         active_liquidity: u128,
     ) -> Result<Self::FullRangePool, Self::FullRangePoolConstructionError>;
+
+    fn real_last_virtual_order_execution_time(
+        block_timestamp: u64,
+        last_execution_time: u64,
+    ) -> u64;
 }
 
 #[cfg(test)]
