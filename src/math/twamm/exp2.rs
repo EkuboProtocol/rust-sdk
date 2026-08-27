@@ -1,6 +1,13 @@
 use ruint::aliases::U256;
 
 #[must_use]
+// Binary exponentiation, unrolled one bit at a time with a per-bit magic
+// constant. The branch count is the point: each `if` is one bit of x and one
+// factor of the product, and the constants must stay bit-for-bit identical to
+// the on-chain `exp2.sol` or TWAMM projections stop matching execution.
+// Rolling this into a loop over a table would change the rounding of the
+// intermediate products, so it is exempted rather than refactored.
+#[allow(clippy::cognitive_complexity)]
 pub fn exp2(x: u128) -> u128 {
     // x must be less than 0x400000000000000000 == 64 << 64 (overflow check)
     assert!(x < 0x400000000000000000, "Overflow");
