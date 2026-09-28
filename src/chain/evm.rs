@@ -36,6 +36,11 @@ use crate::quoting::pools::concentrated::{
     ConcentratedPoolKey, ConcentratedPoolQuoteError, ConcentratedPoolResources,
     ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
 };
+use crate::quoting::pools::continuous_auction::{
+    ContinuousAuctionPool, ContinuousAuctionPoolConfig, ContinuousAuctionPoolConstructionError,
+    ContinuousAuctionPoolKey, ContinuousAuctionPoolQuoteError, ContinuousAuctionPoolResources,
+    ContinuousAuctionPoolState, ContinuousAuctionStandalonePoolResources,
+};
 use crate::quoting::pools::full_range::{
     FullRangePool, FullRangePoolConfig, FullRangePoolConstructionError, FullRangePoolKey,
     FullRangePoolQuoteError, FullRangePoolResources, FullRangePoolState, FullRangePoolTypeConfig,
@@ -185,6 +190,51 @@ pub type EvmVe33StableswapPoolResources = Ve33PoolResources<StableswapPoolResour
 pub type EvmVe33StableswapPoolState = Ve33PoolState<StableswapPoolState>;
 pub type EvmVe33StableswapStandalonePoolResources = Ve33StandalonePoolResources;
 pub type EvmVe33StableswapPoolTypeConfig = StableswapPoolTypeConfig;
+
+pub type EvmContinuousAuctionConcentratedPool = ContinuousAuctionPool<ConcentratedPool<Evm>>;
+pub type EvmContinuousAuctionConcentratedPoolConstructionError =
+    ContinuousAuctionPoolConstructionError;
+pub type EvmContinuousAuctionConcentratedPoolConfig =
+    ContinuousAuctionPoolConfig<ConcentratedPool<Evm>>;
+pub type EvmContinuousAuctionConcentratedPoolKey = ContinuousAuctionPoolKey<ConcentratedPool<Evm>>;
+pub type EvmContinuousAuctionConcentratedPoolQuoteError = ContinuousAuctionPoolQuoteError<
+    <ConcentratedPool<Evm> as crate::quoting::types::Pool>::QuoteError,
+>;
+pub type EvmContinuousAuctionConcentratedPoolResources =
+    ContinuousAuctionPoolResources<ConcentratedPoolResources>;
+pub type EvmContinuousAuctionConcentratedPoolState =
+    ContinuousAuctionPoolState<ConcentratedPoolState>;
+pub type EvmContinuousAuctionConcentratedStandalonePoolResources =
+    ContinuousAuctionStandalonePoolResources;
+pub type EvmContinuousAuctionConcentratedPoolTypeConfig = ConcentratedPoolTypeConfig;
+
+pub type EvmContinuousAuctionFullRangePool = ContinuousAuctionPool<FullRangePool>;
+pub type EvmContinuousAuctionFullRangePoolConstructionError =
+    ContinuousAuctionPoolConstructionError;
+pub type EvmContinuousAuctionFullRangePoolConfig = ContinuousAuctionPoolConfig<FullRangePool>;
+pub type EvmContinuousAuctionFullRangePoolKey = ContinuousAuctionPoolKey<FullRangePool>;
+pub type EvmContinuousAuctionFullRangePoolQuoteError =
+    ContinuousAuctionPoolQuoteError<<FullRangePool as crate::quoting::types::Pool>::QuoteError>;
+pub type EvmContinuousAuctionFullRangePoolResources =
+    ContinuousAuctionPoolResources<FullRangePoolResources>;
+pub type EvmContinuousAuctionFullRangePoolState = ContinuousAuctionPoolState<FullRangePoolState>;
+pub type EvmContinuousAuctionFullRangeStandalonePoolResources =
+    ContinuousAuctionStandalonePoolResources;
+pub type EvmContinuousAuctionFullRangePoolTypeConfig = FullRangePoolTypeConfig;
+
+pub type EvmContinuousAuctionStableswapPool = ContinuousAuctionPool<StableswapPool>;
+pub type EvmContinuousAuctionStableswapPoolConstructionError =
+    ContinuousAuctionPoolConstructionError;
+pub type EvmContinuousAuctionStableswapPoolConfig = ContinuousAuctionPoolConfig<StableswapPool>;
+pub type EvmContinuousAuctionStableswapPoolKey = ContinuousAuctionPoolKey<StableswapPool>;
+pub type EvmContinuousAuctionStableswapPoolQuoteError =
+    ContinuousAuctionPoolQuoteError<<StableswapPool as crate::quoting::types::Pool>::QuoteError>;
+pub type EvmContinuousAuctionStableswapPoolResources =
+    ContinuousAuctionPoolResources<StableswapPoolResources>;
+pub type EvmContinuousAuctionStableswapPoolState = ContinuousAuctionPoolState<StableswapPoolState>;
+pub type EvmContinuousAuctionStableswapStandalonePoolResources =
+    ContinuousAuctionStandalonePoolResources;
+pub type EvmContinuousAuctionStableswapPoolTypeConfig = StableswapPoolTypeConfig;
 
 pub const EVM_NATIVE_TOKEN_ADDRESS: Address = Address::ZERO;
 pub const EVM_MAX_TICK_SPACING: TickSpacing = TickSpacing(698605);

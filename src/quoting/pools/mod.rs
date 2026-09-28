@@ -2,6 +2,8 @@
 pub mod boosted_fees;
 pub mod concentrated;
 #[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
+pub mod continuous_auction;
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod full_range;
 #[cfg(feature = "starknet")]
 pub mod limit_order;
