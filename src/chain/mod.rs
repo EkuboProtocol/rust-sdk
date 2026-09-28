@@ -37,6 +37,10 @@ pub trait Chain:
 
     fn adjust_sqrt_ratio_precision(sqrt_ratio: U256) -> U256;
 
+    /// Rounds a sqrt ratio computed from a swap amount to the precision the chain stores, in the
+    /// given direction. Ratios too large to store round to [`U256::MAX`].
+    fn round_sqrt_ratio(sqrt_ratio: U256, round_up: bool) -> U256;
+
     fn fee_denominator() -> U256;
     fn fee_bits() -> u8;
 

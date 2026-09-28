@@ -104,10 +104,14 @@ pub fn compute_step<C: Chain>(
         amount - fee
     };
 
+    // The stored ratio is rounded towards the starting price for input and away from it for
+    // output: up for token0 amounts and down for token1 amounts.
     let sqrt_ratio_next_from_amount = if is_token1 {
         next_sqrt_ratio_from_amount1(sqrt_ratio, liquidity, price_impact_amount)
+            .map(|next| C::round_sqrt_ratio(next, false))
     } else {
         next_sqrt_ratio_from_amount0(sqrt_ratio, liquidity, price_impact_amount)
+            .map(|next| C::round_sqrt_ratio(next, true))
     };
 
     // we got a next price
@@ -346,11 +350,17 @@ mod tests {
                 SwapResult {
                     consumed_amount: POSITIVE_AMOUNT,
                     calculated_amount: 4_761,
-                    sqrt_ratio_next: U256::from_str_radix(
-                        "324078444686608060441309149935017344244",
-                        10
-                    )
-                    .unwrap(),
+                    // EVM stores the ratio rounded to its compact representation; the values
+                    // match the corresponding cases in the contracts' `SwapTest`
+                    sqrt_ratio_next: match chain {
+                        ChainEnum::Starknet => {
+                            U256::from_str_radix("324078444686608060441309149935017344244", 10)
+                                .unwrap()
+                        }
+                        ChainEnum::Evm =>
+                            U256::from_str_radix("324078444686608060441309149948106768384", 10)
+                                .unwrap(),
+                    },
                     fee_amount: 5_000,
                 }
             );
@@ -380,11 +390,17 @@ mod tests {
                 SwapResult {
                     consumed_amount: POSITIVE_AMOUNT,
                     calculated_amount: 4_761,
-                    sqrt_ratio_next: U256::from_str_radix(
-                        "357296485266985386636543337803356622028",
-                        10
-                    )
-                    .unwrap(),
+                    // EVM stores the ratio rounded to its compact representation; the values
+                    // match the corresponding cases in the contracts' `SwapTest`
+                    sqrt_ratio_next: match chain {
+                        ChainEnum::Starknet => {
+                            U256::from_str_radix("357296485266985386636543337803356622028", 10)
+                                .unwrap()
+                        }
+                        ChainEnum::Evm =>
+                            U256::from_str_radix("357296485266985386621785942544388980736", 10)
+                                .unwrap(),
+                    },
                     fee_amount: 5_000,
                 }
             );
@@ -414,11 +430,17 @@ mod tests {
                 SwapResult {
                     consumed_amount: NEGATIVE_AMOUNT,
                     calculated_amount: 22_224,
-                    sqrt_ratio_next: U256::from_str_radix(
-                        "378091518801042737181527341590853568285",
-                        10
-                    )
-                    .unwrap(),
+                    // EVM stores the ratio rounded to its compact representation; the values
+                    // match the corresponding cases in the contracts' `SwapTest`
+                    sqrt_ratio_next: match chain {
+                        ChainEnum::Starknet => {
+                            U256::from_str_radix("378091518801042737181527341590853568285", 10)
+                                .unwrap()
+                        }
+                        ChainEnum::Evm =>
+                            U256::from_str_radix("378091518801042737222520106199097016320", 10)
+                                .unwrap(),
+                    },
                     fee_amount: 11_112,
                 }
             );
@@ -448,11 +470,17 @@ mod tests {
                 SwapResult {
                     consumed_amount: NEGATIVE_AMOUNT,
                     calculated_amount: 22_224,
-                    sqrt_ratio_next: U256::from_str_radix(
-                        "306254130228844617117037146688591390310",
-                        10
-                    )
-                    .unwrap(),
+                    // EVM stores the ratio rounded to its compact representation; the values
+                    // match the corresponding cases in the contracts' `SwapTest`
+                    sqrt_ratio_next: match chain {
+                        ChainEnum::Starknet => {
+                            U256::from_str_radix("306254130228844617117037146688591390310", 10)
+                                .unwrap()
+                        }
+                        ChainEnum::Evm =>
+                            U256::from_str_radix("306254130228844617117037146678283468800", 10)
+                                .unwrap(),
+                    },
                     fee_amount: 11_112,
                 }
             );

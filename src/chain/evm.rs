@@ -333,6 +333,27 @@ impl Chain for Evm {
         }
     }
 
+    /// Mirrors `toSqrtRatio` in the contracts: the region is chosen after rounding, so rounding
+    /// up can move a ratio into the next, coarser region.
+    fn round_sqrt_ratio(ratio: U256, round_up: bool) -> U256 {
+        for (shift, bound) in [
+            (2, TWO_POW_96),
+            (34, TWO_POW_128),
+            (66, TWO_POW_160),
+            (98, TWO_POW_192),
+        ] {
+            let rounded = if round_up {
+                ratio.saturating_add((U256::ONE << shift) - U256::ONE)
+            } else {
+                ratio
+            };
+            if rounded < bound {
+                return (rounded >> shift) << shift;
+            }
+        }
+        U256::MAX
+    }
+
     fn fee_denominator() -> U256 {
         EVM_FEE_DENOMINATOR
     }

@@ -166,6 +166,10 @@ impl Chain for Starknet {
         sqrt_ratio
     }
 
+    fn round_sqrt_ratio(sqrt_ratio: U256, _round_up: bool) -> U256 {
+        sqrt_ratio
+    }
+
     fn fee_denominator() -> U256 {
         STARKNET_FEE_DENOMINATOR
     }
