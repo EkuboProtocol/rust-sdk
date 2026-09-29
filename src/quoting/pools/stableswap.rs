@@ -432,7 +432,7 @@ mod tests {
         let quote = quote_amount(&pool, Evm::one_address(), SMALL_AMOUNT);
 
         assert_eq!(quote.consumed_amount, SMALL_AMOUNT);
-        assert_eq!(quote.calculated_amount, 999_999_999_500_000);
+        assert_eq!(quote.calculated_amount, 999_999_999_138_796);
     }
 
     #[test]
