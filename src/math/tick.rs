@@ -72,6 +72,24 @@ pub fn approximate_sqrt_ratio_to_tick(sqrt_ratio: U256) -> i32 {
     )) as i32
 }
 
+/// Returns the greatest tick whose sqrt ratio is less than or equal to `sqrt_ratio`, clamped to
+/// the chain's tick bounds.
+#[must_use]
+pub fn sqrt_ratio_to_tick<C: Chain>(sqrt_ratio: U256) -> i32 {
+    let tick_sqrt_ratio = |tick| to_sqrt_ratio::<C>(tick).unwrap();
+
+    let mut tick = approximate_sqrt_ratio_to_tick(sqrt_ratio).clamp(C::min_tick(), C::max_tick());
+
+    while tick > C::min_tick() && tick_sqrt_ratio(tick) > sqrt_ratio {
+        tick -= 1;
+    }
+    while tick < C::max_tick() && tick_sqrt_ratio(tick + 1) <= sqrt_ratio {
+        tick += 1;
+    }
+
+    tick
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,6 +329,49 @@ mod tests {
                         Evm::max_tick()
                     ),
                 }
+            }
+        }
+    }
+
+    mod sqrt_ratio_to_tick {
+        use ruint::uint;
+
+        use super::*;
+
+        #[test]
+        fn tick_boundaries() {
+            for tick in [
+                Evm::min_tick(),
+                -10_000_000,
+                -20_000,
+                -1,
+                0,
+                1,
+                20_000,
+                10_000_000,
+                Evm::max_tick(),
+            ] {
+                let sqrt_ratio = to_sqrt_ratio::<Evm>(tick).unwrap();
+
+                assert_eq!(sqrt_ratio_to_tick::<Evm>(sqrt_ratio), tick);
+
+                if tick != Evm::min_tick() {
+                    assert_eq!(sqrt_ratio_to_tick::<Evm>(sqrt_ratio - U256::ONE), tick - 1);
+                }
+            }
+        }
+
+        #[test]
+        fn matches_core() {
+            // Pool ticks after swaps on `Core`, checked in Foundry
+            for (sqrt_ratio, tick) in [
+                (uint!(338896032025200968065003068944229072896_U256), -8_165),
+                (uint!(341674372949594377224929448206153023488_U256), 8_164),
+                (uint!(340220542971813192254578489734276841472_U256), -364),
+                (uint!(340344202104543146321529093331370377216_U256), 363),
+                (uint!(338594801479722334937492722081826078720_U256), -9_944),
+            ] {
+                assert_eq!(sqrt_ratio_to_tick::<Evm>(sqrt_ratio), tick);
             }
         }
     }
