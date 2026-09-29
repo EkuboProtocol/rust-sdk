@@ -9,17 +9,17 @@ use crate::{
 };
 use crate::{
     chain::evm::{EVM_FULL_RANGE_TICK_SPACING, Evm},
-    math::{
-        facade::round_f64,
-        swap::{amount_before_fee, compute_fee},
-    },
+    math::swap::{amount_before_fee, compute_fee},
     private,
     quoting::pools::concentrated::{
         ConcentratedPool, ConcentratedPoolQuoteError, ConcentratedPoolResources,
         ConcentratedPoolState, ConcentratedPoolTypeConfig, TickSpacing,
     },
 };
-use crate::{math::tick::approximate_sqrt_ratio_to_tick, quoting::types::PoolState};
+use crate::{
+    math::tick::{sqrt_ratio_to_tick, to_sqrt_ratio},
+    quoting::types::PoolState,
+};
 
 /// MEV-capture pool that wraps a concentrated liquidity pool with time-aware fees.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -136,6 +136,38 @@ impl MevCapturePool {
     pub fn concentrated_pool(&self) -> &ConcentratedPool<Evm> {
         &self.concentrated_pool
     }
+
+    /// Returns the tick Core stores for a swap ending at `sqrt_ratio`.
+    ///
+    /// Core stores the floor tick of the price, except that a decreasing swap which stops on the
+    /// tick it was swapping towards leaves the pool at that tick minus one. For concentrated
+    /// pools that happens at initialized ticks and at the minimum tick. Core also stops on
+    /// uninitialized ticks at the edge of each searched tick bitmap word, which depends on the
+    /// swap's `skipAhead`; a swap only ends exactly on one of those if its sqrt ratio limit is
+    /// that tick's price, which this does not model.
+    fn tick_after_swap(&self, sqrt_ratio: U256, is_price_increasing: bool) -> i32 {
+        let tick = sqrt_ratio_to_tick::<Evm>(sqrt_ratio);
+
+        let stopped_on_crossed_tick = !is_price_increasing
+            && to_sqrt_ratio::<Evm>(tick) == Some(sqrt_ratio)
+            && (tick == Evm::min_tick()
+                || self
+                    .concentrated_pool
+                    .ticks()
+                    .binary_search_by_key(&tick, |t| t.index)
+                    .is_ok());
+
+        tick - i32::from(stopped_on_crossed_tick)
+    }
+}
+
+/// Core's additional fee for a swap that moved the pool by `tick_delta` ticks.
+fn additional_fee(tick_delta: u32, tick_spacing: u32, fee: u64) -> u64 {
+    let fee_multiplier_x64 = (U256::from(tick_delta) << 64) / U256::from(tick_spacing);
+
+    let fee: U256 = (fee_multiplier_x64 * U256::from(fee)) >> 64;
+
+    fee.min(U256::from(u64::MAX)).to()
 }
 
 impl AsRef<ConcentratedPool<Evm>> for MevCapturePool {
@@ -183,15 +215,15 @@ impl Pool for MevCapturePool {
             Ok(quote) => {
                 let current_time = (params.meta & 0xFFFFFFFF) as u32;
 
-                let tick_after_swap = approximate_sqrt_ratio_to_tick(quote.state_after.sqrt_ratio);
+                let tick_after_swap =
+                    self.tick_after_swap(quote.state_after.sqrt_ratio, quote.is_price_increasing);
 
                 let pool_config = self.concentrated_pool.key().config;
-                let approximate_fee_multiplier = f64::from((tick_after_swap - self.tick).abs() + 1)
-                    / f64::from(pool_config.pool_type_config.0);
-
-                let fixed_point_additional_fee: u64 =
-                    (round_f64(approximate_fee_multiplier * pool_config.fee as f64) as u128)
-                        .min(u128::from(u64::MAX)) as u64;
+                let fixed_point_additional_fee = additional_fee(
+                    tick_after_swap.abs_diff(self.tick),
+                    pool_config.pool_type_config.0,
+                    pool_config.fee,
+                );
 
                 let pool_time = params
                     .override_state
@@ -451,8 +483,8 @@ mod tests {
         );
 
         for (amount, expected) in [
-            (1_000_000_000_000_000, 3_024_269_006_844_199_919),
-            (5_000_000_000_000_000, 15_086_011_739_862_955_625),
+            (1_000_000_000_000_000, 3_024_270_519_421_888_604),
+            (5_000_000_000_000_000, 15_086_011_739_862_955_627),
         ] {
             let quote = pool
                 .quote(QuoteParams {
@@ -473,6 +505,9 @@ mod tests {
         }
     }
 
+    // The first swap crosses the empty tick bitmap word starting at tick 8,065,000. `Core` gives
+    // these amounts with `skipAhead` 2; with `skipAhead` 0 it takes an extra swap step at that
+    // word boundary and rounds differently by a few thousand wei.
     #[test]
     fn swap_example_mainnet_split_trade() {
         let liquidity = 187_957_823_162_863_064_741;
@@ -508,7 +543,7 @@ mod tests {
 
         assert_eq!(
             (result0.consumed_amount, result0.calculated_amount),
-            (125_000_000_000_000_000, 378_805_738_986_174_441_203)
+            (125_000_000_000_000_000, 378_805_738_986_174_443_017)
         );
 
         let result1 = pool
@@ -525,7 +560,7 @@ mod tests {
 
         assert_eq!(
             (result1.consumed_amount, result1.calculated_amount),
-            (50_000_000_000_000_000, 141_694_588_268_248_470_552)
+            (50_000_000_000_000_000, 141_694_588_268_248_472_002)
         );
 
         let result2 = pool
@@ -542,7 +577,7 @@ mod tests {
 
         assert_eq!(
             (result2.consumed_amount, result2.calculated_amount),
-            (12_500_000_000_000_000, 34_654_649_033_984_065_498)
+            (12_500_000_000_000_000, 34_654_649_033_984_065_649)
         );
 
         let result3 = pool
@@ -559,7 +594,233 @@ mod tests {
 
         assert_eq!(
             (result3.consumed_amount, result3.calculated_amount),
-            (12_500_000_000_000_000, 34_275_601_333_991_479_467)
+            (12_500_000_000_000_000, 34_275_601_333_991_479_698)
         );
+    }
+
+    /// A pool with the positions the Foundry parity scenarios create on `Core`.
+    fn core_parity_pool(
+        fee: u64,
+        tick_spacing: u32,
+        liquidity: u128,
+        positions: [(i32, i128); 2],
+    ) -> MevCapturePool {
+        let [(outer, outer_liquidity), (inner, inner_liquidity)] = positions;
+
+        MevCapturePool::new(
+            ConcentratedPool::new(
+                PoolKey {
+                    token0: Evm::zero_address(),
+                    token1: Evm::one_address(),
+                    config: PoolConfig {
+                        fee,
+                        pool_type_config: TickSpacing(tick_spacing),
+                        extension: Evm::one_address(),
+                    },
+                },
+                ConcentratedPoolState {
+                    active_tick_index: Some(1),
+                    liquidity,
+                    sqrt_ratio: to_sqrt_ratio::<Evm>(0).unwrap(),
+                },
+                ticks(&[
+                    (-outer, outer_liquidity),
+                    (-inner, inner_liquidity),
+                    (inner, -inner_liquidity),
+                    (outer, -outer_liquidity),
+                ]),
+            )
+            .unwrap(),
+            0,
+            0,
+        )
+        .unwrap()
+    }
+
+    /// Quotes each swap in sequence, as `Core` would execute them within one block, and checks the
+    /// consumed and calculated amounts.
+    fn assert_quotes(pool: &MevCapturePool, swaps: &[(bool, i128, Option<i32>, i128, u128)]) {
+        let mut state = None;
+
+        for &(is_token1, amount, limit_tick, consumed, calculated) in swaps {
+            let quote = pool
+                .quote(QuoteParams {
+                    meta: 1,
+                    override_state: state,
+                    sqrt_ratio_limit: limit_tick.map(|tick| to_sqrt_ratio::<Evm>(tick).unwrap()),
+                    token_amount: TokenAmount {
+                        amount,
+                        token: if is_token1 {
+                            Evm::one_address()
+                        } else {
+                            Evm::zero_address()
+                        },
+                    },
+                })
+                .unwrap();
+
+            assert_eq!(
+                (quote.consumed_amount, quote.calculated_amount),
+                (consumed, calculated)
+            );
+
+            state = Some(quote.state_after);
+        }
+    }
+
+    // Expected amounts are the results of the same swaps through `MEVCapture` on `Core` in Foundry
+    mod matches_core {
+        use super::*;
+
+        fn wide_spacing_pool() -> MevCapturePool {
+            core_parity_pool(
+                DEFAULT_FEE,
+                DEFAULT_TICK_SPACING,
+                121_005_059,
+                [(100_000, 20_504_176), (20_000, 100_500_883)],
+            )
+        }
+
+        fn low_fee_pool() -> MevCapturePool {
+            core_parity_pool(
+                ((1u128 << 64) / 10_000) as u64,
+                100,
+                2_201_001_558_332_747_049_219_572_744,
+                [
+                    (10_000, 200_500_516_666_268_056_066_533_655),
+                    (1_000, 2_000_501_041_666_478_993_153_039_089),
+                ],
+            )
+        }
+
+        #[test]
+        fn exact_input() {
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[(false, 500_000, None, 500_000, 490_970)],
+            );
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[(true, 500_000, None, 500_000, 490_970)],
+            );
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    false,
+                    400_000_000_000_000_000_000_000,
+                    None,
+                    400_000_000_000_000_000_000_000,
+                    399_741_774_575_010_561_642_568,
+                )],
+            );
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    true,
+                    400_000_000_000_000_000_000_000,
+                    None,
+                    400_000_000_000_000_000_000_000,
+                    399_742_174_462_343_990_786_130,
+                )],
+            );
+        }
+
+        #[test]
+        fn exact_output() {
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[(false, -300_000, None, -300_000, 304_533)],
+            );
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[(true, -300_000, None, -300_000, 304_533)],
+            );
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    false,
+                    -300_000_000_000_000_000_000_000,
+                    None,
+                    -300_000_000_000_000_000_000_000,
+                    300_152_536_467_866_436_260_590,
+                )],
+            );
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    true,
+                    -300_000_000_000_000_000_000_000,
+                    None,
+                    -300_000_000_000_000_000_000_000,
+                    300_152_836_672_351_544_524_094,
+                )],
+            );
+        }
+
+        #[test]
+        fn crossing_initialized_ticks() {
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    false,
+                    2_000_000_000_000_000_000_000_000,
+                    None,
+                    2_000_000_000_000_000_000_000_000,
+                    1_974_512_281_141_026_964_903_651,
+                )],
+            );
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    true,
+                    -1_500_000_000_000_000_000_000_000,
+                    None,
+                    -1_500_000_000_000_000_000_000_000,
+                    1_509_437_693_364_358_517_459_459,
+                )],
+            );
+        }
+
+        // `Core` leaves the pool one tick below an initialized tick that a decreasing swap stops
+        // on, which moves the pool one tick further for the additional fee
+        #[test]
+        fn stopping_on_initialized_tick() {
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[(false, 10_000_000, Some(-20_000), 1_228_406, 1_191_978)],
+            );
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[(true, 10_000_000, Some(20_000), 1_228_406, 1_191_978)],
+            );
+            assert_quotes(
+                &low_fee_pool(),
+                &[(
+                    false,
+                    5_000_000_000_000_000_000_000_000,
+                    Some(-1_000),
+                    1_100_885_488_244_704_583_342_630,
+                    1_099_123_824_470_088_356_129_274,
+                )],
+            );
+        }
+
+        #[test]
+        fn swaps_in_same_block() {
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[
+                    (false, 200_000, None, 200_000, 197_352),
+                    (false, 200_000, None, 200_000, 196_386),
+                ],
+            );
+            assert_quotes(
+                &wide_spacing_pool(),
+                &[
+                    (false, 300_000, None, 300_000, 295_545),
+                    (true, 400_000, None, 400_000, 396_318),
+                ],
+            );
+        }
     }
 }
