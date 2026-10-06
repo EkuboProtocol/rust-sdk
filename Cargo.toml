@@ -56,3 +56,6 @@ starknet = ["starknet-types-core"]
 evm = ["evm-alloy-1"]
 evm-alloy-0_6 = ["dep:alloy-primitives-0_6"]
 evm-alloy-1 = ["dep:alloy-primitives-1"]
+
+[dev-dependencies]
+serde_json = "1"
