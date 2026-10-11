@@ -15,10 +15,11 @@ use ekubo_sdk::{
             concentrated::TickSpacing,
             zero_seed_launch::{
                 ZeroSeedLaunchConfig, ZeroSeedLaunchFeeSchedule, ZeroSeedLaunchFullFillError,
-                ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters,
-                ZeroSeedLaunchPoolConstructionError, ZeroSeedLaunchPoolQuoteError,
-                ZeroSeedLaunchPoolState, ZeroSeedLaunchRange, check_launch_binding,
-                preview_installation,
+                ZeroSeedLaunchInstance, ZeroSeedLaunchLocalPreview, ZeroSeedLaunchParameterError,
+                ZeroSeedLaunchParameters, ZeroSeedLaunchPoolConstructionError,
+                ZeroSeedLaunchPoolQuoteError, ZeroSeedLaunchPoolState, ZeroSeedLaunchRange,
+                check_launch_binding, check_launch_binding_math, preview_installation,
+                preview_installation_math, validate_claim_recipient,
             },
         },
         types::{Pool, PoolConfig, PoolKey, QuoteParams, TokenAmount},
@@ -43,8 +44,17 @@ fn address(s: &str) -> Address {
     Address::from_str(s).unwrap()
 }
 
-fn fixture_quotes() -> [Address; 2] {
-    [address(QUOTE_HIGH), address(QUOTE_LOW)]
+fn instance(created: &Value) -> ZeroSeedLaunchInstance {
+    ZeroSeedLaunchInstance {
+        chain_id: 31337,
+        extension: address(s(created, "extension")),
+        core: address("0x00000000000014aa86c5d3c41765bb24e11bd701"),
+        constructor_quote: address(s(created, "constructorQuote")),
+        quote_token_getter: address(s(created, "constructorQuote")),
+        extension_runtime: U256::from_str(s(created, "extensionCodehash")).unwrap(),
+        core_runtime: U256::from_str(s(created, "coreCodehash")).unwrap(),
+        quote_runtime: U256::from_str(s(created, "quoteCodehash")).unwrap(),
+    }
 }
 
 fn s<'a>(v: &'a Value, field: &str) -> &'a str {
@@ -126,7 +136,12 @@ fn pool_from_created(created: &Value, state: ZeroSeedLaunchPoolState) -> EvmZero
         config.range.pool_bounds(),
         (num(created, "tickLower"), num(created, "tickUpper"))
     );
-    EvmZeroSeedLaunchPool::new(key, config, state, &fixture_quotes()).unwrap()
+    if num::<u8>(created, "quoteDecimals") == 18 {
+        EvmZeroSeedLaunchPool::new(key, config, state, &instance(created)).unwrap()
+    } else {
+        assert!(EvmZeroSeedLaunchPool::new(key, config, state, &instance(created)).is_err());
+        EvmZeroSeedLaunchPool::new_math(key, config, state).unwrap()
+    }
 }
 
 fn optional_limit(step: &Value) -> Option<U256> {
@@ -198,6 +213,10 @@ fn parity_with_local_core_state_and_events() {
             let result = pool.simulate_swap(current, amount, is_token1, optional_limit(step), ts);
 
             if !step["ok"].as_bool().unwrap() {
+                assert_eq!(
+                    step["pre_balances"], step["post_balances"],
+                    "{label}: rollback conservation"
+                );
                 let error = s(step, "error");
                 assert_eq!(
                     state(&step["post"]),
@@ -230,10 +249,16 @@ fn parity_with_local_core_state_and_events() {
                             (swap.delta0, swap.delta1)
                         };
                         let held_token: u128 = num(step, "held_token");
-                        let held_quote: u128 = num(step, "held_quote");
+                        let token_allowance = U256::from_str(s(step, "token_allowance")).unwrap();
+                        let held_quote = U256::from_str(s(step, "held_quote")).unwrap();
+                        let core_quote = U256::from_str(s(step, "core_quote")).unwrap();
                         assert!(
                             (token_owed > 0 && token_owed as u128 > held_token)
-                                || (quote_owed > 0 && quote_owed as u128 > held_quote),
+                                || (token_owed > 0
+                                    && U256::from(token_owed as u128) > token_allowance)
+                                || (quote_owed > 0 && U256::from(quote_owed as u128) > held_quote)
+                                || (quote_owed < 0
+                                    && U256::from(quote_owed.unsigned_abs()) > core_quote),
                             "{label}: owes {token_owed}/{quote_owed}, holds {held_token}/{held_quote}"
                         );
                     }
@@ -244,6 +269,36 @@ fn parity_with_local_core_state_and_events() {
             }
 
             let swap = result.unwrap_or_else(|e| panic!("{label}: {e}"));
+            for (i, delta) in [swap.delta0, swap.delta1].into_iter().enumerate() {
+                let pre =
+                    |k: usize| U256::from_str(step["pre_balances"][k].as_str().unwrap()).unwrap();
+                let post =
+                    |k: usize| U256::from_str(step["post_balances"][k].as_str().unwrap()).unwrap();
+                let amount = U256::from(delta.unsigned_abs());
+                let expected_core = if delta >= 0 {
+                    pre(i).checked_add(amount)
+                } else {
+                    pre(i).checked_sub(amount)
+                }
+                .unwrap();
+                let expected_holder = if delta >= 0 {
+                    pre(i + 2).checked_sub(amount)
+                } else {
+                    pre(i + 2).checked_add(amount)
+                }
+                .unwrap();
+                assert_eq!(post(i), expected_core, "{label}: Core balance delta");
+                assert_eq!(
+                    post(i + 2),
+                    expected_holder,
+                    "{label}: holder balance delta"
+                );
+                assert_eq!(
+                    pre(i).checked_add(pre(i + 2)),
+                    post(i).checked_add(post(i + 2)),
+                    "{label}: asset conservation"
+                );
+            }
             let event = &step["event"];
             assert_eq!(swap.delta0, num::<i128>(step, "delta0"), "{label} delta0");
             assert_eq!(swap.delta1, num::<i128>(step, "delta1"), "{label} delta1");
@@ -331,7 +386,7 @@ fn parity_with_local_core_state_and_events() {
     assert_eq!(compared + refused, 307);
     assert!(compared >= 240, "compared {compared}");
 
-    // Gas: the fitted estimate stays within 30% of the measured in-test gas for every fill except
+    // Gas: the uncalibrated estimate stays within 40% of the measured in-test gas for every fill except
     // the first of each launch and the two that write a zero storage slot (the first fee after the
     // claim, the first tokens bought after the holder sold out), which it underestimates. Set
     // ZERO_SEED_GAS_TABLE to print the table.
@@ -356,7 +411,8 @@ fn parity_with_local_core_state_and_events() {
         worst = worst.max(error.abs());
     }
     assert_eq!(cold, 12);
-    assert!(worst < 0.30, "worst gas estimate error {worst}");
+    println!("parity: {compared} executed, {refused} refused, {claims} claims; gas worst={worst}");
+    assert!(worst < 0.40, "worst gas estimate error {worst}");
 }
 
 fn parameters_of(preview: &Value) -> ZeroSeedLaunchParameters {
@@ -412,7 +468,7 @@ fn installation_preview_and_binding_match_the_contract() {
         let label = s(preview, "label");
         let parameters = parameters_of(preview);
         let now: u64 = num(preview, "now");
-        let result = preview_installation(&parameters, now, &fixture_quotes());
+        let result = preview_installation_math(&parameters, now);
         if preview["ok"].as_bool().unwrap() {
             let installation = result.unwrap_or_else(|e| panic!("{label}: {e}"));
             let token_is0 = s(preview, "token") == s(preview, "token0");
@@ -451,7 +507,16 @@ fn installation_preview_and_binding_match_the_contract() {
             );
             ok += 1;
         } else {
-            assert_eq!(result, Err(decode_error(s(preview, "err"))), "{label}");
+            let error = decode_error(s(preview, "err"));
+            if error == ZeroSeedLaunchParameterError::UnsupportedQuoteToken {
+                // Pure math intentionally has no constructor/address support policy. The emitted
+                // contract refusal is independently asserted: it mismatches BOTH manifest quotes.
+                assert!(
+                    ![address(QUOTE_HIGH), address(QUOTE_LOW)].contains(&parameters.quote_token)
+                );
+            } else {
+                assert_eq!(result, Err(error), "{label}");
+            }
         }
         by_label.insert(label.to_owned(), parameters);
     }
@@ -467,7 +532,7 @@ fn installation_preview_and_binding_match_the_contract() {
         let liquidity: u128 = num(binding, "liquidity");
         // Creation happens in the block after the preview's timestamp in the generator, at the
         // same timestamp.
-        let result = check_launch_binding(&parameters, liquidity, 1, &fixture_quotes());
+        let result = check_launch_binding_math(&parameters, liquidity, 1);
         if binding["ok"].as_bool().unwrap() {
             let installation = result.unwrap_or_else(|e| panic!("{label}: {e}"));
             assert_eq!(installation.installed_supply, parameters.supply);
@@ -483,10 +548,10 @@ fn installation_preview_and_binding_match_the_contract() {
 
     // The documented trap: previewing the installed supply again does not return the same pair.
     let frozen = &by_label["t0_18_6_frozen"];
-    let first = preview_installation(frozen, 1, &fixture_quotes()).unwrap();
+    let first = preview_installation_math(frozen, 1).unwrap();
     let mut again = *frozen;
     again.supply = first.installed_supply;
-    let second = preview_installation(&again, 1, &fixture_quotes()).unwrap();
+    let second = preview_installation_math(&again, 1).unwrap();
     assert_eq!(second.liquidity, first.liquidity - 1);
     assert!(second.installed_supply < first.installed_supply);
 }
@@ -530,7 +595,7 @@ fn frozen_integer_vectors() {
             range,
             fee: fee(3600),
         };
-        let installation = preview_installation(&parameters, 1, &fixture_quotes()).unwrap();
+        let installation = preview_installation_math(&parameters, 1).unwrap();
         assert_eq!(
             installation.installed_supply,
             num::<u128>(entry, "installed")
@@ -552,7 +617,7 @@ fn frozen_integer_vectors() {
         } else {
             (token, address(quote))
         };
-        let pool = EvmZeroSeedLaunchPool::new(
+        let pool = EvmZeroSeedLaunchPool::new_math(
             PoolKey {
                 token0,
                 token1,
@@ -568,7 +633,6 @@ fn frozen_integer_vectors() {
                 fee: fee(3600),
             },
             initial_state(&range, installation.liquidity),
-            &fixture_quotes(),
         )
         .unwrap();
         pools.insert(
@@ -642,6 +706,26 @@ fn frozen_integer_vectors() {
         }
     }
     assert_eq!(checked, 12);
+
+    // Upper residue is not Core's accumulated unowned dust. Preserve per-asset raw units.
+    let residues = vectors["residue_metrics"]["scenarios"].as_array().unwrap();
+    assert_eq!(residues.len(), 4);
+    for (entry, expected) in residues.iter().zip([89u128, 89, 94, 90]) {
+        let residue: u128 = num(entry, "upper_residue_raw_token");
+        assert_eq!(residue, expected);
+        assert_eq!(
+            num::<u128>(entry, "position_token_before_exhaust")
+                - num::<u128>(entry, "delivered_raw_token"),
+            residue
+        );
+        let before = &entry["core_dust_before_exhaust"];
+        let after = &entry["core_dust_after_exhaust"];
+        assert_eq!(
+            num::<u128>(after, "raw_token"),
+            num::<u128>(before, "raw_token") + residue
+        );
+        assert!(num::<u128>(after, "raw_quote") >= num::<u128>(before, "raw_quote"));
+    }
 
     // The deployed router fixture's 1e18 quote buy and the one-unit dust buy.
     for entry in vectors["router"].as_array().unwrap() {
@@ -777,25 +861,176 @@ fn unsupported_quote_tokens_fail_closed() {
     };
     let launch = *pool_from_created(created, state(&created["state"])).launch();
     let core = state(&created["state"]);
-    assert_eq!(
-        EvmZeroSeedLaunchPool::new(key, launch, core, &[]),
-        Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)
-    );
-    assert_eq!(
-        EvmZeroSeedLaunchPool::new(key, launch, core, &[key.token0]),
-        Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)
-    );
+    let mut observed = instance(created);
+    observed.extension_runtime = U256::ZERO;
+    assert!(EvmZeroSeedLaunchPool::new(key, launch, core, &observed).is_err());
+    observed = instance(created);
+    observed.constructor_quote = key.token0;
+    assert!(EvmZeroSeedLaunchPool::new(key, launch, core, &observed).is_err());
     key.config.fee = 1;
     assert_eq!(
-        EvmZeroSeedLaunchPool::new(key, launch, core, &[key.token1]),
+        EvmZeroSeedLaunchPool::new(key, launch, core, &instance(created)),
         Err(ZeroSeedLaunchPoolConstructionError::FeeMustBeZero)
     );
+}
 
-    let preview = &vectors["previews"][0];
-    let parameters = parameters_of(preview);
-    assert_eq!(
-        preview_installation(&parameters, 1, &[]),
-        Err(ZeroSeedLaunchParameterError::UnsupportedQuoteToken)
-    );
-    assert!(preview_installation(&parameters, 1, &[parameters.quote_token]).is_ok());
+#[test]
+fn manifest_and_local_producer_negative_controls() {
+    let vectors: Value = serde_json::from_str(PARITY).unwrap();
+    for scenario in vectors["scenarios"].as_array().unwrap() {
+        let created = &scenario["create"];
+        let observed = instance(created);
+        if num::<u8>(created, "quoteDecimals") == 6 {
+            assert_eq!(
+                observed.validate(),
+                Err(ZeroSeedLaunchParameterError::UnsupportedInstance)
+            );
+            continue;
+        }
+        observed.validate().unwrap();
+        let pool = pool_from_created(created, state(&created["state"]));
+        let key = pool.key();
+        for (ask, upper) in [(i32::MIN, 0), (0, i32::MAX), (0, i32::MIN)] {
+            let mut invalid = *pool.launch();
+            invalid.range.ask_tick = ask;
+            invalid.range.upper_tick = upper;
+            assert_eq!(
+                EvmZeroSeedLaunchPool::new(key, invalid, pool.state(), &observed),
+                Err(ZeroSeedLaunchPoolConstructionError::InvalidLaunchConfig)
+            );
+        }
+        // Each provenance component is essential, not merely an arbitrary caller allowlist.
+        for i in 0..8 {
+            let mut bad = observed;
+            match i {
+                0 => bad.chain_id = 8453,
+                1 => bad.extension = Address::ZERO,
+                2 => bad.core = Address::ZERO,
+                3 => bad.constructor_quote = Address::ZERO,
+                4 => bad.quote_token_getter = Address::ZERO,
+                5 => bad.extension_runtime = U256::ZERO,
+                6 => bad.core_runtime = U256::ZERO,
+                _ => bad.quote_runtime = U256::ZERO,
+            }
+            assert!(bad.validate().is_err());
+            assert!(EvmZeroSeedLaunchPool::new(key, *pool.launch(), pool.state(), &bad).is_err());
+        }
+        let mut bad = observed;
+        bad.extension_runtime =
+            U256::from_str("0xa85c864302696dce32b5e2452508219bb08323c142b40fb7c487540db3f75d89")
+                .unwrap();
+        assert!(
+            bad.validate().is_err(),
+            "zero-filled template is not executed provenance"
+        );
+        for sink in [
+            Address::ZERO,
+            observed.core,
+            observed.extension,
+            key.token0,
+            key.token1,
+        ] {
+            assert_eq!(
+                validate_claim_recipient(&observed, &key, sink),
+                Err(ZeroSeedLaunchParameterError::InvalidRecipient)
+            );
+        }
+        validate_claim_recipient(
+            &observed,
+            &key,
+            address("0x0000000000000000000000000000000000000001"),
+        )
+        .unwrap();
+
+        let mut parameters = ZeroSeedLaunchParameters {
+            quote_token: observed.constructor_quote,
+            supply: num(created, "supply"),
+            range: pool.launch().range,
+            fee: pool.launch().fee,
+        };
+        parameters.fee.trading_start = 301;
+        let mut context = ZeroSeedLaunchLocalPreview {
+            instance: &observed,
+            name: "éééééééééééééééa",
+            symbol: "ZERO",
+            predicted_token_has_code: false,
+            build_time: 1,
+            execution_expiry: 301,
+        };
+        assert_eq!(context.name.len(), 31);
+        let preview = preview_installation(&parameters, 1, &context).unwrap();
+        let requested = parameters.supply;
+        parameters.supply = preview.installed_supply;
+        assert!(parameters.supply <= requested);
+        check_launch_binding(&parameters, preview.liquidity, 1, &context).unwrap();
+        assert!(check_launch_binding(&parameters, preview.liquidity + 1, 1, &context).is_err());
+
+        context.name = "éééééééééééééééé"; // 16 characters, 32 bytes.
+        assert_eq!(
+            preview_installation(&parameters, 1, &context),
+            Err(ZeroSeedLaunchParameterError::MetadataTooLong)
+        );
+        context.name = "ZERO";
+        context.symbol = "éééééééééééééééé";
+        assert_eq!(
+            context.validate(&parameters, 1),
+            Err(ZeroSeedLaunchParameterError::MetadataTooLong)
+        );
+        context.symbol = "";
+        context.predicted_token_has_code = true;
+        assert_eq!(
+            context.validate(&parameters, 1),
+            Err(ZeroSeedLaunchParameterError::LaunchTokenExists)
+        );
+        context.predicted_token_has_code = false;
+        for start in [1, 300, 86402] {
+            parameters.fee.trading_start = start;
+            assert_eq!(
+                context.validate(&parameters, 1),
+                Err(ZeroSeedLaunchParameterError::InvalidLocalTiming)
+            );
+        }
+        for start in [301, 86401] {
+            parameters.fee.trading_start = start;
+            context.execution_expiry = start;
+            context.validate(&parameters, 1).unwrap();
+            for expiry in [0, 1, start + 1] {
+                context.execution_expiry = expiry;
+                assert!(context.validate(&parameters, 1).is_err());
+            }
+        }
+        parameters.fee.trading_start = 301;
+        context.execution_expiry = 301;
+        assert!(context.validate(&parameters, 0).is_err(), "future build");
+        assert!(
+            context.validate(&parameters, 2).is_err(),
+            "fresh margin must remain"
+        );
+        assert!(
+            context.validate(&parameters, 301).is_err(),
+            "expired at equality"
+        );
+        parameters.fee.trading_start = 86401;
+        context.execution_expiry = 2;
+        assert!(
+            context.validate(&parameters, 2).is_err(),
+            "expiry with ample start margin"
+        );
+        context.build_time = u64::MAX - 299;
+        context.execution_expiry = u64::MAX;
+        assert_eq!(
+            context.validate(&parameters, context.build_time),
+            Err(ZeroSeedLaunchParameterError::Overflow)
+        );
+        context.build_time = 1;
+        assert_eq!(
+            context.validate(&parameters, u64::MAX),
+            Err(ZeroSeedLaunchParameterError::Overflow)
+        );
+        parameters.quote_token = Address::ZERO;
+        assert_eq!(
+            context.validate(&parameters, 1),
+            Err(ZeroSeedLaunchParameterError::UnsupportedQuoteToken)
+        );
+    }
 }

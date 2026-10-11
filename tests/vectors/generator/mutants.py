@@ -21,22 +21,44 @@ MUTANTS = [
     ("skipAhead 1", "const SKIP_AHEAD: u32 = 0;", "const SKIP_AHEAD: u32 = 1;"),
     ("no bitmap word stop", "let word_end = (raw >> 8 << 8) + 255;", "let word_end = (raw >> 9 << 9) + 511;"),
     ("tick cap off by one", "u128::MAX / ticks", "u128::MAX / ticks + 1"),
-    ("no supported quote check", "|| !supported_quote_tokens.contains(&parameters.quote_token)", ""),
+    ("no constructor quote check", "if parameters.quote_token != self.instance.constructor_quote {", "if false {"),
     ("zero output accepted", "if requested > 0 && quote.calculated_amount == 0 {", "if false {"),
     ("fee cap off by one", "if fee.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {", "if fee.initial_fee >= ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {"),
     ("binding not checked", "if installation.installed_supply != parameters.supply {", "if false {"),
+    ("live network accepted", "self.chain_id != 31337", "false"),
+    ("extension identity ignored", '|| self.extension != addr("0x5100000000000000000000000000000000000000")', ""),
+    ("Core identity ignored", '|| self.core != addr("0x00000000000014aa86c5d3c41765bb24e11bd701")', ""),
+    ("getter ignored", "|| self.quote_token_getter != self.constructor_quote", ""),
+    ("executed runtime ignored", "|| self.extension_runtime != runtime", ""),
+    ("Core runtime ignored", '|| self.core_runtime\n                != hash("0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a")', ""),
+    ("quote runtime ignored", '|| self.quote_runtime\n                != hash("0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c")', ""),
+    ("32-byte metadata accepted", "self.name.len() > 31", "self.name.len() > 32"),
+    ("metadata character count", "self.name.len() > 31", "self.name.chars().count() > 31"),
+    ("collision ignored", "if self.predicted_token_has_code {", "if false {"),
+    ("margin off by one", "checked_add(300)", "checked_add(299)"),
+    ("start cap removed", "|| start > max_start", ""),
+    ("expiry at start rejected", "self.execution_expiry > start", "self.execution_expiry >= start"),
+    ("expired plan accepted", "|| now >= self.execution_expiry", ""),
+    ("fresh start margin removed", "|| start < fresh_min", ""),
+    ("Core sink accepted", "|| recipient == instance.core", ""),
+    ("extension sink accepted", "|| recipient == instance.extension", ""),
+    ("token0 sink accepted", "|| recipient == key.token0", ""),
+    ("token1 sink accepted", "|| recipient == key.token1", ""),
 ]
 
 original = open(PATH).read()
 killed = 0
 try:
     for name, old, new in MUTANTS:
-        assert original.count(old) == 1, name
+        assert original.count(old) >= 1, name
         open(PATH, "w").write(original.replace(old, new))
         r = subprocess.run(
-            ["cargo", "test", "--features", "evm,starknet,serde", "--test", "zero_seed_launch_vectors", "-q"],
+            ["cargo", "test", "--offline", "--features", "evm,serde", "--test", "zero_seed_launch_vectors", "-q"],
             capture_output=True,
         )
+        if r.returncode != 0 and b"test result: FAILED" not in r.stdout:
+            print(r.stderr.decode(), flush=True)
+            raise RuntimeError("control must compile and fail an assertion: " + name)
         status = "KILLED" if r.returncode != 0 else "SURVIVED"
         killed += r.returncode != 0
         print(f"{status}\t{name}", flush=True)
