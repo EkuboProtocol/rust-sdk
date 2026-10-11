@@ -49,12 +49,6 @@ use crate::quoting::pools::oracle::{
     OraclePool, OraclePoolConfig, OraclePoolConstructionError, OraclePoolKey, OraclePoolResources,
     OraclePoolState, OraclePoolTypeConfig, OracleStandalonePoolResources,
 };
-use crate::quoting::pools::scheduled_launch::{
-    ScheduledLaunchConfig, ScheduledLaunchPool, ScheduledLaunchPoolConfig,
-    ScheduledLaunchPoolConstructionError, ScheduledLaunchPoolKey, ScheduledLaunchPoolQuoteError,
-    ScheduledLaunchPoolResources, ScheduledLaunchPoolState, ScheduledLaunchPoolTypeConfig,
-    ScheduledLaunchStandalonePoolResources,
-};
 use crate::quoting::pools::stableswap::{
     StableswapPool, StableswapPoolConfig, StableswapPoolConstructionError, StableswapPoolKey,
     StableswapPoolQuoteError, StableswapPoolResources, StableswapPoolState,
@@ -67,6 +61,11 @@ use crate::quoting::pools::twamm::{
 use crate::quoting::pools::ve33::{
     Ve33Pool, Ve33PoolConfig, Ve33PoolConstructionError, Ve33PoolKey, Ve33PoolQuoteError,
     Ve33PoolResources, Ve33PoolState, Ve33StandalonePoolResources,
+};
+use crate::quoting::pools::zero_seed_launch::{
+    ZeroSeedLaunchConfig, ZeroSeedLaunchPool, ZeroSeedLaunchPoolConfig,
+    ZeroSeedLaunchPoolConstructionError, ZeroSeedLaunchPoolKey, ZeroSeedLaunchPoolQuoteError,
+    ZeroSeedLaunchPoolResources, ZeroSeedLaunchPoolState, ZeroSeedLaunchPoolTypeConfig,
 };
 use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
@@ -158,16 +157,15 @@ pub type EvmBoostedFeesStableswapPoolState = BoostedFeesStableswapPoolState;
 pub type EvmBoostedFeesStableswapPoolQuoteError = BoostedFeesStableswapPoolQuoteError;
 pub type EvmBoostedFeesStableswapPoolTypeConfig = BoostedFeesStableswapPoolTypeConfig;
 
-pub type EvmScheduledLaunchPool = ScheduledLaunchPool;
-pub type EvmScheduledLaunchConfig = ScheduledLaunchConfig;
-pub type EvmScheduledLaunchPoolConstructionError = ScheduledLaunchPoolConstructionError;
-pub type EvmScheduledLaunchPoolConfig = ScheduledLaunchPoolConfig;
-pub type EvmScheduledLaunchPoolKey = ScheduledLaunchPoolKey;
-pub type EvmScheduledLaunchPoolQuoteError = ScheduledLaunchPoolQuoteError;
-pub type EvmScheduledLaunchPoolResources = ScheduledLaunchPoolResources;
-pub type EvmScheduledLaunchStandalonePoolResources = ScheduledLaunchStandalonePoolResources;
-pub type EvmScheduledLaunchPoolState = ScheduledLaunchPoolState;
-pub type EvmScheduledLaunchPoolTypeConfig = ScheduledLaunchPoolTypeConfig;
+pub type EvmZeroSeedLaunchPool = ZeroSeedLaunchPool;
+pub type EvmZeroSeedLaunchConfig = ZeroSeedLaunchConfig;
+pub type EvmZeroSeedLaunchPoolConstructionError = ZeroSeedLaunchPoolConstructionError;
+pub type EvmZeroSeedLaunchPoolConfig = ZeroSeedLaunchPoolConfig;
+pub type EvmZeroSeedLaunchPoolKey = ZeroSeedLaunchPoolKey;
+pub type EvmZeroSeedLaunchPoolQuoteError = ZeroSeedLaunchPoolQuoteError;
+pub type EvmZeroSeedLaunchPoolResources = ZeroSeedLaunchPoolResources;
+pub type EvmZeroSeedLaunchPoolState = ZeroSeedLaunchPoolState;
+pub type EvmZeroSeedLaunchPoolTypeConfig = ZeroSeedLaunchPoolTypeConfig;
 
 pub type EvmVe33ConcentratedPool = Ve33Pool<ConcentratedPool<Evm>>;
 pub type EvmVe33ConcentratedPoolConstructionError = Ve33PoolConstructionError;
