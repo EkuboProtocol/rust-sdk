@@ -1,0 +1,3 @@
+# clippy's default. Set explicitly so changing it is a deliberate edit rather
+# than a silent inheritance from whatever clippy ships.
+cognitive-complexity-threshold = 25

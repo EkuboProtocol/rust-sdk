@@ -56,3 +56,11 @@ starknet = ["starknet-types-core"]
 evm = ["evm-alloy-1"]
 evm-alloy-0_6 = ["dep:alloy-primitives-0_6"]
 evm-alloy-1 = ["dep:alloy-primitives-1"]
+
+[lints.clippy]
+# Not on by default: it lives in clippy's `restriction` group, and clippy's own
+# docs say it does not measure cognitive complexity especially well. It is
+# enabled here anyway as a coarse guardrail against a function quietly becoming
+# unreviewable -- the threshold is in clippy.toml. CI runs clippy with
+# `-D warnings`, so this is an error there and a warning locally.
+cognitive_complexity = "warn"
