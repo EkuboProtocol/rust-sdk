@@ -283,8 +283,11 @@ fn anchor_model(v: &Value) -> MevCaptureV21MainModel {
     .unwrap()
 }
 
-/// `_anchorUpdate`, `_refresh` and `beforeUpdatePosition` are byte-identical between the `main`
-/// extension and the merged `next` one (`da368348`), so its fixtures apply unchanged.
+/// `_refresh` and `beforeUpdatePosition` are byte-identical between the `main` extension and the
+/// merged `next` one (`da368348`). `_anchorUpdate` differs only in the movement allowance, which
+/// `main` rounds up (EKU-1582 `17b5e50`, V12 F-13) where `next` floors. Cases whose `next` move
+/// was bound by a fractional floored allowance must move exactly one more unit; every other case
+/// and field replays unchanged.
 #[test]
 fn anchor_updates_all_seven_fields() {
     let v: Value =
@@ -292,8 +295,27 @@ fn anchor_updates_all_seven_fields() {
     let m = anchor_model(&v);
     let cases = v["anchorUpdates"].as_array().unwrap();
     assert_eq!(cases.len(), 120);
+    let half_life = u64::from(m.config().half_life);
+    let clamp = u64::from(m.config().clamp_ticks);
+    let mut rounded_up = 0;
     for (i, c) in cases.iter().enumerate() {
-        let mut state = anchor(&c["stateIn"]);
+        let state_in = anchor(&c["stateIn"]);
+        let mut expected = anchor(&c["expected"]);
+        let dt = u64::from(s::<u32>(&c["timestamp"]).wrapping_sub(state_in.last_update_time))
+            .min(half_life);
+        let floored = ((clamp << 16) * dt) / half_life;
+        let next_move = expected.anchor_x16 - state_in.anchor_x16;
+        if c["passed"].as_bool().unwrap()
+            && ((clamp << 16) * dt) % half_life != 0
+            && next_move.unsigned_abs() == floored
+        {
+            // the `next` limit bound this move; on `main` the limit is one unit larger. The
+            // decayed target lies strictly beyond the floored limit only if the bound was
+            // strict, which the replay below confirms by matching exactly one extra unit.
+            expected.anchor_x16 += next_move.signum();
+            rounded_up += 1;
+        }
+        let mut state = state_in;
         let gate = m
             .before_swap(
                 &mut state,
@@ -305,7 +327,99 @@ fn anchor_updates_all_seven_fields() {
         assert_eq!(gate.passed, c["passed"].as_bool().unwrap(), "case {i}");
         assert_eq!(gate.l_obs, s::<u8>(&c["lObs"]), "case {i}");
         assert_eq!(gate.e_ref, s::<u8>(&c["eRef"]), "case {i}");
-        assert_eq!(state, anchor(&c["expected"]), "case {i}");
+        assert_eq!(state, expected, "case {i}");
+    }
+    assert!(
+        rounded_up > 0,
+        "no fixture exercises the rounded-up allowance"
+    );
+}
+
+/// Initialized at tick 0 at time 0 with the gate open; the callers push the pool tick away.
+fn displaced() -> MevCaptureV21MainAnchor {
+    MevCaptureV21MainAnchor {
+        last_update_time: 0,
+        l_ref_time: 0,
+        last_pos_time: 0,
+        l_ref_bits: 0,
+        snap_bits: 0,
+        l_ref_raise_time: 0,
+        anchor_x16: 0,
+    }
+}
+
+fn clamp_model(half_life: u32, clamp_ticks: u32) -> MevCaptureV21MainModel {
+    MevCaptureV21MainModel::new(MevCaptureV21MainConfig {
+        half_life,
+        slope_k: 4,
+        segment_exp: 0,
+        j_lin: 16,
+        max_fee: 1 << 63,
+        clamp_ticks,
+        m_gate: 3,
+    })
+    .unwrap()
+}
+
+/// Ports `test_f13_zero_amount_forwards_every_second_cannot_freeze_anchor` (EKU-1582 `17b5e50`):
+/// with `CLAMP_TICKS = 1` and `HALF_LIFE = 2^20` each per-second update grants one unit, and a
+/// single update over the same 32 s grants `ceil(2^16 * 32 / 2^20) = 2`.
+#[test]
+fn f13_per_second_updates_cannot_freeze_anchor() {
+    let m = clamp_model(1 << 20, 1);
+    let mut touched = displaced();
+    for i in 1..=32u32 {
+        m.before_swap(&mut touched, 1000, L66 as u128, i).unwrap();
+        assert_eq!(touched.last_update_time, i);
+        assert_eq!(touched.anchor_x16, i64::from(i), "update {i}");
+    }
+    let mut single = displaced();
+    m.before_swap(&mut single, 1000, L66 as u128, 32).unwrap();
+    assert_eq!(single.anchor_x16, 2);
+}
+
+/// Ports `test_park_with_dust_allowance_rounds_up`: a 7 s update with `CLAMP_TICKS = 2500`,
+/// `HALF_LIFE = 120` moves `ceil(2500 * 2^16 * 7 / 120)`.
+#[test]
+fn dust_allowance_rounds_up() {
+    let m = clamp_model(120, 2500);
+    let mut state = displaced();
+    m.before_swap(&mut state, 1_000_000, L66 as u128, 7)
+        .unwrap();
+    assert_eq!(state.anchor_x16, ((2500i64 << 16) * 7 + 119) / 120);
+}
+
+/// Ports `test_fuzz_frequent_updates_never_slow_anchor` over a deterministic grid: `n`
+/// per-second clamp-bound updates move exactly `n * ceil(CLAMP * 2^16 / tau)`, one update over
+/// the same `n` seconds moves `ceil(CLAMP * 2^16 * min(n, tau) / tau)`, and the first is never
+/// less than the second nor more than `n` units above the exact rate.
+#[test]
+fn frequent_updates_never_slow_anchor() {
+    for tau in [1u32, 2, 3, 7, 120, 1000, 65_537, 1 << 20] {
+        for clamp in [1u32, 2, 5, 2500, 4096] {
+            for n in [1u32, 2, 17, 48] {
+                let m = clamp_model(tau, clamp);
+                let tick = (70 * clamp + 128) as i32;
+                let units = u64::from(clamp) << 16;
+                let tau64 = u64::from(tau);
+                let mut touched = displaced();
+                for t in 1..=n {
+                    m.before_swap(&mut touched, tick, L66 as u128, t).unwrap();
+                }
+                let touched = touched.anchor_x16 as u64;
+                assert_eq!(
+                    touched,
+                    u64::from(n) * units.div_ceil(tau64),
+                    "{tau} {clamp} {n}"
+                );
+                let mut single = displaced();
+                m.before_swap(&mut single, tick, L66 as u128, n).unwrap();
+                let single = single.anchor_x16 as u64;
+                assert_eq!(single, (units * u64::from(n).min(tau64)).div_ceil(tau64));
+                assert!(touched >= single);
+                assert!(touched * tau64 <= u64::from(n) * units + u64::from(n) * tau64);
+            }
+        }
     }
 }
 

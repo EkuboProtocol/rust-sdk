@@ -11,9 +11,14 @@
   the rebuilt ticks against the traced active liquidity.
 - `anchorUpdates.json`, `gateScenarios.json`: the `next` extension's fixtures
   (EkuboProtocol/evm-contracts `da368348`, `test/data/mevcapture-v21`).
-  `_anchorUpdate`, `_refresh`, `_decayedReference`, `_raise` and
-  `beforeUpdatePosition` are textually identical in the `main` extension, so
-  they apply unchanged; the replay ignores the `next`-only config fields.
+  `_refresh`, `_decayedReference`, `_raise` and `beforeUpdatePosition` are
+  textually identical in the `main` extension. `_anchorUpdate` differs only in
+  the movement allowance, which `main` rounds up (EKU-1582 `17b5e50`, V12
+  F-13) where `next` floors, so the replay expects one extra unit on the case
+  that the fractional floored allowance bound. The replay ignores the
+  `next`-only config fields. The F-13 contract tests are ported as
+  `f13_per_second_updates_cannot_freeze_anchor`, `dust_allowance_rounds_up`
+  and `frequent_updates_never_slow_anchor`.
 
 Re-run the vector generator against the merged contract commit before
 shipping and replace the file if it changed.

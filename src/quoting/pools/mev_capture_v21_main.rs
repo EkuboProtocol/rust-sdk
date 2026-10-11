@@ -186,9 +186,14 @@ impl MevCaptureV21MainModel {
             } else {
                 magnitude as i128
             };
+            // rounds up on `main` (the `next` variant floors): every update that consumes elapsed
+            // time grants at least one 2^-16 tick
+            let half_life = i128::from(self.config.half_life);
             let limit = ((i128::from(self.config.clamp_ticks) << 16)
-                * i128::from(dt.min(self.config.half_life)))
-                / i128::from(self.config.half_life);
+                * i128::from(dt.min(self.config.half_life))
+                + half_life
+                - 1)
+                / half_life;
             state.anchor_x16 =
                 (i128::from(state.anchor_x16) + (decayed - offset).clamp(-limit, limit)) as i64;
             let base = e_ref.max(state.l_ref_bits.min(l_obs));
