@@ -29,6 +29,7 @@ use serde_json::Value;
 
 const FROZEN: &str = include_str!("vectors/zero-seed-launch.json");
 const PARITY: &str = include_str!("vectors/zero-seed-launch-parity.json");
+const INDEXER: &str = include_str!("vectors/zero-seed-launch-indexer.json");
 
 /// Fixture quote tokens of the contract tests: the high one makes the launch token token0.
 const QUOTE_HIGH: &str = "0xffffffffffffffffffffffffffffffffffffffff";
@@ -109,6 +110,30 @@ fn initial_state(range: &ZeroSeedLaunchRange, liquidity: u128) -> ZeroSeedLaunch
 
 /// Builds the pool from `LaunchCreated` fields only.
 fn pool_from_created(created: &Value, state: ZeroSeedLaunchPoolState) -> EvmZeroSeedLaunchPool {
+    let pool = math_pool_from_created(created, state);
+    assert!(
+        EvmZeroSeedLaunchPool::new(pool.key(), *pool.launch(), state, &instance(created)).is_err()
+    );
+    pool
+}
+
+fn supported_pool_from_created(
+    created: &Value,
+    state: ZeroSeedLaunchPoolState,
+) -> EvmZeroSeedLaunchPool {
+    let (key, config) = pool_inputs_from_created(created);
+    EvmZeroSeedLaunchPool::new(key, config, state, &instance(created)).unwrap()
+}
+
+fn math_pool_from_created(
+    created: &Value,
+    state: ZeroSeedLaunchPoolState,
+) -> EvmZeroSeedLaunchPool {
+    let (key, config) = pool_inputs_from_created(created);
+    EvmZeroSeedLaunchPool::new_math(key, config, state).unwrap()
+}
+
+fn pool_inputs_from_created(created: &Value) -> (EvmZeroSeedLaunchPoolKey, ZeroSeedLaunchConfig) {
     let token0 = address(s(created, "token0"));
     let token1 = address(s(created, "token1"));
     let token = address(s(created, "token"));
@@ -136,12 +161,266 @@ fn pool_from_created(created: &Value, state: ZeroSeedLaunchPoolState) -> EvmZero
         config.range.pool_bounds(),
         (num(created, "tickLower"), num(created, "tickUpper"))
     );
-    if num::<u8>(created, "quoteDecimals") == 18 {
-        EvmZeroSeedLaunchPool::new(key, config, state, &instance(created)).unwrap()
-    } else {
-        assert!(EvmZeroSeedLaunchPool::new(key, config, state, &instance(created)).is_err());
-        EvmZeroSeedLaunchPool::new_math(key, config, state).unwrap()
+    (key, config)
+}
+
+fn indexer_state(word: &str) -> ZeroSeedLaunchPoolState {
+    let word = U256::from_str(word).unwrap();
+    let float: U256 = word >> 160usize;
+    let mantissa_mask = (U256::from(1) << 94) - U256::from(1);
+    let exponent: u8 = (float >> 94usize).try_into().unwrap();
+    let tick_bits: u32 = ((word >> 128usize) & U256::from(u32::MAX))
+        .try_into()
+        .unwrap();
+    ZeroSeedLaunchPoolState {
+        sqrt_ratio: (float & mantissa_mask) << (2 + 32 * exponent),
+        tick: tick_bits as i32,
+        liquidity: (word & U256::from(u128::MAX)).try_into().unwrap(),
     }
+}
+
+// Decode the actual emitted LaunchCreated ABI and same-block packed Core state, without
+// substituting addresses, states or installation math. The original receipt is copied verbatim.
+fn indexer_created_vectors() -> Value {
+    let fixture: Value = serde_json::from_str(INDEXER).unwrap();
+    let topic = ekubo_sdk::alloy_primitives::keccak256(
+        "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))",
+    ).to_string();
+    let mut scenarios = Vec::new();
+    for branch in fixture["branches"].as_object().unwrap().values() {
+        for log in branch["logs"].as_array().unwrap() {
+            if log["topics"][0].as_str() != Some(topic.as_str()) {
+                continue;
+            }
+            let data = &s(log, "data")[2..];
+            let word =
+                |i: usize| U256::from_str(&format!("0x{}", &data[i * 64..(i + 1) * 64])).unwrap();
+            let addr = |i: usize| format!("0x{}", &data[i * 64 + 24..(i + 1) * 64]);
+            let offset: usize = word(5).try_into().unwrap();
+            let p = offset / 32;
+            let signed = |i| {
+                let n: u32 = (word(i) & U256::from(u32::MAX)).try_into().unwrap();
+                n as i32
+            };
+            let emitted_key = format!("0x{}", &data[128..192]);
+            let extension = s(log, "address");
+            let observed = fixture["instances"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|i| s(i, "address").eq_ignore_ascii_case(extension))
+                .unwrap();
+            assert_eq!(addr(p).to_lowercase(), s(observed, "quote").to_lowercase());
+            let args = &s(observed, "constructorArguments")[2..];
+            assert_eq!(
+                U256::from_str(&format!("0x{}", &args[..64])).unwrap(),
+                U256::from_str(s(&fixture["addresses"], "core")).unwrap()
+            );
+            assert_eq!(
+                U256::from_str(&format!("0x{}", &args[64..])).unwrap(),
+                word(p)
+            );
+            assert_eq!(word(4), word(p + 5));
+            assert_eq!(format!("0x{}", &data[128..168]), extension.to_lowercase());
+            assert_eq!(&data[168..184], "0000000000000000");
+            let block = u64::from_str_radix(&s(log, "blockNumber")[2..], 16).unwrap();
+            let snapshot = branch["states"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|s| s["blockNumber"].as_u64() == Some(block))
+                .unwrap();
+            let state_word = snapshot["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["poolId"] == log["topics"][1])
+                .unwrap();
+            let core = indexer_state(s(state_word, "poolStateWord"));
+            let is1 = addr(p).eq_ignore_ascii_case(&addr(0));
+            let ask = signed(p + 6);
+            let upper = signed(p + 7);
+            let range = ZeroSeedLaunchRange {
+                launch_token_is_token1: is1,
+                ask_tick: ask,
+                upper_tick: upper,
+                tick_spacing: word(p + 8).try_into().unwrap(),
+            };
+            let (lower, upper_bound) = range.pool_bounds();
+            assert_eq!(
+                addr(0).to_lowercase(),
+                fixture["launches"][s(state_word, "label")]["poolKey"]["token0"]
+                    .as_str()
+                    .unwrap()
+                    .to_lowercase()
+            );
+            assert_eq!(
+                emitted_key.to_lowercase(),
+                fixture["launches"][s(state_word, "label")]["poolKey"]["config"]
+                    .as_str()
+                    .unwrap()
+                    .to_lowercase()
+            );
+            scenarios.push(serde_json::json!({ "create": {
+                "extension": extension, "constructorQuote": observed["quote"],
+                "extensionCodehash": observed["runtimeKeccak"],
+                "coreCodehash": fixture["provenance"]["coreRuntimeKeccak"],
+                "quoteCodehash": if observed["scope"].as_str().unwrap().contains("synthetic") { "0x0" } else { s(&fixture["provenance"], "wethRuntimeKeccak") },
+                "quoteDecimals": if observed["scope"].as_str().unwrap().contains("synthetic") { "6" } else { "18" },
+                "token0": addr(0), "token1": addr(1),
+                "token": format!("0x{}", &log["topics"][2].as_str().unwrap()[26..]),
+                "fee": "0", "tickSpacing": range.tick_spacing.to_string(),
+                "askTick": ask.to_string(), "upperTick": upper.to_string(),
+                "tickLower": lower.to_string(), "tickUpper": upper_bound.to_string(),
+                "liquidity": word(4).to_string(), "supply": word(p+4).to_string(),
+                "tradingStart": word(p+9).to_string(), "feeDuration": word(p+10).to_string(),
+                "initialFee": word(p+11).to_string(), "finalFee": word(p+12).to_string(),
+                "state": { "sqrt_ratio": core.sqrt_ratio.to_string(), "tick": core.tick.to_string(), "liquidity": core.liquidity.to_string() },
+                "branch": branch["blocks"][0]["parentHash"], "blockNumber": block,
+                "poolStateWord": state_word["poolStateWord"], "poolId": log["topics"][1]
+            }}));
+        }
+    }
+    assert_eq!(scenarios.len(), 4);
+    serde_json::json!({"scenarios": scenarios})
+}
+
+#[test]
+fn supported_indexer_same_block_states() {
+    let vectors = indexer_created_vectors();
+    let fixture: Value = serde_json::from_str(INDEXER).unwrap();
+    let mut checked = 0;
+    for scenario in vectors["scenarios"].as_array().unwrap() {
+        let created = &scenario["create"];
+        if num::<u8>(created, "quoteDecimals") != 18 {
+            continue;
+        }
+        let initial = state(&created["state"]);
+        let pool = supported_pool_from_created(created, initial);
+        assert_eq!(pool.state(), initial);
+        for branch in fixture["branches"].as_object().unwrap().values() {
+            for snapshot in branch["states"].as_array().unwrap() {
+                for observed in snapshot["pools"].as_array().unwrap() {
+                    if observed["poolId"] != created["poolId"] {
+                        continue;
+                    }
+                    let recorded = indexer_state(s(observed, "poolStateWord"));
+                    let candidate = supported_pool_from_created(created, recorded);
+                    assert_eq!(candidate.state(), recorded);
+                    assert_eq!(candidate.key(), pool.key());
+                    checked += 1;
+                }
+            }
+        }
+        // The parity address and the other real extension are not aliases for this tuple.
+        for extension in [
+            "0x5100000000000000000000000000000000000000",
+            if s(created, "constructorQuote") == QUOTE_HIGH {
+                "0x5195c03d30c11be73485ab76a35eb6f59fc52072"
+            } else {
+                "0x510d7c117adeeb89bb33b9acb53995f3280eaa3a"
+            },
+        ] {
+            let mut bad = instance(created);
+            bad.extension = address(extension);
+            assert!(bad.validate().is_err());
+        }
+    }
+    assert_eq!(checked, 19);
+}
+
+#[test]
+fn supported_indexer_actual_trade_parity() {
+    let vectors = indexer_created_vectors();
+    let fixture: Value = serde_json::from_str(INDEXER).unwrap();
+    let mut prefix_states = HashMap::new();
+    let mut checked = 0;
+    for branch_name in ["prefix", "alternate", "canonical"] {
+        let branch = &fixture["branches"][branch_name];
+        let mut states = prefix_states.clone();
+        for block in branch["blocks"].as_array().unwrap() {
+            let number = block["number"].as_u64().unwrap();
+            let logs: Vec<_> = branch["logs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|l| u64::from_str_radix(&s(l, "blockNumber")[2..], 16).unwrap() == number)
+                .collect();
+            let mut swaps = logs.iter().filter(|l| {
+                l["topics"][0].as_str()
+                    == Some("0x3e58795f52a8e88efdec2da89ea3798175f8764145ccd7bf5e40633a7d571f6d")
+            });
+            for action in block["actions"].as_array().unwrap() {
+                let action: Vec<_> = action.as_str().unwrap().split_whitespace().collect();
+                if !["buy", "sell"].contains(&action[0]) {
+                    continue;
+                }
+                let event = swaps.next().unwrap();
+                if !["l1", "l3"].contains(&action[1]) {
+                    continue;
+                }
+                let created = &vectors["scenarios"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|s| s["create"]["poolId"] == fixture["launches"][action[1]]["poolId"])
+                    .unwrap()["create"];
+                let before = *states
+                    .entry(action[1].to_owned())
+                    .or_insert_with(|| state(&created["state"]));
+                let pool = supported_pool_from_created(created, before);
+                let launch = address(s(created, "token"));
+                let quote = instance(created).constructor_quote;
+                let token = match (action[0], action[2]) {
+                    ("buy", "exact-in") | ("sell", "exact-out") => quote,
+                    _ => launch,
+                };
+                let amount: i128 = action[3].parse().unwrap();
+                let q = pool
+                    .quote(QuoteParams {
+                        token_amount: TokenAmount { token, amount },
+                        sqrt_ratio_limit: None,
+                        override_state: None,
+                        meta: block["timestamp"].as_u64().unwrap(),
+                    })
+                    .unwrap();
+                let core_log = logs.iter().find(|l| {
+                    l["transactionHash"] == event["transactionHash"]
+                        && l["topics"].as_array().unwrap().is_empty()
+                        && s(l, "data").len() == 234
+                });
+                let recorded = if let Some(core_log) = core_log {
+                    let data = &s(core_log, "data")[2..];
+                    assert_eq!(format!("0x{}", &data[40..104]), s(created, "poolId"));
+                    indexer_state(&format!("0x{}", &data[168..232]))
+                } else {
+                    before
+                }; // No-bid zero fill emits no Core swap, but does emit LaunchSwapped.
+                assert_eq!(q.state_after, recorded, "{branch_name} {number}");
+                assert!(s(event, "address").eq_ignore_ascii_case(s(created, "extension")));
+                let data = &s(event, "data")[2..];
+                let word = |i: usize| {
+                    U256::from_str(&format!("0x{}", &data[i * 64..(i + 1) * 64])).unwrap()
+                };
+                let signed = |i| {
+                    let n: u128 = (word(i) & U256::from(u128::MAX)).try_into().unwrap();
+                    n as i128
+                };
+                let specified_is1 = token == pool.key().token1;
+                assert_eq!(signed(usize::from(specified_is1)), q.consumed_amount);
+                let calculated = signed(usize::from(!specified_is1));
+                assert_eq!(calculated.unsigned_abs(), q.calculated_amount);
+                assert_eq!(word(3), U256::from(q.fees_paid));
+                assert_eq!(word(4), U256::from(u8::from(!specified_is1)));
+                states.insert(action[1].to_owned(), q.state_after);
+                checked += 1;
+            }
+        }
+        if branch_name == "prefix" {
+            prefix_states = states;
+        }
+    }
+    assert_eq!(checked, 12);
 }
 
 fn optional_limit(step: &Value) -> Option<U256> {
@@ -848,7 +1127,7 @@ fn full_fill_refusal_and_explicit_partial_result() {
 
 #[test]
 fn unsupported_quote_tokens_fail_closed() {
-    let vectors: Value = serde_json::from_str(PARITY).unwrap();
+    let vectors = indexer_created_vectors();
     let created = &vectors["scenarios"][0]["create"];
     let mut key = EvmZeroSeedLaunchPoolKey {
         token0: address(s(created, "token0")),
@@ -859,13 +1138,17 @@ fn unsupported_quote_tokens_fail_closed() {
             pool_type_config: TickSpacing(num(created, "tickSpacing")),
         },
     };
-    let launch = *pool_from_created(created, state(&created["state"])).launch();
+    let launch = *supported_pool_from_created(created, state(&created["state"])).launch();
     let core = state(&created["state"]);
     let mut observed = instance(created);
     observed.extension_runtime = U256::ZERO;
     assert!(EvmZeroSeedLaunchPool::new(key, launch, core, &observed).is_err());
     observed = instance(created);
-    observed.constructor_quote = key.token0;
+    observed.constructor_quote = if key.token0 == observed.constructor_quote {
+        key.token1
+    } else {
+        key.token0
+    };
     assert!(EvmZeroSeedLaunchPool::new(key, launch, core, &observed).is_err());
     key.config.fee = 1;
     assert_eq!(
@@ -876,7 +1159,7 @@ fn unsupported_quote_tokens_fail_closed() {
 
 #[test]
 fn manifest_and_local_producer_negative_controls() {
-    let vectors: Value = serde_json::from_str(PARITY).unwrap();
+    let vectors = indexer_created_vectors();
     for scenario in vectors["scenarios"].as_array().unwrap() {
         let created = &scenario["create"];
         let observed = instance(created);
@@ -885,11 +1168,30 @@ fn manifest_and_local_producer_negative_controls() {
                 observed.validate(),
                 Err(ZeroSeedLaunchParameterError::UnsupportedInstance)
             );
+            let (key, config) = pool_inputs_from_created(created);
+            assert!(
+                EvmZeroSeedLaunchPool::new(key, config, state(&created["state"]), &observed)
+                    .is_err()
+            );
             continue;
         }
         observed.validate().unwrap();
-        let pool = pool_from_created(created, state(&created["state"]));
+        let pool = supported_pool_from_created(created, state(&created["state"]));
         let key = pool.key();
+        let mut wrong_key = key;
+        wrong_key.config.extension = Address::ZERO;
+        assert!(
+            EvmZeroSeedLaunchPool::new(wrong_key, *pool.launch(), pool.state(), &observed).is_err()
+        );
+        let mut wrong_key = key;
+        if wrong_key.token0 == observed.constructor_quote {
+            wrong_key.token0 = Address::ZERO;
+        } else {
+            wrong_key.token1 = address("0xfffffffffffffffffffffffffffffffffffffffe");
+        }
+        assert!(
+            EvmZeroSeedLaunchPool::new(wrong_key, *pool.launch(), pool.state(), &observed).is_err()
+        );
         for (ask, upper) in [(i32::MIN, 0), (0, i32::MAX), (0, i32::MIN)] {
             let mut invalid = *pool.launch();
             invalid.range.ask_tick = ask;

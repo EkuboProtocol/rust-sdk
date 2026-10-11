@@ -69,15 +69,21 @@ impl ZeroSeedLaunchInstance {
         let hash = |s| U256::from_str(s).expect("static manifest hash");
         let high = addr("0xffffffffffffffffffffffffffffffffffffffff");
         let low = addr("0x0000000000000000000000000000000000010000");
-        let runtime = if self.constructor_quote == high {
-            hash("0x8d8839b97583f275a84aaf26cd6a5fa3ba21a7be04731a65f6140fc5040477c4")
+        let (extension, runtime) = if self.constructor_quote == high {
+            (
+                addr("0x510d7c117adeeb89bb33b9acb53995f3280eaa3a"),
+                hash("0x8d8839b97583f275a84aaf26cd6a5fa3ba21a7be04731a65f6140fc5040477c4"),
+            )
         } else if self.constructor_quote == low {
-            hash("0x8751bab213ba226c4e45f6441b9df2db1f9c8ee9e9335320e180f3b348646014")
+            (
+                addr("0x5195c03d30c11be73485ab76a35eb6f59fc52072"),
+                hash("0x8751bab213ba226c4e45f6441b9df2db1f9c8ee9e9335320e180f3b348646014"),
+            )
         } else {
             return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
         };
         if self.chain_id != 31337
-            || self.extension != addr("0x5100000000000000000000000000000000000000")
+            || self.extension != extension
             || self.core != addr("0x00000000000014aa86c5d3c41765bb24e11bd701")
             || self.quote_token_getter != self.constructor_quote
             || self.extension_runtime != runtime
