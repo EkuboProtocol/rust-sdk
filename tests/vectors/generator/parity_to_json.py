@@ -41,10 +41,14 @@ for raw in sys.stdin:
             "amount": f["amount"],
             "limit": f["limit"],
             "held_token": f["heldToken"],
+            "token_allowance": f["tokenAllowance"],
             "held_quote": f["heldQuote"],
+            "core_quote": f["coreQuote"],
             "pre": state(f["pre"]),
             "ok": f["ok"] == "1",
             "post": state(f["post"]),
+            "pre_balances": f["preBalances"].split(","),
+            "post_balances": f["postBalances"].split(","),
         }
         if step["ok"]:
             d0, d1, rate, fee, fee1 = f["event"].split(",")
@@ -77,7 +81,7 @@ json.dump(
         "version": 1,
         "label": "LOCAL FIXTURE PARITY VECTORS - not live evidence",
         "source": {
-            "contracts": "EkuboProtocol/evm-contracts@39ca1918e4d16b1c9fd4db5ed70761ef7b12c6ae (tree b95e748486d5bbf23635fcea73bd4825b3a36455)",
+            "contracts": "EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d (tree 28946ed5a980df9cd030931e365741fe6b971b50)",
             "core": "local Core built at that commit, runtime keccak 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a (asserted in every scenario)",
             "generator": "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol",
         },

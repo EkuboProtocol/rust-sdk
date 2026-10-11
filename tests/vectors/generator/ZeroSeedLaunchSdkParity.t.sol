@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: ekubo-license-v1.eth
 pragma solidity =0.8.33;
 
-// SDK parity generator for EKU-1518. Not part of evm-contracts PR #380: it is copied into a detached worktree of
-// 39ca1918e4d16b1c9fd4db5ed70761ef7b12c6ae, run with `forge test --match-contract ZeroSeedLaunchSdkParity -vv`,
+// SDK parity generator for EKU-1540. Not part of evm-contracts PR #380: it is copied into a detached worktree of
+// d6aeb58d845aa29454f3ed8df15e84a306a6f26d, run with `forge test --match-contract ZeroSeedLaunchSdkParity -vv`,
 // and its `PARITY|` log lines are converted to JSON by `parity_to_json.py`. Every value it prints is read from the
 // local Core and ZeroSeedLaunch state or from their emitted events, never recomputed. Local fixture only.
 
@@ -61,6 +61,15 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         (a, b) = launch.creatorFees(key);
     }
 
+    function _balances(Ctx memory c) private view returns (string memory) {
+        return string.concat(
+            _s(ERC20(c.key.token0).balanceOf(CORE)), ",",
+            _s(ERC20(c.key.token1).balanceOf(CORE)), ",",
+            _s(ERC20(c.key.token0).balanceOf(address(this))), ",",
+            _s(ERC20(c.key.token1).balanceOf(address(this)))
+        );
+    }
+
     /// @dev One forwarded swap at `ts`. `specifiedIs1` and `amount` are Core's SwapParameters; `limit` is fixed point,
     /// 0 for the default.
     function _step(Ctx memory c, string memory label, uint256 ts, bool specifiedIs1, int128 amount, uint256 limit)
@@ -89,10 +98,16 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             _s(limit == 0 ? 0 : lim.toFixed()),
             "|heldToken=",
             _s(_held(c)),
+            "|tokenAllowance=",
+            _s(ERC20(c.token).allowance(address(this), address(swapper))),
             "|heldQuote=",
             _s(ERC20(c.quote).balanceOf(address(this))),
+            "|coreQuote=",
+            _s(ERC20(c.quote).balanceOf(CORE)),
             "|pre=",
-            pre
+            pre,
+            "|preBalances=",
+            _balances(c)
         );
         uint256 gas = gasleft();
         try swapper.forwardSwap(c.key, createSwapParameters(lim, amount, specifiedIs1, 0)) returns (
@@ -103,7 +118,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             u = r;
         } catch (bytes memory err) {
             vm.getRecordedLogs();
-            console2.log(string.concat(head, "|ok=0|err=", vm.toString(err), "|post=", _state(c.key)));
+            console2.log(string.concat(head, "|ok=0|err=", vm.toString(err), "|post=", _state(c.key), "|postBalances=", _balances(c)));
             return (false, u);
         }
         console2.log(string.concat(head, _tail(c, ts, u, f0, f1), "|gas=", _s(gas)));
@@ -141,7 +156,9 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             "|event=",
             ev,
             "|post=",
-            _state(c.key)
+            _state(c.key),
+            "|postBalances=",
+            _balances(c)
         );
     }
 
@@ -242,6 +259,12 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                             _state(key),
                             "|coreCodehash=",
                             vm.toString(CORE.codehash),
+                            "|extensionCodehash=",
+                            vm.toString(address(launch).codehash),
+                            "|constructorQuote=",
+                            vm.toString(launch.quoteToken()),
+                            "|quoteCodehash=",
+                            vm.toString(p.quoteToken.codehash),
                             "|createTs=",
                             _s(block.timestamp)
                         )

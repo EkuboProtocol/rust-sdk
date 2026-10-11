@@ -13,9 +13,10 @@
 //! the contract's deltas, creator fee and post-swap `Core` state exactly. The installation
 //! functions mirror `previewInstallation` and the binding check of `create`.
 //!
-//! Target: `EkuboProtocol/evm-contracts@39ca1918e4d16b1c9fd4db5ed70761ef7b12c6ae`, against the
+//! Target: `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`, against the
 //! Q0.64-fee `Core` of that commit's base. Not the Q0.16 `next` Core.
 
+use core::str::FromStr;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
 use ruint::aliases::U256;
@@ -46,6 +47,145 @@ use crate::{
 
 type Address = <Evm as Chain>::Address;
 
+/// Offline observation from the LOCAL harness, never a live provider attestation.
+/// Callers must bind these values to the same executed instance/block as the pool state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ZeroSeedLaunchInstance {
+    pub chain_id: u64,
+    pub extension: Address,
+    pub core: Address,
+    pub constructor_quote: Address,
+    pub quote_token_getter: Address,
+    pub extension_runtime: U256,
+    pub core_runtime: U256,
+    pub quote_runtime: U256,
+}
+
+impl ZeroSeedLaunchInstance {
+    /// Fail closed against the two constructor-executed WETH LOCAL manifest entries.
+    /// There are NO approved live entries. Synthetic six-decimal arithmetic is not supported.
+    pub fn validate(&self) -> Result<(), ZeroSeedLaunchParameterError> {
+        let addr = |s| Address::from_str(s).expect("static manifest address");
+        let hash = |s| U256::from_str(s).expect("static manifest hash");
+        let high = addr("0xffffffffffffffffffffffffffffffffffffffff");
+        let low = addr("0x0000000000000000000000000000000000010000");
+        let runtime = if self.constructor_quote == high {
+            hash("0x8d8839b97583f275a84aaf26cd6a5fa3ba21a7be04731a65f6140fc5040477c4")
+        } else if self.constructor_quote == low {
+            hash("0x8751bab213ba226c4e45f6441b9df2db1f9c8ee9e9335320e180f3b348646014")
+        } else {
+            return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
+        };
+        if self.chain_id != 31337
+            || self.extension != addr("0x5100000000000000000000000000000000000000")
+            || self.core != addr("0x00000000000014aa86c5d3c41765bb24e11bd701")
+            || self.quote_token_getter != self.constructor_quote
+            || self.extension_runtime != runtime
+            || self.core_runtime
+                != hash("0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a")
+            || self.quote_runtime
+                != hash("0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c")
+        {
+            return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
+        }
+        Ok(())
+    }
+}
+
+/// Finite LOCAL producer/decoder context, separate from pure `fee_at` and pool math.
+/// Integer types express the unsigned domains; every addition is checked.
+#[derive(Clone, Copy, Debug)]
+pub struct ZeroSeedLaunchLocalPreview<'a> {
+    pub instance: &'a ZeroSeedLaunchInstance,
+    pub name: &'a str,
+    pub symbol: &'a str,
+    /// Observed code presence at the predicted token address (same local snapshot).
+    pub predicted_token_has_code: bool,
+    pub build_time: u64,
+    pub execution_expiry: u64,
+}
+
+impl ZeroSeedLaunchLocalPreview<'_> {
+    /// Re-run at build, use and owner review with fresh `now`; never rewrite signed start.
+    pub fn validate(
+        &self,
+        parameters: &ZeroSeedLaunchParameters,
+        now: u64,
+    ) -> Result<(), ZeroSeedLaunchParameterError> {
+        type E = ZeroSeedLaunchParameterError;
+        self.instance.validate()?;
+        if parameters.quote_token != self.instance.constructor_quote {
+            return Err(E::UnsupportedQuoteToken);
+        }
+        if self.name.len() > 31 || self.symbol.len() > 31 {
+            return Err(E::MetadataTooLong);
+        }
+        if self.predicted_token_has_code {
+            return Err(E::LaunchTokenExists);
+        }
+        let min_start = self.build_time.checked_add(300).ok_or(E::Overflow)?;
+        let max_start = self.build_time.checked_add(86400).ok_or(E::Overflow)?;
+        let fresh_min = now.checked_add(300).ok_or(E::Overflow)?;
+        let start = parameters.fee.trading_start;
+        if now < self.build_time
+            || now >= self.execution_expiry
+            || start < min_start
+            || start > max_start
+            || start < fresh_min
+            || self.execution_expiry <= self.build_time
+            || self.execution_expiry > start
+        {
+            return Err(E::InvalidLocalTiming);
+        }
+        Ok(())
+    }
+}
+
+/// Single-preview arithmetic pair. Keep requested supply separately; bind THIS actual pair at
+/// creation, without another preview. Not calldata, an execution guarantee or live authorization.
+pub fn preview_installation(
+    parameters: &ZeroSeedLaunchParameters,
+    now: u64,
+    context: &ZeroSeedLaunchLocalPreview<'_>,
+) -> Result<ZeroSeedLaunchInstallation, ZeroSeedLaunchParameterError> {
+    context.validate(parameters, now)?;
+    preview_installation_math(parameters, now)
+}
+
+/// Exact binding of the single preview's installed supply/liquidity. Rechecks fresh local context.
+pub fn check_launch_binding(
+    parameters: &ZeroSeedLaunchParameters,
+    liquidity: u128,
+    now: u64,
+    context: &ZeroSeedLaunchLocalPreview<'_>,
+) -> Result<ZeroSeedLaunchInstallation, ZeroSeedLaunchParameterError> {
+    context.validate(parameters, now)?;
+    check_launch_binding_math(parameters, liquidity, now)
+}
+
+/// Mirrors all five contract sink refusals. Atomic full two-asset claim, not a per-side claim.
+pub fn validate_claim_recipient(
+    instance: &ZeroSeedLaunchInstance,
+    key: &ZeroSeedLaunchPoolKey,
+    recipient: Address,
+) -> Result<(), ZeroSeedLaunchParameterError> {
+    instance.validate()?;
+    if key.config.extension != instance.extension
+        || (key.token0 != instance.constructor_quote && key.token1 != instance.constructor_quote)
+    {
+        return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
+    }
+    if recipient.is_zero()
+        || recipient == instance.core
+        || recipient == instance.extension
+        || recipient == key.token0
+        || recipient == key.token1
+    {
+        return Err(ZeroSeedLaunchParameterError::InvalidRecipient);
+    }
+    Ok(())
+}
+
 /// Highest creator fee rate the contract accepts, Q0.64: `floor(2**64 / 10)`, 10%.
 pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = 1_844_674_407_370_955_161;
 
@@ -60,8 +200,8 @@ const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 
 // Gas estimates fitted to the in-test gas of the forwarded swap frame (test locker
 // `forwardSwap`, token settlement included) of the parity vectors generated at
-// `EkuboProtocol/evm-contracts@39ca1918e4d16b1c9fd4db5ed70761ef7b12c6ae`: 220 fills, worst error
-// 27%, median 4%. They exclude the 21,000 transaction base, calldata, the router and any account
+// `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`: worst error
+// 40% on non-cold fills. They exclude the 21,000 transaction base, calldata, the router and any account
 // abstraction overhead. A swap that writes a zero storage slot, such as the first creator fee after
 // a claim or the first launch tokens a holder receives, costs about 20,000 more per slot, which
 // the pool state cannot predict; the first swap of a launch costs about 60,000-70,000 more.
@@ -166,7 +306,7 @@ impl ZeroSeedLaunchFeeSchedule {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZeroSeedLaunchParameters {
-    /// Quote token. Must be in the caller's supported quote token list.
+    /// Quote token. Supported entrypoints require the exact constructor-pinned instance quote.
     pub quote_token: Address,
     /// Requested supply for a preview, or the bound installed supply for `create`.
     pub supply: u128,
@@ -198,7 +338,17 @@ pub struct ZeroSeedLaunchInstallation {
 /// Why `previewInstallation` or `create` refuses a launch, by contract error.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Error)]
 pub enum ZeroSeedLaunchParameterError {
-    /// `UnsupportedQuoteToken`, or a quote token outside the caller's supported list.
+    #[error("missing or mismatched local instance provenance")]
+    UnsupportedInstance,
+    #[error("metadata exceeds 31 UTF-8 bytes")]
+    MetadataTooLong,
+    #[error("predicted launch token address has code")]
+    LaunchTokenExists,
+    #[error("invalid claim recipient")]
+    InvalidRecipient,
+    #[error("invalid or stale LOCAL start/expiry context")]
+    InvalidLocalTiming,
+    /// `UnsupportedQuoteToken`, or a quote that mismatches the supported constructor instance.
     #[error("quote token is not supported")]
     UnsupportedQuoteToken,
     /// `InvalidParameters`: supply, tick spacing or range out of bounds.
@@ -232,17 +382,14 @@ pub enum ZeroSeedLaunchParameterError {
 
 /// `_validate` of `previewInstallation` and `create`, plus Core's bound alignment check.
 ///
-/// `now` is the timestamp of the block the call executes in. `supported_quote_tokens` is the
-/// caller's quote token allowlist; an empty list refuses every launch. The contract only refuses
-/// the native token and addresses without code, which says nothing about the token's behaviour.
-pub fn validate_launch_parameters(
+/// Pure arithmetic validation, NOT supported-instance or producer timing approval.
+/// `now` is the timestamp of the block the contract call executes in.
+pub fn validate_launch_parameters_math(
     parameters: &ZeroSeedLaunchParameters,
     now: u64,
-    supported_quote_tokens: &[Address],
 ) -> Result<(), ZeroSeedLaunchParameterError> {
     type E = ZeroSeedLaunchParameterError;
-    if parameters.quote_token.is_zero() || !supported_quote_tokens.contains(&parameters.quote_token)
-    {
+    if parameters.quote_token.is_zero() {
         return Err(E::UnsupportedQuoteToken);
     }
     if parameters.supply == 0 || parameters.supply > i128::MAX as u128 {
@@ -277,12 +424,11 @@ pub fn validate_launch_parameters(
 
 /// `previewInstallation`: the largest liquidity `parameters.supply` buys and the exact supply
 /// that liquidity takes.
-pub fn preview_installation(
+pub fn preview_installation_math(
     parameters: &ZeroSeedLaunchParameters,
     now: u64,
-    supported_quote_tokens: &[Address],
 ) -> Result<ZeroSeedLaunchInstallation, ZeroSeedLaunchParameterError> {
-    validate_launch_parameters(parameters, now, supported_quote_tokens)?;
+    validate_launch_parameters_math(parameters, now)?;
     let (lower, upper) = range_sqrt_ratios(&parameters.range);
     let liquidity = if parameters.range.launch_token_is_token1 {
         max_liquidity_for_token1(lower, upper, parameters.supply)
@@ -294,13 +440,12 @@ pub fn preview_installation(
 
 /// The binding check of `create`: `parameters.supply` must be exactly the amount `liquidity`
 /// takes. Returns the installation `create` performs.
-pub fn check_launch_binding(
+pub fn check_launch_binding_math(
     parameters: &ZeroSeedLaunchParameters,
     liquidity: u128,
     now: u64,
-    supported_quote_tokens: &[Address],
 ) -> Result<ZeroSeedLaunchInstallation, ZeroSeedLaunchParameterError> {
-    validate_launch_parameters(parameters, now, supported_quote_tokens)?;
+    validate_launch_parameters_math(parameters, now)?;
     let installation = install(&parameters.range, liquidity)?;
     if installation.installed_supply != parameters.supply {
         return Err(ZeroSeedLaunchParameterError::SupplyNotExactlyInstallable {
@@ -478,7 +623,6 @@ pub struct ZeroSeedLaunchSwap {
 
 /// Launch pool quoted against the `Core` state of the launch pool.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZeroSeedLaunchPool {
     key: ZeroSeedLaunchPoolKey,
     launch: ZeroSeedLaunchConfig,
@@ -502,16 +646,36 @@ struct SwapOutcome {
 }
 
 impl ZeroSeedLaunchPool {
-    /// Creates a launch pool.
+    /// Creates a supported LOCAL launch pool; missing/mismatched provenance refuses it.
     ///
     /// `key` is the pool key from `LaunchCreated`, `launch` the rest of that event and `state`
-    /// `Core.poolState` of the pool at the block being quoted. `supported_quote_tokens` is the
-    /// caller's quote token allowlist; an empty list refuses every pool.
+    /// `Core.poolState` of the pool at the block being quoted. No live instance is supported.
     pub fn new(
         key: ZeroSeedLaunchPoolKey,
         launch: ZeroSeedLaunchConfig,
         state: ZeroSeedLaunchPoolState,
-        supported_quote_tokens: &[Address],
+        instance: &ZeroSeedLaunchInstance,
+    ) -> Result<Self, ZeroSeedLaunchPoolConstructionError> {
+        instance
+            .validate()
+            .map_err(|_| ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)?;
+        let quote = if launch.range.launch_token_is_token1 {
+            key.token0
+        } else {
+            key.token1
+        };
+        if key.config.extension != instance.extension || quote != instance.constructor_quote {
+            return Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken);
+        }
+        Self::new_math(key, launch, state)
+    }
+
+    /// Pure pool math, including synthetic quote arithmetic. This is NOT asset/instance approval;
+    /// service routing must use `new`, never this constructor. No RPC, calldata or plan production.
+    pub fn new_math(
+        key: ZeroSeedLaunchPoolKey,
+        launch: ZeroSeedLaunchConfig,
+        state: ZeroSeedLaunchPoolState,
     ) -> Result<Self, ZeroSeedLaunchPoolConstructionError> {
         type E = ZeroSeedLaunchPoolConstructionError;
         ensure_valid_token_order(&key)?;
@@ -531,12 +695,19 @@ impl ZeroSeedLaunchPool {
         } else {
             key.token1
         };
-        if quote_token.is_zero() || !supported_quote_tokens.contains(&quote_token) {
+        if quote_token.is_zero() {
             return Err(E::UnsupportedQuoteToken);
         }
 
         let range = launch.range;
         let fee_schedule = launch.fee;
+        // Validate before token-order inversion: negating i32::MIN would overflow.
+        if range.ask_tick < Evm::min_tick()
+            || range.upper_tick > Evm::max_tick()
+            || range.ask_tick >= range.upper_tick
+        {
+            return Err(E::InvalidLaunchConfig);
+        }
         let (lower, upper) = range.pool_bounds();
         if range.tick_spacing != tick_spacing
             || tick_spacing == 0
