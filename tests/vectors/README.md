@@ -15,11 +15,19 @@ No live instances/assets are approved; release is HOLD. Historical reviews are n
 - `pins/`: exact correction `pins.json` and three canonical ABIs. Constructor `(Core,address quote)`,
   `quoteToken()` and new errors are source-bound; public create/preview/claim/event shapes unchanged.
   `generator/verify_pins.py` verifies their SHA256 receipts and compares every emitted instance.
+- `zero-seed-launch-indexer.json`: verbatim indexer LOCAL receipt at
+  `f6af3070036dda06c885a91351277044330c03fd` (tree `cb8b9c7d28a418e1fa498088692f6646867f37f6`),
+  SHA256 `41d416cebdc78845f022f504ed72c86789890f3009f37e2dccf62f2d0f9ca9d4`.
+  Supported constructor tests decode actual LaunchCreated inputs and packed same-block Core states.
+  The two supported tuples use extension `0x510d7c117adeeb89bb33b9acb53995f3280eaa3a` for high WETH
+  and `0x5195c03d30c11be73485ab76a35eb6f59fc52072` for low WETH, each bound to its exact runtime.
+  The seven Foundry parity scenarios and `pins.json.localFixtures` remain arithmetic evidence only:
+  their relocated `0x5100000000000000000000000000000000000000` is refused by supported `new`.
 
 ## Supported surface versus arithmetic
 
 `ZeroSeedLaunchPool::new` requires an offline `ZeroSeedLaunchInstance` observation matching one of
-the two LOCAL, chain-ID-31337, constructor-executed WETH fixtures. Extension/Core identity, constructor
+the two actual indexer LOCAL, chain-ID-31337, constructor-executed WETH fixtures. Extension/Core identity, constructor
 quote, getter, executed extension runtime, Core runtime and actual WETH runtime are all essential.
 These are caller-provided observations, NOT cryptographic proof, RPC reads or a live attestation.
 Callers must read/bind them and pool state from one authentic local snapshot. There is no caller
