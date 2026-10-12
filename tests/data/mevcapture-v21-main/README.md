@@ -20,5 +20,7 @@
   `f13_per_second_updates_cannot_freeze_anchor`, `dust_allowance_rounds_up`
   and `frequent_updates_never_slow_anchor`.
 
-Re-run the vector generator against the merged contract commit before
-shipping and replace the file if it changed.
+Regenerated on 2026-10-12 at the merged contract, evm-contracts `main`
+`3ae01f9` (PR #382 squash of `17b5e50`, which includes the F-13 ceil): the 21
+vectors parsed from the `-vv` log are identical to this file, so it is kept
+byte-for-byte. Re-run the generator after any later change to the extension.
