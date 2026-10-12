@@ -7,6 +7,8 @@ pub mod full_range;
 pub mod limit_order;
 #[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod mev_capture;
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
+pub mod mev_capture_v21_main;
 pub mod oracle;
 #[cfg(feature = "starknet")]
 pub mod spline;

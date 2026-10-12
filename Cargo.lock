@@ -587,6 +587,7 @@ dependencies = [
  "num-traits",
  "ruint",
  "serde",
+ "serde_json",
  "starknet-types-core",
  "thiserror",
 ]
