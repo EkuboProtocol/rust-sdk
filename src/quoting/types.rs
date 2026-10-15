@@ -121,7 +121,7 @@ pub trait Pool: private::Sealed + Debug {
     type QuoteError: Error + Copy + Eq + Hash + 'static;
     /// Any additional data that is required to compute a quote for this pool, e.g. the block timestamp
     type Meta: Debug + Copy + Eq + Hash;
-    type PoolTypeConfig; // TODO Bounds
+    type PoolTypeConfig;
 
     fn key(&self) -> PoolKey<Self::Address, Self::Fee, Self::PoolTypeConfig>;
     fn state(&self) -> Self::State;

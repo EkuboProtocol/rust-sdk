@@ -36,7 +36,6 @@ pub fn next_sqrt_ratio_from_amount0(
         let amount0_abs = U256::try_from(amount0.checked_abs().ok_or(PriceMathError::Overflow)?)
             .map_err(|_| PriceMathError::Overflow)?;
 
-        // product = amount0_abs * sqrt_ratio
         let product = amount0_abs
             .checked_mul(sqrt_ratio)
             .ok_or(PriceMathError::Overflow)?;

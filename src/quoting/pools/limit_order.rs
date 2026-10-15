@@ -95,7 +95,6 @@ impl LimitOrderPool {
         liquidity: u128,
         sorted_ticks: Vec<Tick>,
     ) -> Result<Self, LimitOrderPoolConstructionError> {
-        // check that each tick has at least 1 neighbor within 128 ticks
         let active_tick_index = find_nearest_initialized_tick_index(&sorted_ticks, tick);
         let mut maybe_last: Option<(&Tick, usize)> = None;
         for t in &sorted_ticks {
@@ -195,7 +194,6 @@ impl Pool for LimitOrderPool {
 
         let active_tick_index = concentrated_pool_state.active_tick_index;
 
-        // if we need to skip one or more already pulled orders, this contains the tick index of the next unpulled order
         let next_unpulled_order_tick_index_after_skip = initial_state
             .tick_indices_reached
             .and_then(|(lower, upper)| {
@@ -259,7 +257,6 @@ impl Pool for LimitOrderPool {
                 Ord::max(active_tick_sqrt_ratio_limit, params_sqrt_ratio_limit)
             };
 
-            // swap to (at most) the boundary of the current active tick
             let quote_to_active_tick_boundary = self.concentrated_pool.quote(QuoteParams {
                 sqrt_ratio_limit: Some(active_tick_boundary_sqrt_ratio),
                 token_amount: params.token_amount,
@@ -276,7 +273,6 @@ impl Pool for LimitOrderPool {
 
             let amount_remaining = params.token_amount.amount - consumed_amount;
 
-            // skip the range of pulled orders and start from the sqrt ratio of the next unpulled order if we have some amount remaining
             if !amount_remaining.is_zero() {
                 let skip_starting_sqrt_ratio = if is_increasing {
                     next_unpulled_order_tick_index
@@ -299,7 +295,6 @@ impl Pool for LimitOrderPool {
                         .max(params_sqrt_ratio_limit)
                 };
 
-                // account for the uninitialized ticks that we will skip next
                 concentrated_pool_resources.extra_distinct_bitmap_lookups +=
                     approximate_extra_distinct_tick_bitmap_lookups(
                         concentrated_pool_state.sqrt_ratio,
@@ -311,7 +306,6 @@ impl Pool for LimitOrderPool {
                     let mut current_liquidity = concentrated_pool_state.liquidity;
                     let mut current_active_tick_index = concentrated_pool_state.active_tick_index;
 
-                    // apply all liquidity_deltas in between the current active tick and the next unpulled order
                     loop {
                         let (next_tick_index, liquidity_delta) = if is_increasing
                             && current_active_tick_index < next_unpulled_order_tick_index

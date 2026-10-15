@@ -149,7 +149,6 @@ impl Pool for FullRangePool {
         let mut sqrt_ratio = state.sqrt_ratio;
         let liquidity = state.liquidity;
 
-        // If there's no liquidity, we can't perform a swap
         if liquidity.is_zero() {
             return Ok(Quote {
                 is_price_increasing: is_increasing,
@@ -183,7 +182,6 @@ impl Pool for FullRangePool {
 
         let starting_sqrt_ratio = sqrt_ratio;
 
-        // Since we're in a full range pool, we can complete the swap in a single step
         let step = compute_step::<Evm>(
             sqrt_ratio,
             liquidity,
@@ -194,11 +192,9 @@ impl Pool for FullRangePool {
         )
         .map_err(FullRangePoolQuoteError::FailedComputeSwapStep)?;
 
-        // Update sqrt_ratio based on the swap step
         sqrt_ratio = step.sqrt_ratio_next;
 
         let resources = FullRangePoolResources {
-            // Track if the price changed, but only if not overridden
             no_override_price_change: u32::from(
                 starting_sqrt_ratio == self.state.sqrt_ratio && starting_sqrt_ratio != sqrt_ratio,
             ),
@@ -219,17 +215,14 @@ impl Pool for FullRangePool {
         })
     }
 
-    // Checks if the pool has any liquidity
     fn has_liquidity(&self) -> bool {
         self.state.liquidity > 0
     }
 
-    // For full range pools, if there's liquidity, then the max tick is MAX_TICK
     fn max_tick_with_liquidity(&self) -> Option<i32> {
         self.has_liquidity().then_some(Evm::max_tick())
     }
 
-    // For full range pools, if there's liquidity, then the min tick is MIN_TICK
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.has_liquidity().then_some(Evm::min_tick())
     }
@@ -385,7 +378,7 @@ mod tests {
     #[test]
     fn test_with_fee() {
         let pool = FullRangePool::new(
-            pool_key(1 << 32), // 0.01% fee
+            pool_key(1 << 32),
             FullRangePoolState {
                 sqrt_ratio: U256::ONE << 128,
                 liquidity: 1_000_000,
@@ -405,7 +398,6 @@ mod tests {
 
         let quote = pool.quote(params).expect("Failed to get quote");
 
-        // Assert that a fee was applied
         assert!(quote.fees_paid > 0);
     }
 }

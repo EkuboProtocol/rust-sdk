@@ -2,10 +2,8 @@ use ruint::aliases::U256;
 
 #[must_use]
 pub fn exp2(x: u128) -> u128 {
-    // x must be less than 0x400000000000000000 == 64 << 64 (overflow check)
     assert!(x < 0x400000000000000000, "Overflow");
 
-    // Start with 0x80000000000000000000000000000000 (i.e. 2^127)
     let mut result = U256::ONE << 127;
 
     macro_rules! mul_shift {
@@ -16,7 +14,6 @@ pub fn exp2(x: u128) -> u128 {
         };
     }
 
-    // Each branch multiplies result by a precomputed constant if the corresponding bit is set.
     mul_shift!(
         0x8000000000000000,
         U256::from_limbs([12896923290648804670, 7640891576956012808, 1, 0])
@@ -226,7 +223,6 @@ pub fn exp2(x: u128) -> u128 {
     mul_shift!(0x2, U256::from_limbs([7125873216695759704, 1, 1, 0]));
     mul_shift!(0x1, U256::from_limbs([12786308645202655659, 0, 1, 0]));
 
-    // Final adjustment: shift right by 63 - (x >> 64). (x >> 64) is the integer part.
     let shift = 63 - (x >> 64);
     result >>= shift as u16;
 

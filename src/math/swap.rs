@@ -114,11 +114,9 @@ pub fn compute_step<C: Chain>(
             .map(|next| C::round_sqrt_ratio(next, true))
     };
 
-    // we got a next price
     if let Ok(sqrt_ratio_next) = sqrt_ratio_next_from_amount {
         // and it's not in excess of the limit
         if (sqrt_ratio_next <= sqrt_ratio_limit) == increasing {
-            // price did not move so we consume the entire amount
             if sqrt_ratio_next == sqrt_ratio {
                 return Ok(SwapResult {
                     consumed_amount: amount,
@@ -155,7 +153,6 @@ pub fn compute_step<C: Chain>(
         }
     }
 
-    // this branch is only reached if we are trading all the way up to the limit
     let (specified_amount_delta, calculated_amount_delta) = if is_token1 {
         (
             amount1_delta(sqrt_ratio_limit, sqrt_ratio, liquidity, !amount_negative),

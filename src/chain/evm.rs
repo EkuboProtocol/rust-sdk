@@ -64,7 +64,6 @@ use crate::quoting::pools::ve33::{
 };
 use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
-// Re-export pool types for ergonomic, chain-scoped usage.
 pub type EvmConcentratedPool = ConcentratedPool<Evm>;
 pub type EvmConcentratedPoolConstructionError = ConcentratedPoolConstructionError;
 pub type EvmConcentratedPoolConfig = ConcentratedPoolConfig<Evm>;
@@ -656,7 +655,7 @@ mod tests {
     fn stableswap_rejects_amplification_over_max() {
         let mut raw = [0u8; 4];
         raw[0] = EVM_MAX_STABLESWAP_AMPLIFICATION_FACTOR + 1;
-        raw[3] = 1; // center tick = 1
+        raw[3] = 1;
 
         let b32 = B32::from(u32::from_be_bytes(raw));
         assert_eq!(

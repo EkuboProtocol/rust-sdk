@@ -271,17 +271,14 @@ impl Pool for StableswapPool {
         })
     }
 
-    // Checks if the pool has any liquidity
     fn has_liquidity(&self) -> bool {
         self.state.liquidity > 0
     }
 
-    // For full range pools, if there's liquidity, then the max tick is MAX_TICK
     fn max_tick_with_liquidity(&self) -> Option<i32> {
         self.has_liquidity().then_some(Evm::max_tick())
     }
 
-    // For full range pools, if there's liquidity, then the min tick is MIN_TICK
     fn min_tick_with_liquidity(&self) -> Option<i32> {
         self.has_liquidity().then_some(Evm::min_tick())
     }

@@ -1683,9 +1683,7 @@ mod tests {
             })
             .unwrap();
 
-        // The untruncated time is updated...
         assert_eq!(quote.state_after.last_execution_time, current_time);
-        // ...but since the u32 suffix of the last_execution_time and the current_time match, orders aren't executed
         assert_eq!(quote.execution_resources.twamm.virtual_orders_executed, 0);
     }
 
