@@ -685,7 +685,6 @@ impl CoreSwap<'_> {
         let specified = amount
             .checked_sub(remaining)
             .ok_or(MevCaptureV21MainQuoteError::AmountOverflow)?;
-        // `toInt128(max(type(int128).min, calculatedAmount))`
         let calculated = if exact_out {
             i128::try_from(calculated).map_err(|_| MevCaptureV21MainQuoteError::AmountOverflow)?
         } else if calculated >= 1 << 127 {
@@ -844,7 +843,6 @@ impl MevCaptureV21MainPool {
         let mut remaining = params.amount;
         let mut resources = MevCaptureV21MainPoolResources::default();
 
-        // runs one Core call and, for a charged call, the surcharge on its calculated token
         let mut call = |kind: MevCaptureV21MainCallKind,
                         limit: U256,
                         remaining: &mut i128,

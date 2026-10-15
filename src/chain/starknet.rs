@@ -29,7 +29,6 @@ use crate::quoting::pools::twamm::{
 };
 use crate::quoting::types::{PoolConfig, PoolKey, Tick, TokenAmount};
 
-// Re-export pool types for ergonomic, chain-scoped usage.
 pub type StarknetConcentratedPool = ConcentratedPool<Starknet>;
 pub type StarknetConcentratedPoolConstructionError = ConcentratedPoolConstructionError;
 pub type StarknetConcentratedPoolConfig = ConcentratedPoolConfig<Starknet>;

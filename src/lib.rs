@@ -1,6 +1,5 @@
 #![no_std]
 
-// Enforce that exactly one of "std" or "no_std" is selected.
 #[cfg(all(feature = "std", feature = "no_std"))]
 compile_error!(r#"Features "std" and "no_std" are mutually exclusive."#);
 #[cfg(not(any(feature = "std", feature = "no_std")))]

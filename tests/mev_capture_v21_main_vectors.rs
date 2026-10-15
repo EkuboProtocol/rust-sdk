@@ -275,7 +275,6 @@ fn anchor_model(v: &Value) -> MevCaptureV21MainModel {
         slope_k: s(&c["slopeK"]),
         segment_exp: s(&c["segmentExp"]),
         j_lin: s(&c["jLin"]),
-        // the `next` tuple's Q0.16 maxFee; the anchor update does not read it
         max_fee: s::<u64>(&c["maxFee"]) << 48,
         clamp_ticks: s(&c["clampTicks"]),
         m_gate: s(&c["mGate"]),
@@ -309,9 +308,6 @@ fn anchor_updates_all_seven_fields() {
             && ((clamp << 16) * dt) % half_life != 0
             && next_move.unsigned_abs() == floored
         {
-            // the `next` limit bound this move; on `main` the limit is one unit larger. The
-            // decayed target lies strictly beyond the floored limit only if the bound was
-            // strict, which the replay below confirms by matching exactly one extra unit.
             expected.anchor_x16 += next_move.signum();
             rounded_up += 1;
         }
@@ -474,7 +470,6 @@ fn quote_runs_anchor_update_then_segments() {
         })
         .unwrap()
     };
-    // same timestamp as initialization: no update, anchor at the initial tick (0)
     let same = quote(1);
     let direct = pool
         .swap_through_segments(
@@ -492,7 +487,6 @@ fn quote_runs_anchor_update_then_segments() {
     assert_eq!(same.calculated_amount, direct.delta0.unsigned_abs());
     assert_eq!(same.execution_resources.anchor_updates, 0);
     assert!(direct.surcharge0 > 0);
-    // a later timestamp runs the gate (passes: lObs 67 + mGate >= eRef 0)
     let later = quote(13);
     assert_eq!(later.execution_resources.anchor_updates, 1);
     assert_eq!(later.state_after.anchor.last_update_time, 13);

@@ -85,7 +85,6 @@ pub enum MevCapturePoolConstructionError {
 }
 
 impl MevCapturePool {
-    // An MEV resist pool just wraps a concentrated pool with some additional logic
     pub fn new(
         concentrated_pool: ConcentratedPool<Evm>,
         last_update_time: u32,
@@ -107,7 +106,6 @@ impl MevCapturePool {
             return Err(MevCapturePoolConstructionError::MissingExtension);
         }
 
-        // validates that the current tick is between the active tick and the active tick index + 1
         if let Some(i) = concentrated_pool.state().active_tick_index {
             let sorted_ticks = concentrated_pool.ticks();
             if let Some(t) = sorted_ticks.get(i)
@@ -236,7 +234,6 @@ impl Pool for MevCapturePool {
                 let mut calculated_amount = quote.calculated_amount;
 
                 if params.token_amount.amount >= 0 {
-                    // exact input, remove the additional fee from the output
                     calculated_amount -=
                         compute_fee::<Evm>(calculated_amount, fixed_point_additional_fee);
                 } else {
@@ -248,7 +245,6 @@ impl Pool for MevCapturePool {
                         amount_before_fee::<Evm>(input_amount, fixed_point_additional_fee)
                     {
                         let fee = bf - input_amount;
-                        // exact output, compute the additional fee for the output
                         calculated_amount += fee;
                     } else {
                         return Err(ConcentratedPoolQuoteError::FailedComputeSwapStep(

@@ -6,7 +6,6 @@ use num_traits::Zero;
 use ruint::aliases::U256;
 use thiserror::Error;
 
-// Function to find the nearest initialized tick index.
 #[must_use]
 pub fn find_nearest_initialized_tick_index(sorted_ticks: &[Tick], tick: i32) -> Option<usize> {
     let mut l = 0usize;
@@ -125,14 +124,11 @@ pub fn construct_sorted_ticks<C: Chain>(
     let valid_max_tick = (((max_tick_searched + (spacing_i32 - 1)) / spacing_i32) * spacing_i32)
         .min((C::max_tick() / spacing_i32) * spacing_i32);
 
-    // Sort and deduplicate ticks
     let mut result = partial_ticks.clone();
     result.sort_by_key(|tick| tick.index);
 
-    // Calculate sum of liquidity for ticks at or below current_tick
     let mut liquidity_sum = 0_i128;
 
-    // First pass: find active tick index and calculate running sum
     for tick in &result {
         if tick.index <= current_tick {
             liquidity_sum += tick.liquidity_delta;
@@ -141,19 +137,14 @@ pub fn construct_sorted_ticks<C: Chain>(
         }
     }
 
-    // Calculate min tick delta (difference between expected and actual liquidity)
     let min_tick_liquidity_delta = (liquidity as i128) - liquidity_sum;
 
-    // Calculate max tick delta (ensure all deltas sum to zero)
-    // For this, we need to sum all tick deltas and negate the result plus min_delta
     let all_delta_sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
     let max_tick_liquidity_delta = -(min_tick_liquidity_delta + all_delta_sum);
 
     if min_tick_liquidity_delta != 0 {
-        // Check if we already have min/max boundary ticks
         let has_min_tick = result.first().is_some_and(|t| t.index == valid_min_tick);
 
-        // Add or update min boundary tick
         if has_min_tick {
             result.first_mut().unwrap().liquidity_delta += min_tick_liquidity_delta;
         } else {
@@ -170,12 +161,9 @@ pub fn construct_sorted_ticks<C: Chain>(
     if max_tick_liquidity_delta != 0 {
         let has_max_tick = result.last().is_some_and(|t| t.index == valid_max_tick);
 
-        // Add or update max boundary tick
         if has_max_tick {
-            // Update existing tick
             result.last_mut().unwrap().liquidity_delta += max_tick_liquidity_delta;
         } else {
-            // Add new max boundary tick
             result.push(Tick {
                 index: valid_max_tick,
                 liquidity_delta: max_tick_liquidity_delta,
@@ -429,8 +417,8 @@ mod tests {
 
         chain_test!(min_max_tick_rounding, {
             let tick_spacing = 10;
-            let min_searched = -15; // Should round down to -20
-            let max_searched = 25; // Should round up to 30
+            let min_searched = -15;
+            let max_searched = 25;
 
             let ticks = vec![Tick {
                 index: 0,
@@ -452,7 +440,6 @@ mod tests {
             assert!(result.iter().any(|t| t.index == expected_min));
             assert!(result.iter().any(|t| t.index == expected_max));
 
-            // The sum of all liquidity deltas should be zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
         });
@@ -483,7 +470,6 @@ mod tests {
             )
             .unwrap();
 
-            // Verify that the liquidity at the current tick is correct
             let mut active_liquidity = 0_u128;
             for tick in &result {
                 if tick.index <= current_tick {
@@ -499,7 +485,6 @@ mod tests {
 
             assert_eq!(active_liquidity, liquidity);
 
-            // The sum of all liquidity deltas should be zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
         });
@@ -507,7 +492,6 @@ mod tests {
         chain_test!(partial_view_with_existing_liquidity, {
             let tick_spacing = 10;
 
-            // Create partial ticks that don't include the whole range
             let partial_ticks = vec![
                 Tick {
                     index: 0,
@@ -522,7 +506,7 @@ mod tests {
             let min_searched = -45;
             let max_searched = 145;
             let current_tick = 52;
-            let liquidity = 750; // Current liquidity at tick 50
+            let liquidity = 750;
 
             let result = construct_sorted_ticks::<ChainTy>(
                 partial_ticks,
@@ -547,7 +531,6 @@ mod tests {
             );
             assert_eq!(last.liquidity_delta, -550);
 
-            // Verify sum is zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
         });
@@ -556,7 +539,7 @@ mod tests {
             let tick_spacing = 10;
             let min_searched = ChainTy::min_tick();
             let max_searched = ChainTy::min_tick() + 100;
-            let current_tick = -20; // Current tick is below the min searched tick
+            let current_tick = -20;
             let liquidity = 100;
 
             let partial_ticks = vec![
@@ -614,15 +597,12 @@ mod tests {
             )
             .unwrap();
 
-            // Check boundaries are preserved
             assert!(result.iter().any(|t| t.index == min_tick));
             assert!(result.iter().any(|t| t.index == max_tick));
 
-            // Sum should be zero
             let sum: i128 = result.iter().map(|t| t.liquidity_delta).sum();
             assert_eq!(sum, 0);
 
-            // Active liquidity should match
             let mut active_liquidity = 0_u128;
             for tick in &result {
                 if tick.index <= -10 {

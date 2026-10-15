@@ -38,7 +38,6 @@ pub fn integer_sqrt_u256(value: U256) -> U256 {
             return value;
         }
 
-        // Newton's method for integer square root.
         let mut x0 = value;
         let mut x1 = (x0 + value / x0) >> 1;
 

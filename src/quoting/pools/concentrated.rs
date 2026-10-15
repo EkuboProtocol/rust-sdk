@@ -163,7 +163,6 @@ impl<C: Chain> ConcentratedPool<C> {
         let spacing_i32 = tick_spacing.0 as i32;
         let tick_spacing = tick_spacing.0;
 
-        // Get sorted ticks using the utility function
         let sorted_ticks = construct_sorted_ticks::<C>(
             partial_ticks,
             min_tick_searched,
@@ -174,14 +173,12 @@ impl<C: Chain> ConcentratedPool<C> {
         )
         .map_err(ConcentratedPoolConstructionError::ConstructSortedTicksFromPartialDataError)?;
 
-        // Ensure all ticks are multiples of tick spacing
         for tick in &sorted_ticks {
             if tick.index % spacing_i32 != 0 {
                 return Err(ConcentratedPoolConstructionError::TickNotMultipleOfSpacing);
             }
         }
 
-        // Find the active tick index (closest initialized tick at or below current_tick)
         let mut active_tick_index = None;
         for (i, tick) in sorted_ticks.iter().enumerate() {
             if tick.index <= current_tick {
@@ -191,14 +188,12 @@ impl<C: Chain> ConcentratedPool<C> {
             }
         }
 
-        // Create the ConcentratedPoolState with the provided sqrt_ratio, liquidity, and computed active_tick_index
         let state = ConcentratedPoolState {
             sqrt_ratio,
             liquidity,
             active_tick_index,
         };
 
-        // Call the existing constructor with the prepared parameters
         Self::new(key, state, sorted_ticks)
     }
 
@@ -219,7 +214,6 @@ impl<C: Chain> ConcentratedPool<C> {
             return Err(ConcentratedPoolConstructionError::TickSpacingCannotBeZero);
         }
 
-        // Check ticks are sorted in linear time
         let mut last_tick: Option<i32> = None;
         let mut total_liquidity: u128 = 0;
         let mut active_liquidity: u128 = 0;
@@ -227,14 +221,12 @@ impl<C: Chain> ConcentratedPool<C> {
         let mut sorted_tick_sqrt_ratios = Vec::with_capacity(sorted_ticks.len());
 
         for (i, tick) in sorted_ticks.iter().enumerate() {
-            // Verify ticks are sorted
             if let Some(last) = last_tick
                 && tick.index <= last
             {
                 return Err(ConcentratedPoolConstructionError::TicksNotSorted);
             }
 
-            // Verify ticks are multiples of tick_spacing
             if !(tick.index % spacing_i32).is_zero() {
                 return Err(ConcentratedPoolConstructionError::TickNotMultipleOfSpacing);
             }
@@ -244,12 +236,10 @@ impl<C: Chain> ConcentratedPool<C> {
                 ConcentratedPoolConstructionError::InvalidTickIndex(tick.index),
             )?);
 
-            // Calculate total liquidity
             total_liquidity = total_liquidity
                 .checked_add_signed(tick.liquidity_delta)
                 .ok_or(ConcentratedPoolConstructionError::ActiveLiquidityOverflow)?;
 
-            // Calculate active liquidity
             if let Some(active_index) = state.active_tick_index
                 && i <= active_index
             {
@@ -259,17 +249,14 @@ impl<C: Chain> ConcentratedPool<C> {
             }
         }
 
-        // Verify total liquidity is zero
         if !total_liquidity.is_zero() {
             return Err(ConcentratedPoolConstructionError::TotalLiquidityNotZero);
         }
 
-        // Verify active liquidity matches state liquidity
         if active_liquidity != state.liquidity {
             return Err(ConcentratedPoolConstructionError::ActiveLiquidityMismatch);
         }
 
-        // Validate sqrt ratio against active or first tick
         if let Some(active) = state.active_tick_index {
             let active_tick_sqrt_ratio = *sorted_tick_sqrt_ratios
                 .get(active)

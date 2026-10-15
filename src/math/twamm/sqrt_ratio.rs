@@ -54,7 +54,6 @@ pub fn calculate_next_sqrt_ratio<C: Chain>(
         .unwrap_or(sqrt_sale_ratio)
     };
 
-    // we should never exceed the sale ratio
     if round_up {
         sqrt_ratio_next = sqrt_ratio_next.max(sqrt_sale_ratio);
     } else {
@@ -68,7 +67,6 @@ fn compute_sqrt_sale_ratio_x128(sale_rate_token0: u128, sale_rate_token1: u128) 
     let sale_ratio: U256 = (U256::from(sale_rate_token1) << 128) / U256::from(sale_rate_token0);
 
     if sale_ratio < U256::from_limbs([0, 0, 1, 0]) {
-        // full precision
         integer_sqrt_u256(sale_ratio << 128u8)
     } else if sale_ratio < U256::from_limbs([0, 0, 0, 1]) {
         // we know it only has 192 bits, so we can shift it 64 before rooting to get more precision
@@ -92,9 +90,9 @@ fn compute_c(sqrt_ratio: U256, sqrt_sale_ratio: U256) -> U256 {
 mod tests {
     use super::*;
 
-    const ONE_E18: u128 = 1_000_000_000_000_000_000; // 10^18
-    const SHIFT_32: u128 = 1u128 << 32; // 2^32 = 4294967296
-    const TOKEN_SALE_RATE: u128 = ONE_E18 * SHIFT_32; // 10^18 * 2^32
+    const ONE_E18: u128 = 1_000_000_000_000_000_000;
+    const SHIFT_32: u128 = 1u128 << 32;
+    const TOKEN_SALE_RATE: u128 = ONE_E18 * SHIFT_32;
 
     mod calculate_next_sqrt_ratio {
         use ruint::uint;
@@ -223,18 +221,13 @@ mod tests {
             fn solidity_example_lower() {
                 assert_eq!(
                     calculate_next_sqrt_ratio::<Evm>(
-                        // price is 10k**2
                         uint!(3402823669209384634633746074317682114560000_U256),
-                        // low liquidity
                         10_000,
-                        // 0.1 per second
                         458864027,
-                        // 0.065384615212679 per second
                         280824784,
                         46_800,
                         0
                     ),
-                    // expect 2.100594408164651 ** 2
                     uint!(714795237151155238093993646993154300599_U256)
                 );
             }
