@@ -1,28 +1,76 @@
 # Current zero-seed conformance (draft LOCAL only)
 
-Target: `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`, tree
-`28946ed5a980df9cd030931e365741fe6b971b50`, base `98d1be1b80f6945c50bf4c9b599ebe74b59549ee`.
-Q0.64 Core/raw tick spacing, zero Core fee, separate creator fee. Not Q0.16 `next`.
-No live instances/assets are approved; release is HOLD. Historical reviews are not new-head clearance.
+Target: `EkuboProtocol/evm-contracts@b1cbb1c1a9a00de62072a63a8f4aab4d97065573`, tree
+`3f9196ebe47ebbff04459d08d645f8ca3168244a`, parent `6ab0ab4eb942ebd76da45a0bd9ed18ef92770995`
+(draft normalized exponential creator-fee decay). Q0.64 Core/raw tick spacing, zero Core fee,
+separate creator fee. Not Q0.16 `next`. No live instances/assets are approved; release is HOLD.
+Historical reviews are not new-head clearance.
 
-- `zero-seed-launch.json`: the current 58 emitted vectors, copied unchanged from that revision;
-  SHA256 `0a136d132d37de2d775e7f50b6bba413d2fda1cfd5c63e294d6bd060e28e8127`.
-- `zero-seed-launch-parity.json`: 7 local scenarios, all 307 original step slots, 108 previews and
-  160 binding attempts regenerated against the actual current Core/extension. Inputs and later
-  branches follow the same complete program; changed quote settlement can change subsequent amounts.
-  Every successful step compares SDK deltas, fee asset/amount, ledgers and chained state at the exact
-  emitted timestamp. Per-asset Core/holder balance conservation and refusal rollback are checked.
-- `pins/`: exact correction `pins.json` and three canonical ABIs. Constructor `(Core,address quote)`,
-  `quoteToken()` and new errors are source-bound; public create/preview/claim/event shapes unchanged.
-  `generator/verify_pins.py` verifies their SHA256 receipts and compares every emitted instance.
-- `zero-seed-launch-indexer.json`: verbatim indexer LOCAL receipt at
-  `f6af3070036dda06c885a91351277044330c03fd` (tree `cb8b9c7d28a418e1fa498088692f6646867f37f6`),
-  SHA256 `41d416cebdc78845f022f504ed72c86789890f3009f37e2dccf62f2d0f9ca9d4`.
-  Supported constructor tests decode actual LaunchCreated inputs and packed same-block Core states.
-  The two supported tuples use extension `0x510d7c117adeeb89bb33b9acb53995f3280eaa3a` for high WETH
-  and `0x5195c03d30c11be73485ab76a35eb6f59fc52072` for low WETH, each bound to its exact runtime.
-  The seven Foundry parity scenarios and `pins.json.localFixtures` remain arithmetic evidence only:
-  their relocated `0x5100000000000000000000000000000000000000` is refused by supported `new`.
+## Fee schedule (draft interface)
+
+`LaunchParameters` gains `uint64 decayFactor` after `finalFee` and `Launch` appends it after
+`tickUpper`; `ZeroSeedLaunchFeeSchedule::decay_factor` mirrors it. With `Q = 2**64`,
+`b = decay_factor` (a literal Q0.64 per-second multiplier in `(0, Q)`, not a half-life),
+`b**n = pow_q64(b, n)` (square-and-multiply, floor after EVERY Q64 multiply, square only while
+bits remain) and `E = b**D`:
+
+```
+fee_at(t) = initial                                   t <= trading_start
+          = final + floor((initial - final) * (b**e - E) / (Q - E))   0 < e < D
+          = final                                     e >= D  (e = t - trading_start, no narrowing)
+```
+
+All intermediates fit `u128` for every `u64` factor (products of operands <= 2**64); the
+token-amount fee/gross-up helpers keep their 256-bit intermediates. Do not use floats,
+nearest-rounded rpow or a half-life parameter. The draft cap is `floor(99 * Q / 100)`
+(`18262276632972456099`); `decay_factor == 0` is `InvalidFeeSchedule`; no new errors. A nearly
+flat factor can lie a few Q64 units ABOVE the integer linear chord (largest documented excess
+60,738,877); the SDK reproduces this and asserts chord dominance only for the two study factors
+(D600 `18319323104848571946`, D3600 `18425445863997925462`). These are study values, not
+selected parameters; 5% -> 0.3% remains a named comparison baseline.
+
+ABI: `create` `0xe11b98da -> 0xd5f50468`, `previewInstallation` `0xcd1632b3 -> 0x5283ac38`,
+`LaunchCreated` topic `0xfe2a763a... -> 0x9658a825...`; `getLaunch` `0x7d1d589c` (one more
+returned field) and `feeAt` `0xe81084ec` keep their selectors; `LaunchSwapped` and
+`CreatorFeesClaimed` are unchanged. Swap forwarding encoding (`Core.forward` of
+`(poolKey, swapParameters)`) is unchanged. The extension init code changes, so every instance
+address/runtime pin changes; `MintableERC20` and therefore launch-token CREATE2 addresses for a
+given extension do not.
+
+## Vectors
+
+- `zero-seed-launch.json`: the contract's vectors at the target, copied unchanged
+  (SHA256 `303055e5fe7bcb67755e2723036e408048c8761d9b7e118185a7c118da6e1723`), including the
+  exponential `fee` rows, 12 all-second SHA-256 digests (2 durations x 5/50/75/90/99/max),
+  the equal-half-life fixture and the five integer-chord counterexamples.
+- `zero-seed-launch-fee-curve-rows.json`: the executed `VEC|` rows of the contract's fee-curve
+  study (`ZeroSeedLaunchFeeCurve.t.sol`), verbatim from the protocol evidence bundle
+  (SHA256 `bf3d3098c9b77befd35166c974793ec1ecdeccaa03adf5cf0b9888c67cac6320`). Unit tests in
+  `src/quoting/pools/zero_seed_launch/fee_curve_tests.rs` reproduce the 50/75/90/99/max swap
+  matrix (both orders, 18/18 and 18/6), round trips and creator-versus-outsider ledgers against
+  the linear comparator, the exact-output helper (`AmountBeforeFeeOverflow`) and signed
+  (`Overflow`) bounds, and the Yul-router max-rate rows. The highest encodable rate `2**64 - 1`
+  is refused by validation and `new_math`; it is exercised ONLY by overwriting a valid pool's
+  stored initial fee inside the unit test, as the contract test injects storage. Research-only.
+- The same unit tests rebuild the contract reference's `--export` byte for byte (25,212 rows,
+  SHA256 `cf6950db88ede4fff87a011b902c4d9d18f878a8b1eacbe622bea32e953f1502`), check the 12
+  digests, and sweep 20,000 seeded factor/duration/elapsed cases against a 256-bit reference
+  (endpoints, boundedness, monotonicity; never the chord).
+- `zero-seed-launch-parity.json`: 9 local scenarios (the original 7 plus 50% -> 0.3% D3600
+  token0 18/18 and 99% -> 0.3% D600 token1 18/6), 407 step slots, 120 previews (adds zero
+  factor, maximum factor and maximum encodable rate) and 176 binding attempts, regenerated with
+  `generator/ZeroSeedLaunchSdkParity.t.sol` against the actual target Core/extension. Every
+  successful step compares SDK deltas, fee asset/amount, `LaunchSwapped` rate, ledgers and
+  chained state at the exact emitted timestamp, across the exponential window.
+- `pins/`: `pins.json` and three canonical ABIs regenerated by
+  `generator/pins_from_artifacts.py`; `abiCompatibility` lists exactly the three changed
+  entries, `baseline` the previous build. Errors and the constructor are unchanged.
+- `zero-seed-launch-indexer.json`: verbatim indexer LOCAL receipt regenerated by the indexer's
+  `scripts/zeroSeedLaunchFixture.ts` on anvil at the target. Supported tuples: extension
+  `0x5142e167b32877ca3cf3060010a0a1418e3ef1b9` (high WETH, runtime `0x8fb360bb...`) and
+  `0x51174b5db84c81a906ec55445070fd84c8c8e655` (low WETH, runtime `0xa951db07...`). Both
+  runtimes equal the Foundry parity generator's instances (same constructor arguments).
+  The parity scenarios' relocated `0x5100...` instance remains refused by supported `new`.
 
 ## Supported surface versus arithmetic
 
@@ -75,29 +123,35 @@ principal/fees. `residue_metrics` retains per-asset units and `dust_after.token=
 
 SDK gas constants are unchanged UNCALIBRATED estimates. Current WETH/synthetic harness non-cold fills
 have up to 40% error, not the old synthetic quote's 30% bound. Cold slots/first swaps, router, calldata,
-transaction base and UserOp costs are not predicted. The correction's same-WETH protocol baseline
-comparison reports +100 create/+327 claim/0 swap under identical compiler settings; no new contract
-gas optimization or bytecode change is claimed by this SDK re-pin.
+transaction base and UserOp costs are not predicted. The exponential schedule is measured by the
+contract at identical states (5% -> 0.3%, D3600): +2,947 to +3,150 gas per swap strictly inside
+the fee window, +9/+132 at t = 0 / t >= D; a 32-bit duration costs ~6k more than linear. Against
+the regenerated parity vectors the unchanged estimate errs -27%..+18% (mean -3%) on interior fills;
+the worst non-cold error (39.3%) is an endpoint fill. No constant is refitted; calibrate against
+execution before relying on them.
 
 ## Reproduce, stop and reset
 
 ```sh
-git -C <evm-contracts> worktree add --detach <task-parity-worktree> d6aeb58d845aa29454f3ed8df15e84a306a6f26d
+git -C <evm-contracts> worktree add --detach <task-parity-worktree> b1cbb1c1a9a00de62072a63a8f4aab4d97065573
 cp tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol <task-parity-worktree>/test/extensions/
 # Use that repository's pinned Foundry dependencies/toolchain; do not fetch providers.
 (cd <task-parity-worktree> && forge test --offline --match-contract ZeroSeedLaunchSdkParity -vv) > <forge-log>
 python3 tests/vectors/generator/parity_to_json.py < <forge-log> > tests/vectors/zero-seed-launch-parity.json
+python3 tests/vectors/generator/pins_from_artifacts.py <task-parity-worktree>
+python3 tests/vectors/generator/check_vector_log.py tests/vectors/zero-seed-launch.json <zero-seed-launch -vv log>
 python3 tests/vectors/generator/verify_pins.py
-cargo test --offline --features evm,serde --test zero_seed_launch_vectors
+cargo test --offline --features evm,starknet,serde zero_seed
 python3 tests/vectors/generator/mutants.py
 ```
 
-Stop supported creation/routing/handoff and leave PR #40 draft/unmerged. Known-safe SDK rollback is
+Stop supported creation/routing/handoff and leave the SDK draft unmerged. Known-safe SDK rollback is
 `main`/3.3.0 `32af2077663a9268612c206f8e6446cf024c2ba3` (NO launch support), never the obsolete
 arbitrary-quote implementation. Local fixtures are in-memory Foundry runs: restart a fresh run to
 reset; retain evidence and avoid other worktrees. No migrations or production data writes.
 
 NOT PROVEN: authentic live instance/constructor/network/runtime/registration, full WETH CBOR metadata
 reproduction, hosted timing parameters, downstream actual preview/decoder/owner enforcement,
-whole-stack QA/Sage, provider/bundler/mined UserOp, external audit/legal/assets/retention/oncall/costs,
-or release authorization. Local tests and guards do not close L-3 end-to-end.
+whole-stack QA, provider/bundler/mined UserOp, external audit/legal/assets/retention/oncall/costs,
+fee-curve parameter selection, or release authorization. Local tests and guards do not close L-3
+end-to-end.

@@ -6,11 +6,12 @@ from pathlib import Path
 
 root = Path("tests/vectors")
 expected = {
-    "zero-seed-launch-indexer.json": "41d416cebdc78845f022f504ed72c86789890f3009f37e2dccf62f2d0f9ca9d4",
-    "zero-seed-launch.json": "0a136d132d37de2d775e7f50b6bba413d2fda1cfd5c63e294d6bd060e28e8127",
-    "pins/pins.json": "f78c349e1403ecf89d2bc1b7be208752ec4e8692729d8bc727227b93525ab881",
-    "pins/ZeroSeedLaunch.abi.json": "189ff93c0f6fb64f6e7dd0675872bf6686692f8303e6218b8c2521bfa5ced215",
-    "pins/IZeroSeedLaunch.abi.json": "4c519694df0d35d77e382a35a4423367e0b8b8f3548294856240e2f83eec20bf",
+    "zero-seed-launch-indexer.json": "b4026beee434641d3420de7db672d9424d79bad3a3ed86f44f50cf2bd5ca16fd",
+    "zero-seed-launch.json": "303055e5fe7bcb67755e2723036e408048c8761d9b7e118185a7c118da6e1723",
+    "zero-seed-launch-fee-curve-rows.json": "bf3d3098c9b77befd35166c974793ec1ecdeccaa03adf5cf0b9888c67cac6320",
+    "pins/pins.json": "449da40cf91ac0d4ea24faa78ce6399545bc576d3dea99c40d257dc2041ceb35",
+    "pins/ZeroSeedLaunch.abi.json": "bc51b39284a5a2a0970d3a804420762ce291dc01f9c21ddf31840e354a3792bb",
+    "pins/IZeroSeedLaunch.abi.json": "60eaec35405f1a750acc93794cd724d744ffa2be9abc87cc41145fb3ea915f40",
     "pins/MintableERC20.abi.json": "0f0d0950f409dfb10d8985ba15e203f3d028d127d674a7b89dff9a0bfc66b348",
 }
 for name, digest in expected.items():
@@ -19,8 +20,9 @@ for name, digest in expected.items():
     print(actual, name)
 pins = json.loads((root / "pins/pins.json").read_text())["ZeroSeedLaunch"]
 parity = json.loads((root / "zero-seed-launch-parity.json").read_text())
-assert parity["source"]["contracts"] == "EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d (tree 28946ed5a980df9cd030931e365741fe6b971b50)"
-assert sum(len(s["steps"]) for s in parity["scenarios"]) == 307
+assert parity["source"]["contracts"] == "EkuboProtocol/evm-contracts@b1cbb1c1a9a00de62072a63a8f4aab4d97065573 (tree 3f9196ebe47ebbff04459d08d645f8ca3168244a)"
+assert sum(len(s["steps"]) for s in parity["scenarios"]) == 407
+assert len(parity["scenarios"]) == 9
 for scenario in parity["scenarios"]:
     c = scenario["create"]
     fixture = next(f for f in pins["localFixtures"].values() if f["quote"].lower() == c["constructorQuote"].lower())
@@ -38,9 +40,15 @@ for scenario in parity["scenarios"]:
 assert pins["functions"]["quoteToken()"] == "0x217a4b70"
 assert pins["errors"]["MetadataTooLong()"]["selector"] == "0x85b8e2f4"
 assert pins["errors"]["LaunchTokenExists(address)"]["selector"] == "0xf68475cd"
+create = "create((address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))"
+assert pins["functions"][create] == "0xd5f50468"
+assert pins["functions"]["feeAt(bytes32,uint256)"] == "0xe81084ec"
+assert pins["functions"]["getLaunch(bytes32)"] == "0x7d1d589c"
+changed = pins["abiCompatibility"]["removedEntries"] + pins["abiCompatibility"]["addedEntries"]
+assert all(e[0] != "error" for e in changed), "errors and their selectors are unchanged"
 indexer = json.loads((root / "zero-seed-launch-indexer.json").read_text())
 assert indexer["chainId"] == 31337
-assert indexer["provenance"]["evmContractsHead"] == "d6aeb58d845aa29454f3ed8df15e84a306a6f26d"
+assert indexer["provenance"]["evmContractsHead"] == "b1cbb1c1a9a00de62072a63a8f4aab4d97065573"
 source = Path("src/quoting/pools/zero_seed_launch.rs").read_text()
 for entry in indexer["instances"][:2]:
     assert entry["address"].lower() in source
@@ -49,4 +57,4 @@ for entry in indexer["instances"][:2]:
     assert int(args[:64], 16) == int(indexer["addresses"]["core"], 16)
     assert int(args[64:], 16) == int(entry["quote"], 16)
 assert "0x5100000000000000000000000000000000000000" not in source
-print("PASS: 6 exact SHA256 receipts, 7 arithmetic parity fixtures, 307 step slots, 2 actual supported indexer tuples; live manifest EMPTY")
+print("PASS: 7 exact SHA256 receipts, 9 arithmetic parity fixtures, 407 step slots, 2 actual supported indexer tuples; live manifest EMPTY")

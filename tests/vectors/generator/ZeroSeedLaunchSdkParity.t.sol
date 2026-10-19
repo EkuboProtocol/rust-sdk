@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: ekubo-license-v1.eth
 pragma solidity =0.8.33;
 
-// SDK parity generator for EKU-1540. Not part of evm-contracts PR #380: it is copied into a detached worktree of
-// d6aeb58d845aa29454f3ed8df15e84a306a6f26d, run with `forge test --match-contract ZeroSeedLaunchSdkParity -vv`,
+// SDK parity generator. Not part of evm-contracts: it is copied into a detached worktree of the draft exponential
+// fee-decay head b1cbb1c1a9a00de62072a63a8f4aab4d97065573, run with `forge test --match-contract ZeroSeedLaunchSdkParity -vv`,
 // and its `PARITY|` log lines are converted to JSON by `parity_to_json.py`. Every value it prints is read from the
 // local Core and ZeroSeedLaunch state or from their emitted events, never recomputed. Local fixture only.
 
@@ -22,16 +22,17 @@ import {SwapParameters, createSwapParameters} from "../../src/types/swapParamete
 import {SqrtRatio, toSqrtRatio} from "../../src/types/sqrtRatio.sol";
 import {tickToSqrtRatio} from "../../src/math/ticks.sol";
 import {MIN_SQRT_RATIO, MAX_SQRT_RATIO} from "../../src/types/sqrtRatio.sol";
+import {MAX_CREATOR_FEE} from "../../src/extensions/ZeroSeedLaunch.sol";
+import {MintableERC20} from "../../src/MintableERC20.sol";
 import {ZeroSeedLaunchBase} from "./ZeroSeedLaunch.t.sol";
 
 contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
     using CoreLib for ICore;
 
     bytes32 constant CORE_CODEHASH = 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a;
-    bytes32 constant LAUNCH_CREATED =
-        keccak256(
-            "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))"
-        );
+    bytes32 constant LAUNCH_CREATED = keccak256(
+        "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))"
+    );
     bytes32 constant LAUNCH_SWAPPED = keccak256("LaunchSwapped(bytes32,address,int128,int128,uint64,uint128,bool)");
 
     struct Ctx {
@@ -63,9 +64,12 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
 
     function _balances(Ctx memory c) private view returns (string memory) {
         return string.concat(
-            _s(ERC20(c.key.token0).balanceOf(CORE)), ",",
-            _s(ERC20(c.key.token1).balanceOf(CORE)), ",",
-            _s(ERC20(c.key.token0).balanceOf(address(this))), ",",
+            _s(ERC20(c.key.token0).balanceOf(CORE)),
+            ",",
+            _s(ERC20(c.key.token1).balanceOf(CORE)),
+            ",",
+            _s(ERC20(c.key.token0).balanceOf(address(this))),
+            ",",
             _s(ERC20(c.key.token1).balanceOf(address(this)))
         );
     }
@@ -118,7 +122,11 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             u = r;
         } catch (bytes memory err) {
             vm.getRecordedLogs();
-            console2.log(string.concat(head, "|ok=0|err=", vm.toString(err), "|post=", _state(c.key), "|postBalances=", _balances(c)));
+            console2.log(
+                string.concat(
+                    head, "|ok=0|err=", vm.toString(err), "|post=", _state(c.key), "|postBalances=", _balances(c)
+                )
+            );
             return (false, u);
         }
         console2.log(string.concat(head, _tail(c, ts, u, f0, f1), "|gas=", _s(gas)));
@@ -193,6 +201,32 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         _program(c, inst, duration);
     }
 
+    /// @dev The same program from a high initial rate (study values, not selected parameters).
+    function _highRateScenario(
+        bool tokenIs0,
+        uint8 quoteDecimals,
+        uint32 duration,
+        uint64 initialFee,
+        string memory name
+    ) private {
+        address quote = _quote(tokenIs0, quoteDecimals);
+        IZeroSeedLaunch.LaunchParameters memory p =
+            _parameters(quote, quoteDecimals == 18 ? ASK_18_18 : ASK_18_6, REQUESTED_SUPPLY, duration);
+        p.initialFee = initialFee;
+        _bind(p, creator);
+        vm.recordLogs();
+        vm.prank(creator);
+        IZeroSeedLaunch.Installation memory inst = launch.create(p);
+        MintableERC20(inst.token).approve(address(swapper), type(uint256).max);
+        Ctx memory c = _logCreate(
+            string.concat("scenario=", tokenIs0 ? "t0" : "t1", "_18_", _s(quoteDecimals), "_", _s(duration), "_", name),
+            inst,
+            p,
+            quoteDecimals
+        );
+        _program(c, inst, duration);
+    }
+
     function _logCreate(
         string memory tag,
         IZeroSeedLaunch.Installation memory inst,
@@ -212,7 +246,8 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         // Pool construction inputs, from the emitted LaunchCreated event and Core state only.
         bool found;
         for (uint256 k; k < logs.length; k++) {
-            if (logs[k].emitter == address(launch) && logs[k].topics.length > 0 && logs[k].topics[0] == LAUNCH_CREATED) {
+            if (logs[k].emitter == address(launch) && logs[k].topics.length > 0 && logs[k].topics[0] == LAUNCH_CREATED)
+            {
                 (PoolKey memory key, PositionId pos, uint128 liquidity, IZeroSeedLaunch.LaunchParameters memory ep) =
                     abi.decode(logs[k].data, (PoolKey, PositionId, uint128, IZeroSeedLaunch.LaunchParameters));
                 found = true;
@@ -253,6 +288,8 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                             _s(ep.initialFee),
                             "|finalFee=",
                             _s(ep.finalFee),
+                            "|decayFactor=",
+                            _s(ep.decayFactor),
                             "|quoteDecimals=",
                             _s(quoteDecimals),
                             "|state=",
@@ -297,7 +334,14 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         mid -= mid % int32(SPACING);
         uint256 midRatio = tickToSqrtRatio(mid).toFixed();
         _buy(c, "buyToMidLimit", START + duration / 2, int128(uint128(c.unit)) * 1_000_000, false, midRatio);
-        _buy(c, "buyWrongDirection", START + duration / 2, int128(uint128(c.unit)), false, tokenIs0 ? MIN_SQRT_RATIO.toFixed() : MAX_SQRT_RATIO.toFixed());
+        _buy(
+            c,
+            "buyWrongDirection",
+            START + duration / 2,
+            int128(uint128(c.unit)),
+            false,
+            tokenIs0 ? MIN_SQRT_RATIO.toFixed() : MAX_SQRT_RATIO.toFixed()
+        );
         _sell(c, "sellHalfExactIn", START + duration - 1, int128(uint128(_held(c) / 2)), false, 0);
         _sell(c, "sellExactOutQuote", START + duration, int128(uint128(c.unit / 10)), true, 0);
         _buy(c, "buyExactInEndPlus1", START + duration + 1, int128(uint128(c.unit)), false, 0);
@@ -332,13 +376,22 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         // Leave the upper bound, re-enter it with an exact-output buy beyond inventory, then return to the ask.
         _sell(c, "sellFromUpper", ts + 1, int128(uint128(_held(c) / 3)), false, 0);
         _buy(c, "exhaustExactOut", ts + 2, int128(uint128(REQUESTED_SUPPLY)), true, 0);
-        _sell(c, "sellBeyondLowerLimit", ts + 3, int128(uint128(_held(c) / 2)), false, tokenIs0 ? MIN_SQRT_RATIO.toFixed() : MAX_SQRT_RATIO.toFixed());
+        _sell(
+            c,
+            "sellBeyondLowerLimit",
+            ts + 3,
+            int128(uint128(_held(c) / 2)),
+            false,
+            tokenIs0 ? MIN_SQRT_RATIO.toFixed() : MAX_SQRT_RATIO.toFixed()
+        );
         _sell(c, "sellAllExactIn", ts + 3, int128(uint128(_held(c))), false, 0);
         // The creator claims its fee ledger and sells the token side too: the price returns to the ask.
         (uint128 l0, uint128 l1) = _fees(c.key);
         vm.prank(creator);
         launch.claimFees(c.key, address(this));
-        console2.log(string.concat("PARITY|claim|", c.tag, "|amount0=", _s(l0), "|amount1=", _s(l1), "|post=", _state(c.key)));
+        console2.log(
+            string.concat("PARITY|claim|", c.tag, "|amount0=", _s(l0), "|amount1=", _s(l1), "|post=", _state(c.key))
+        );
         _sell(c, "sellClaimedExactIn", ts + 4, int128(uint128(_held(c))), false, 0);
         _sell(c, "sellAtAskExactIn", ts + 4, 1e18, false, 0);
         _sell(c, "sellAtAskExactOut", ts + 4, 1, true, 0);
@@ -367,6 +420,14 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
 
     function test_parity_t1_18_6_600() public {
         _scenario(false, 6, DURATION_SHORT);
+    }
+
+    function test_parity_t0_18_18_3600_rate50() public {
+        _highRateScenario(true, 18, DURATION, 9223372036854775808, "rate50");
+    }
+
+    function test_parity_t1_18_6_600_rate99() public {
+        _highRateScenario(false, 6, DURATION_SHORT, MAX_CREATOR_FEE, "rate99");
     }
 
     /// @dev A launch near the top of the price range, where one raw token costs about int128.max raw quote.
@@ -413,6 +474,8 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 _s(p.initialFee),
                 "|finalFee=",
                 _s(p.finalFee),
+                "|decayFactor=",
+                _s(p.decayFactor),
                 "|now=",
                 _s(block.timestamp)
             )
@@ -466,14 +529,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             vm.revertToState(snap);
             console2.log(
                 string.concat(
-                    "PARITY|binding|label=",
-                    label,
-                    "|supply=",
-                    _s(q.supply),
-                    "|liquidity=",
-                    _s(q.liquidity),
-                    "|",
-                    out
+                    "PARITY|binding|label=", label, "|supply=", _s(q.supply), "|liquidity=", _s(q.liquidity), "|", out
                 )
             );
         }
@@ -489,13 +545,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         vm.revertToState(snap2);
         console2.log(
             string.concat(
-                "PARITY|binding|label=",
-                label,
-                "|supply=",
-                _s(e.supply),
-                "|liquidity=",
-                _s(e.liquidity),
-                "|ok=1"
+                "PARITY|binding|label=", label, "|supply=", _s(e.supply), "|liquidity=", _s(e.liquidity), "|ok=1"
             )
         );
     }
@@ -519,6 +569,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             feeDuration: p.feeDuration,
             initialFee: p.initialFee,
             finalFee: p.finalFee,
+            decayFactor: p.decayFactor,
             salt: p.salt
         });
     }
@@ -592,12 +643,12 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 r.askTick += 1;
                 _logPreview(string.concat(g, "_misaligned"), r);
                 r = _clone(p);
-                r.initialFee = MAX_CREATOR_FEE_LOCAL + 1;
+                r.initialFee = MAX_CREATOR_FEE + 1;
                 r.finalFee = 0;
                 _logPreview(string.concat(g, "_feeTooHigh"), r);
                 r = _clone(p);
-                r.initialFee = MAX_CREATOR_FEE_LOCAL;
-                r.finalFee = MAX_CREATOR_FEE_LOCAL;
+                r.initialFee = MAX_CREATOR_FEE;
+                r.finalFee = MAX_CREATOR_FEE;
                 _logPreview(string.concat(g, "_feeAtCap"), r);
                 r = _clone(p);
                 r.finalFee = r.initialFee + 1;
@@ -605,6 +656,15 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 r = _clone(p);
                 r.feeDuration = 0;
                 _logPreview(string.concat(g, "_duration0"), r);
+                r = _clone(p);
+                r.decayFactor = 0;
+                _logPreview(string.concat(g, "_factor0"), r);
+                r = _clone(p);
+                r.decayFactor = type(uint64).max;
+                _logPreview(string.concat(g, "_factorMax"), r);
+                r = _clone(p);
+                r.initialFee = type(uint64).max;
+                _logPreview(string.concat(g, "_feeMaxEncodable"), r);
                 r = _clone(p);
                 r.tradingStart = uint64(block.timestamp - 1);
                 _logPreview(string.concat(g, "_startInPast"), r);
@@ -621,6 +681,4 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             vm.revertToState(snap);
         }
     }
-
-    uint64 constant MAX_CREATOR_FEE_LOCAL = 1844674407370955161;
 }

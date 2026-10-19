@@ -4,17 +4,19 @@
 //! token-only concentrated position from the ask price up to an upper bound, with no quote seed.
 //! The pool fee is 0. The pool, the position and its liquidity never change after creation: only
 //! swaps forwarded through the extension move the price, and every swap's price limit is clamped
-//! to the position bounds. Time only lowers the creator fee, linearly from `initial_fee` at
-//! `trading_start` to `final_fee` after `fee_duration`. The creator fee is charged on the
-//! calculated side of the actual fill and saved separately from the position.
+//! to the position bounds. Time only lowers the creator fee, from `initial_fee` at
+//! `trading_start` along an exponential with per-second factor `decay_factor`, rescaled to reach
+//! `final_fee` exactly after `fee_duration`. The creator fee is charged on the calculated side of
+//! the actual fill and saved separately from the position.
 //!
 //! The model mirrors `ZeroSeedLaunch.handleForwardData` and the `Core` swap loop step by step,
 //! including the tick bitmap word boundaries a swap with `skipAhead` 0 stops at, so it reproduces
 //! the contract's deltas, creator fee and post-swap `Core` state exactly. The installation
 //! functions mirror `previewInstallation` and the binding check of `create`.
 //!
-//! Target: `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`, against the
-//! Q0.64-fee `Core` of that commit's base. Not the Q0.16 `next` Core.
+//! Target: `EkuboProtocol/evm-contracts@b1cbb1c1a9a00de62072a63a8f4aab4d97065573` (draft
+//! exponential creator-fee decay), against the Q0.64-fee `Core` of that commit's base. Not the
+//! Q0.16 `next` Core.
 
 use core::str::FromStr;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -71,13 +73,13 @@ impl ZeroSeedLaunchInstance {
         let low = addr("0x0000000000000000000000000000000000010000");
         let (extension, runtime) = if self.constructor_quote == high {
             (
-                addr("0x510d7c117adeeb89bb33b9acb53995f3280eaa3a"),
-                hash("0x8d8839b97583f275a84aaf26cd6a5fa3ba21a7be04731a65f6140fc5040477c4"),
+                addr("0x5142e167b32877ca3cf3060010a0a1418e3ef1b9"),
+                hash("0x8fb360bb48006819049e6b9a53679ccaa01264e61465ce8e8cd2e8b185d3a8d1"),
             )
         } else if self.constructor_quote == low {
             (
-                addr("0x5195c03d30c11be73485ab76a35eb6f59fc52072"),
-                hash("0x8751bab213ba226c4e45f6441b9df2db1f9c8ee9e9335320e180f3b348646014"),
+                addr("0x51174b5db84c81a906ec55445070fd84c8c8e655"),
+                hash("0xa951db07ad354ea45df3ff1b720b69c7cc588c4feb44aaea79cd79639da61f6e"),
             )
         } else {
             return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
@@ -192,8 +194,9 @@ pub fn validate_claim_recipient(
     Ok(())
 }
 
-/// Highest creator fee rate the contract accepts, Q0.64: `floor(2**64 / 10)`, 10%.
-pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = 1_844_674_407_370_955_161;
+/// Highest creator fee rate the contract accepts, Q0.64: `floor(2**64 * 99 / 100)`, 99%.
+/// A draft cap, not a live parameter. Exactly 100% is not encodable.
+pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = 18_262_276_632_972_456_099;
 
 /// `skipAhead` of the forwarded swaps this model quotes. The deployed Yul router's forwarded hop
 /// uses 0.
@@ -207,7 +210,11 @@ const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 // Gas estimates fitted to the in-test gas of the forwarded swap frame (test locker
 // `forwardSwap`, token settlement included) of the parity vectors generated at
 // `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`: worst error
-// 40% on non-cold fills. They exclude the 21,000 transaction base, calldata, the router and any account
+// 40% on non-cold fills. Unchanged for the exponential schedule of `b1cbb1c1`: the contract
+// measures +2,947 to +3,150 gas per swap strictly inside the fee window (two `powQ64`
+// evaluations and a division) and within +132 at the endpoints; against the regenerated
+// parity vectors the estimate's error on interior fills is -27% to +18% (mean -3%), and the
+// worst non-cold error, 39.3%, is on an endpoint fill. They exclude the 21,000 transaction base, calldata, the router and any account
 // abstraction overhead. A swap that writes a zero storage slot, such as the first creator fee after
 // a claim or the first launch tokens a holder receives, costs about 20,000 more per slot, which
 // the pool state cannot predict; the first swap of a launch costs about 60,000-70,000 more.
@@ -271,6 +278,32 @@ impl ZeroSeedLaunchRange {
     }
 }
 
+/// 2**64: the Q0.64 unit, exactly 100%. Not encodable as a `u64` fee or decay factor.
+pub const ZERO_SEED_LAUNCH_Q64: u128 = 1 << 64;
+
+/// `powQ64` from `math/feeDecay.sol`: `factor ** exponent` in Q0.64 by square-and-multiply,
+/// flooring after every multiply.
+///
+/// The operation order is normative: for each set exponent bit multiply the running result by the
+/// current factor and floor, shift, then square and floor the factor only if bits remain. Both
+/// operands of every product are at most 2**64 and a `u64` factor is below 2**64, so every product
+/// is below 2**128 and the result is at most 2**64. `pow_q64(b, 0)` is 2**64.
+#[must_use]
+pub fn pow_q64(factor: u64, mut exponent: u64) -> u128 {
+    let mut result = ZERO_SEED_LAUNCH_Q64;
+    let mut base = u128::from(factor);
+    while exponent != 0 {
+        if exponent & 1 != 0 {
+            result = (result * base) >> 64;
+        }
+        exponent >>= 1;
+        if exponent != 0 {
+            base = (base * base) >> 64;
+        }
+    }
+    result
+}
+
 /// Creator fee schedule, as in `LaunchParameters`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -283,25 +316,58 @@ pub struct ZeroSeedLaunchFeeSchedule {
     pub initial_fee: u64,
     /// Creator fee from `trading_start + fee_duration` on, Q0.64.
     pub final_fee: u64,
+    /// Per-second Q0.64 multiplier of the unscaled exponential, in `(0, 2**64)`. A literal
+    /// encoded factor, not a half-life. `LaunchParameters.decayFactor`.
+    pub decay_factor: u64,
 }
 
 impl ZeroSeedLaunchFeeSchedule {
     /// `feeAt`: the creator fee at `timestamp`, Q0.64.
+    ///
+    /// `initial_fee` until `trading_start`, then
+    /// `final_fee + floor((initial_fee - final_fee) * (b**t - b**D) / (2**64 - b**D))` with
+    /// `b**n = pow_q64(decay_factor, n)`, `t` the elapsed seconds and `D` the duration, then
+    /// `final_fee` from `elapsed >= fee_duration` on. Elapsed time saturates at the duration
+    /// before any narrowing, as in the contract.
     #[must_use]
     pub fn fee_at(&self, timestamp: u64) -> u64 {
         if timestamp <= self.trading_start {
             return self.initial_fee;
         }
-        let elapsed = timestamp - self.trading_start;
-        if elapsed >= u64::from(self.fee_duration) {
-            return self.final_fee;
-        }
-        // (initial - final) < 2**64 and elapsed < duration < 2**32, so the product fits in a u128
-        // and the quotient is below initial - final.
-        let decline = u128::from(self.initial_fee - self.final_fee) * u128::from(elapsed)
-            / u128::from(self.fee_duration);
-        self.initial_fee - decline as u64
+        decayed_fee(
+            self.initial_fee,
+            self.final_fee,
+            self.decay_factor,
+            self.fee_duration,
+            timestamp - self.trading_start,
+        )
     }
+}
+
+/// `decayedFee` from `math/feeDecay.sol`, for `final_fee <= initial_fee`.
+///
+/// Below the duration `pow_q64` is non-increasing in the exponent, so `b**t >= b**D`; and
+/// `b**D <= b < 2**64`, so the divisor is at least 1. `(initial - final) < 2**64` and
+/// `b**t - b**D <= 2**64`, so the numerator fits a `u128` and the quotient is at most
+/// `initial - final`.
+#[must_use]
+pub fn decayed_fee(
+    initial_fee: u64,
+    final_fee: u64,
+    decay_factor: u64,
+    duration: u32,
+    elapsed: u64,
+) -> u64 {
+    if elapsed == 0 {
+        return initial_fee;
+    }
+    if elapsed >= u64::from(duration) {
+        return final_fee;
+    }
+    let endpoint = pow_q64(decay_factor, u64::from(duration));
+    let excess = u128::from(initial_fee - final_fee) * (pow_q64(decay_factor, elapsed) - endpoint)
+        / (ZERO_SEED_LAUNCH_Q64 - endpoint);
+    final_fee + excess as u64
 }
 
 /// The launch inputs `previewInstallation` and `create` validate.
@@ -360,10 +426,10 @@ pub enum ZeroSeedLaunchParameterError {
     /// `InvalidParameters`: supply, tick spacing or range out of bounds.
     #[error("invalid launch parameters")]
     InvalidParameters,
-    /// `FeeTooHigh`: initial fee above 10%.
+    /// `FeeTooHigh`: initial fee above the 99% cap.
     #[error("creator fee above the cap")]
     FeeTooHigh,
-    /// `InvalidFeeSchedule`: final fee above the initial fee, or zero duration.
+    /// `InvalidFeeSchedule`: final fee above the initial fee, zero duration or zero decay factor.
     #[error("invalid fee schedule")]
     InvalidFeeSchedule,
     /// `InvalidTradingStart`: trading start before the creation block.
@@ -414,7 +480,7 @@ pub fn validate_launch_parameters_math(
     if fee.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {
         return Err(E::FeeTooHigh);
     }
-    if fee.final_fee > fee.initial_fee || fee.fee_duration == 0 {
+    if fee.final_fee > fee.initial_fee || fee.fee_duration == 0 || fee.decay_factor == 0 {
         return Err(E::InvalidFeeSchedule);
     }
     if fee.trading_start < now {
@@ -513,7 +579,8 @@ pub struct ZeroSeedLaunchConfig {
     pub range: ZeroSeedLaunchRange,
     /// The event's `liquidity`, the constant liquidity of the launch position.
     pub liquidity: u128,
-    /// `LaunchParameters.tradingStart`, `feeDuration`, `initialFee` and `finalFee`.
+    /// `LaunchParameters.tradingStart`, `feeDuration`, `initialFee`, `finalFee` and
+    /// `decayFactor`.
     pub fee: ZeroSeedLaunchFeeSchedule,
 }
 
@@ -728,6 +795,7 @@ impl ZeroSeedLaunchPool {
             || fee_schedule.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE
             || fee_schedule.final_fee > fee_schedule.initial_fee
             || fee_schedule.fee_duration == 0
+            || fee_schedule.decay_factor == 0
         {
             return Err(E::InvalidLaunchConfig);
         }
@@ -1248,6 +1316,9 @@ impl private::Sealed for ZeroSeedLaunchPool {}
 impl private::Sealed for ZeroSeedLaunchPoolState {}
 
 #[cfg(test)]
+mod fee_curve_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1289,6 +1360,7 @@ mod tests {
             fee_duration: 3_600,
             initial_fee: ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
             final_fee: 0,
+            decay_factor: 18_425_445_863_997_925_462,
         };
         let mut previous = schedule.fee_at(0);
         for t in (0..6_000).chain([u64::MAX - 1, u64::MAX]) {

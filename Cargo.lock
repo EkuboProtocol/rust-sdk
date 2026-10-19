@@ -588,6 +588,7 @@ dependencies = [
  "ruint",
  "serde",
  "serde_json",
+ "sha2",
  "starknet-types-core",
  "thiserror",
 ]

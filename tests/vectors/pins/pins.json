@@ -1,301 +1,316 @@
 {
-  "ZeroSeedLaunch": {
-    "abiSha256": "189ff93c0f6fb64f6e7dd0675872bf6686692f8303e6218b8c2521bfa5ced215",
-    "constructor": {
-      "type": "constructor",
-      "inputs": [
-        {
-          "name": "core",
-          "type": "address",
-          "internalType": "contract ICore"
-        },
-        {
-          "name": "quote",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "nonpayable"
+ "ZeroSeedLaunch": {
+  "abiSha256": "bc51b39284a5a2a0970d3a804420762ce291dc01f9c21ddf31840e354a3792bb",
+  "constructor": {
+   "type": "constructor",
+   "inputs": [
+    {
+     "name": "core",
+     "type": "address",
+     "internalType": "contract ICore"
     },
-    "functions": {
-      "afterCollectFees(bytes32,(address,address,bytes32),bytes32,uint128,uint128)": "0x751fd5df",
-      "afterInitializePool(address,(address,address,bytes32),int32,uint96)": "0x948374ff",
-      "afterSwap(bytes32,(address,address,bytes32),bytes32,bytes32,bytes32)": "0xa4e8f288",
-      "afterUpdatePosition(bytes32,(address,address,bytes32),bytes32,int128,bytes32,bytes32)": "0x25fa4e69",
-      "beforeCollectFees(bytes32,(address,address,bytes32),bytes32)": "0xdf65d8d1",
-      "beforeInitializePool(address,(address,address,bytes32),int32)": "0x1fbbb462",
-      "beforeSwap(bytes32,(address,address,bytes32),bytes32)": "0xca11dba7",
-      "beforeUpdatePosition(bytes32,(address,address,bytes32),bytes32,int128)": "0x0035c723",
-      "claimFees((address,address,bytes32),address)": "0x6906b4c0",
-      "create((address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0xe11b98da",
-      "creatorFees((address,address,bytes32))": "0xb4ce9a2e",
-      "feeAt(bytes32,uint256)": "0xe81084ec",
-      "forwarded_2374103877(bytes32)": "0x00000001",
-      "getLaunch(bytes32)": "0x7d1d589c",
-      "locked_6416899205(uint256)": "0x00000000",
-      "previewInstallation(address,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0xcd1632b3",
-      "quoteToken()": "0x217a4b70"
-    },
-    "events": {
-      "CreatorFeesClaimed(bytes32,address,address,uint128,uint128)": "0xda45e5fa280329970441a582e78cff0b8e25a17a5d56e3809ef3e6a0dcc078f5",
-      "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0xfe2a763a22e674e13e94ee2f603a671afd54b304fd050776ee150e36370e5dc4",
-      "LaunchSwapped(bytes32,address,int128,int128,uint64,uint128,bool)": "0x3e58795f52a8e88efdec2da89ea3798175f8764145ccd7bf5e40633a7d571f6d"
-    },
-    "errors": {
-      "BaseForwardeeAccountantOnly()": {
-        "selector": "0x588e1740",
-        "signatureKeccak": "0x588e174033b8c807064864ebb7adab7ce9cc76c0989bf9c9a3ced1ec8d5093c7"
-      },
-      "BaseLockerAccountantOnly()": {
-        "selector": "0x3ed2a9c0",
-        "signatureKeccak": "0x3ed2a9c0165c8dd3abd84599c58810b75d144df7fcf519e53a589a385712b392"
-      },
-      "BoundsOrder()": {
-        "selector": "0x68651c5c",
-        "signatureKeccak": "0x68651c5cef0ff89c641f93fe9b66e0f42bc0030e6201bc146342a2fd3892e106"
-      },
-      "BoundsTickSpacing()": {
-        "selector": "0x89fd41b1",
-        "signatureKeccak": "0x89fd41b1956277ff1a2f6511f8d0f94f3c495979541ee2a08d7dd336ea637c2f"
-      },
-      "CallPointNotImplemented()": {
-        "selector": "0xc6f26286",
-        "signatureKeccak": "0xc6f26286ddf66d13374702f540f497512dc6d0776b7adc1f1937db6356ffb2bd"
-      },
-      "CoreOnly()": {
-        "selector": "0x62279cff",
-        "signatureKeccak": "0x62279cff0a840f3f9de39942ef0a3090cc879f33025cf4fccfb4b32a03733255"
-      },
-      "CreatorOnly()": {
-        "selector": "0x91768ed8",
-        "signatureKeccak": "0x91768ed8680165acac0a25aa314a1619def754ad9318db24d01bd5ce1b99b2ba"
-      },
-      "ExpectedRevertWithinLock()": {
-        "selector": "0x4c816e2b",
-        "signatureKeccak": "0x4c816e2b699746d0570d34114a47eb71ac3ea1d76039a65ed230513b21699e7f"
-      },
-      "FeeTooHigh()": {
-        "selector": "0xcd4e6167",
-        "signatureKeccak": "0xcd4e6167a0147beade9e7daca0e52cd42e992cd9c3dc1dd3ce8a2b6956f53601"
-      },
-      "InitializeThroughCreateOnly()": {
-        "selector": "0x028eb443",
-        "signatureKeccak": "0x028eb44335eb0d72cd3c10c8d25ebc53920e3e6a14181a2581dd9deb26eaf05e"
-      },
-      "InvalidFeeSchedule()": {
-        "selector": "0xf75a271a",
-        "signatureKeccak": "0xf75a271ab7dda6d2cddd83cdc517a1946232b3868288e011f85b027b06b7492b"
-      },
-      "InvalidParameters()": {
-        "selector": "0xe5239090",
-        "signatureKeccak": "0xe52390909f87229f872871b8ab57a0e139663fb951ac6346f3852d332ca460b7"
-      },
-      "InvalidRecipient()": {
-        "selector": "0x9c8d2cd2",
-        "signatureKeccak": "0x9c8d2cd23712ccfbf44b8107cfe79ea09343bf5b458f10860098ac1dbdf69f86"
-      },
-      "InvalidTick(int32)": {
-        "selector": "0x073ee172",
-        "signatureKeccak": "0x073ee172edcea11df581fb84920fd68b02931ce38e9477d940dfe68e5e5ce53a"
-      },
-      "InvalidTradingStart()": {
-        "selector": "0xe0839259",
-        "signatureKeccak": "0xe083925974567dff9e53f3f9afc00030db7b0a2d9422516b7f771d24564012f6"
-      },
-      "LaunchTokenExists(address)": {
-        "selector": "0xf68475cd",
-        "signatureKeccak": "0xf68475cd1d455498eecae70aac614d1577d23b1f7e9eb911d6c408d7f6b59f55"
-      },
-      "LiquidityAboveTickCap(uint128,uint128)": {
-        "selector": "0x20ea795f",
-        "signatureKeccak": "0x20ea795fa713076f5fa1fd9ed19e850f74dc2a432909858c34db83779e0a8aa6"
-      },
-      "MetadataTooLong()": {
-        "selector": "0x85b8e2f4",
-        "signatureKeccak": "0x85b8e2f4bdbbcaf009165a028484d0ecf8c793bed0029ee6739e55d7fdbd8af5"
-      },
-      "MinMaxBounds()": {
-        "selector": "0xabfa4a31",
-        "signatureKeccak": "0xabfa4a31f9bfe3541a5442612bbde483965cca9dc05548212b46a8f55b136df9"
-      },
-      "PositionsThroughCreateOnly()": {
-        "selector": "0x74a99003",
-        "signatureKeccak": "0x74a99003e1c3148edc1bbda0e8e7a18129530925df8b81fa7251f61365a0b9c3"
-      },
-      "StableswapMustBeFullRange()": {
-        "selector": "0x72b1019d",
-        "signatureKeccak": "0x72b1019d3db5ab194f6b780728c69fcc0fb7aceaa29886751b69af4bca690f95"
-      },
-      "SupplyNotExactlyInstallable(uint128,uint128)": {
-        "selector": "0xad00b597",
-        "signatureKeccak": "0xad00b597c8795ec81a274ee31121664c7f8180282834083d196bb6920b32f66a"
-      },
-      "SwapsThroughForwardOnly()": {
-        "selector": "0xf17f54b3",
-        "signatureKeccak": "0xf17f54b364a16450a0d38ca4371f832082f3aee04344e17d9f6e4030285f0d97"
-      },
-      "TradingNotStarted()": {
-        "selector": "0xacf75be8",
-        "signatureKeccak": "0xacf75be85408aa5c84b78d99c59849c7979609b09ae95acce4f3d9cdbc0af5dc"
-      },
-      "UnknownLaunch()": {
-        "selector": "0xf6806bf8",
-        "signatureKeccak": "0xf6806bf834a0c7abf93d9170a645af720e5e9cbbe6eafc2b507858892c83fd0c"
-      },
-      "UnsupportedQuoteToken()": {
-        "selector": "0x658d8331",
-        "signatureKeccak": "0x658d833199df6dfb37399ad61c8e4aec56169cd2064150cbda58694037cc8452"
-      },
-      "ZeroLiquidity()": {
-        "selector": "0x10074548",
-        "signatureKeccak": "0x100745484141de1668a86d92bc9492f0aa44f9945862280657cd34aacf118cd5"
-      }
-    },
-    "templateRuntime": {
-      "bytes": 21959,
-      "zeroFilledKeccak": "0xa85c864302696dce32b5e2452508219bb08323c142b40fb7c487540db3f75d89"
-    },
-    "creation": {
-      "bytes": 22598,
-      "keccak": "0x92b1b6e82a8cd13d7bdbd15b4d33622b5b01ec07b5dae1b9b93e6c0229aa7f42"
-    },
-    "immutableReferences": {
-      "66175": {
-        "name": "ACCOUNTANT",
-        "locations": [
-          {
-            "start": 3900,
-            "length": 32
-          }
-        ]
-      },
-      "66248": {
-        "name": "ACCOUNTANT",
-        "locations": [
-          {
-            "start": 5240,
-            "length": 32
-          },
-          {
-            "start": 7745,
-            "length": 32
-          },
-          {
-            "start": 11302,
-            "length": 32
-          }
-        ]
-      },
-      "70052": {
-        "name": "CORE",
-        "locations": [
-          {
-            "start": 2121,
-            "length": 32
-          },
-          {
-            "start": 3314,
-            "length": 32
-          },
-          {
-            "start": 4093,
-            "length": 32
-          },
-          {
-            "start": 7276,
-            "length": 32
-          },
-          {
-            "start": 9335,
-            "length": 32
-          },
-          {
-            "start": 9568,
-            "length": 32
-          },
-          {
-            "start": 9911,
-            "length": 32
-          },
-          {
-            "start": 10080,
-            "length": 32
-          },
-          {
-            "start": 10280,
-            "length": 32
-          }
-        ]
-      },
-      "81309": {
-        "name": "QUOTE_TOKEN",
-        "locations": [
-          {
-            "start": 3538,
-            "length": 32
-          },
-          {
-            "start": 11574,
-            "length": 32
-          }
-        ]
-      }
-    },
-    "localFixtures": {
-      "quoteHigh": {
-        "extension": "0x5100000000000000000000000000000000000000",
-        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
-        "quote": "0xffffffffffffffffffffffffffffffffffffffff",
-        "constructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000ffffffffffffffffffffffffffffffffffffffff",
-        "initCodeKeccak": "0xe74ea49e672227c304c83483ab9781ed409931a5878fce4c98243235ef288a7d",
-        "runtimeKeccak": "0x8d8839b97583f275a84aaf26cd6a5fa3ba21a7be04731a65f6140fc5040477c4",
-        "scope": "constructor-executed synthetic LOCAL fixture, not deployed network pin"
-      },
-      "quoteLow": {
-        "extension": "0x5100000000000000000000000000000000000000",
-        "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
-        "quote": "0x0000000000000000000000000000000000010000",
-        "constructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd7010000000000000000000000000000000000000000000000000000000000010000",
-        "initCodeKeccak": "0x8122de9728b45b04982161fbbf8f4add07784f26bd2c435869a72ed67aa16ad7",
-        "runtimeKeccak": "0x8751bab213ba226c4e45f6441b9df2db1f9c8ee9e9335320e180f3b348646014",
-        "scope": "constructor-executed synthetic LOCAL fixture, not deployed network pin"
-      }
-    },
-    "abiCompatibility": {
-      "oldNonConstructorEntriesUnchanged": true,
-      "addedEntries": [
-        [
-          "error",
-          "LaunchTokenExists(address)"
-        ],
-        [
-          "error",
-          "MetadataTooLong()"
-        ],
-        [
-          "function",
-          "quoteToken()"
-        ]
-      ],
-      "constructorChanged": "(address) -> (address,address)"
-    },
-    "baseline": {
-      "revision": "39ca1918e4d16b1c9fd4db5ed70761ef7b12c6ae",
-      "runtimeBytes": 21456,
-      "creationBytes": 22001,
-      "zeroFilledRuntimeKeccak": "0x16d2d4ce55576f418d94b9dcef3e9d4950a0d3f1573af639f1387e1d6b74c319",
-      "runtimeBytesDelta": 503,
-      "creationBytesDelta": 597
+    {
+     "name": "quote",
+     "type": "address",
+     "internalType": "address"
     }
+   ],
+   "stateMutability": "nonpayable"
   },
-  "IZeroSeedLaunch": {
-    "abiSha256": "4c519694df0d35d77e382a35a4423367e0b8b8f3548294856240e2f83eec20bf"
+  "functions": {
+   "afterCollectFees(bytes32,(address,address,bytes32),bytes32,uint128,uint128)": "0x751fd5df",
+   "afterInitializePool(address,(address,address,bytes32),int32,uint96)": "0x948374ff",
+   "afterSwap(bytes32,(address,address,bytes32),bytes32,bytes32,bytes32)": "0xa4e8f288",
+   "afterUpdatePosition(bytes32,(address,address,bytes32),bytes32,int128,bytes32,bytes32)": "0x25fa4e69",
+   "beforeCollectFees(bytes32,(address,address,bytes32),bytes32)": "0xdf65d8d1",
+   "beforeInitializePool(address,(address,address,bytes32),int32)": "0x1fbbb462",
+   "beforeSwap(bytes32,(address,address,bytes32),bytes32)": "0xca11dba7",
+   "beforeUpdatePosition(bytes32,(address,address,bytes32),bytes32,int128)": "0x0035c723",
+   "claimFees((address,address,bytes32),address)": "0x6906b4c0",
+   "create((address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))": "0xd5f50468",
+   "creatorFees((address,address,bytes32))": "0xb4ce9a2e",
+   "feeAt(bytes32,uint256)": "0xe81084ec",
+   "forwarded_2374103877(bytes32)": "0x00000001",
+   "getLaunch(bytes32)": "0x7d1d589c",
+   "locked_6416899205(uint256)": "0x00000000",
+   "previewInstallation(address,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))": "0x5283ac38",
+   "quoteToken()": "0x217a4b70"
   },
-  "MintableERC20": {
-    "abiSha256": "0f0d0950f409dfb10d8985ba15e203f3d028d127d674a7b89dff9a0bfc66b348",
-    "creation": {
-      "bytes": 4419,
-      "keccak": "0x25da7fd323fdbf874dde8aaef1bce445ec035022d8518cb3046f65a0427a2f52"
-    }
+  "events": {
+   "CreatorFeesClaimed(bytes32,address,address,uint128,uint128)": "0xda45e5fa280329970441a582e78cff0b8e25a17a5d56e3809ef3e6a0dcc078f5",
+   "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))": "0x9658a825b186d32fc3d164a53e6387b7f6d5e317e624faeac98a5d5ad84c3301",
+   "LaunchSwapped(bytes32,address,int128,int128,uint64,uint128,bool)": "0x3e58795f52a8e88efdec2da89ea3798175f8764145ccd7bf5e40633a7d571f6d"
+  },
+  "errors": {
+   "BaseForwardeeAccountantOnly()": {
+    "selector": "0x588e1740",
+    "signatureKeccak": "0x588e174033b8c807064864ebb7adab7ce9cc76c0989bf9c9a3ced1ec8d5093c7"
+   },
+   "BaseLockerAccountantOnly()": {
+    "selector": "0x3ed2a9c0",
+    "signatureKeccak": "0x3ed2a9c0165c8dd3abd84599c58810b75d144df7fcf519e53a589a385712b392"
+   },
+   "BoundsOrder()": {
+    "selector": "0x68651c5c",
+    "signatureKeccak": "0x68651c5cef0ff89c641f93fe9b66e0f42bc0030e6201bc146342a2fd3892e106"
+   },
+   "BoundsTickSpacing()": {
+    "selector": "0x89fd41b1",
+    "signatureKeccak": "0x89fd41b1956277ff1a2f6511f8d0f94f3c495979541ee2a08d7dd336ea637c2f"
+   },
+   "CallPointNotImplemented()": {
+    "selector": "0xc6f26286",
+    "signatureKeccak": "0xc6f26286ddf66d13374702f540f497512dc6d0776b7adc1f1937db6356ffb2bd"
+   },
+   "CoreOnly()": {
+    "selector": "0x62279cff",
+    "signatureKeccak": "0x62279cff0a840f3f9de39942ef0a3090cc879f33025cf4fccfb4b32a03733255"
+   },
+   "CreatorOnly()": {
+    "selector": "0x91768ed8",
+    "signatureKeccak": "0x91768ed8680165acac0a25aa314a1619def754ad9318db24d01bd5ce1b99b2ba"
+   },
+   "ExpectedRevertWithinLock()": {
+    "selector": "0x4c816e2b",
+    "signatureKeccak": "0x4c816e2b699746d0570d34114a47eb71ac3ea1d76039a65ed230513b21699e7f"
+   },
+   "FeeTooHigh()": {
+    "selector": "0xcd4e6167",
+    "signatureKeccak": "0xcd4e6167a0147beade9e7daca0e52cd42e992cd9c3dc1dd3ce8a2b6956f53601"
+   },
+   "InitializeThroughCreateOnly()": {
+    "selector": "0x028eb443",
+    "signatureKeccak": "0x028eb44335eb0d72cd3c10c8d25ebc53920e3e6a14181a2581dd9deb26eaf05e"
+   },
+   "InvalidFeeSchedule()": {
+    "selector": "0xf75a271a",
+    "signatureKeccak": "0xf75a271ab7dda6d2cddd83cdc517a1946232b3868288e011f85b027b06b7492b"
+   },
+   "InvalidParameters()": {
+    "selector": "0xe5239090",
+    "signatureKeccak": "0xe52390909f87229f872871b8ab57a0e139663fb951ac6346f3852d332ca460b7"
+   },
+   "InvalidRecipient()": {
+    "selector": "0x9c8d2cd2",
+    "signatureKeccak": "0x9c8d2cd23712ccfbf44b8107cfe79ea09343bf5b458f10860098ac1dbdf69f86"
+   },
+   "InvalidTick(int32)": {
+    "selector": "0x073ee172",
+    "signatureKeccak": "0x073ee172edcea11df581fb84920fd68b02931ce38e9477d940dfe68e5e5ce53a"
+   },
+   "InvalidTradingStart()": {
+    "selector": "0xe0839259",
+    "signatureKeccak": "0xe083925974567dff9e53f3f9afc00030db7b0a2d9422516b7f771d24564012f6"
+   },
+   "LaunchTokenExists(address)": {
+    "selector": "0xf68475cd",
+    "signatureKeccak": "0xf68475cd1d455498eecae70aac614d1577d23b1f7e9eb911d6c408d7f6b59f55"
+   },
+   "LiquidityAboveTickCap(uint128,uint128)": {
+    "selector": "0x20ea795f",
+    "signatureKeccak": "0x20ea795fa713076f5fa1fd9ed19e850f74dc2a432909858c34db83779e0a8aa6"
+   },
+   "MetadataTooLong()": {
+    "selector": "0x85b8e2f4",
+    "signatureKeccak": "0x85b8e2f4bdbbcaf009165a028484d0ecf8c793bed0029ee6739e55d7fdbd8af5"
+   },
+   "MinMaxBounds()": {
+    "selector": "0xabfa4a31",
+    "signatureKeccak": "0xabfa4a31f9bfe3541a5442612bbde483965cca9dc05548212b46a8f55b136df9"
+   },
+   "PositionsThroughCreateOnly()": {
+    "selector": "0x74a99003",
+    "signatureKeccak": "0x74a99003e1c3148edc1bbda0e8e7a18129530925df8b81fa7251f61365a0b9c3"
+   },
+   "StableswapMustBeFullRange()": {
+    "selector": "0x72b1019d",
+    "signatureKeccak": "0x72b1019d3db5ab194f6b780728c69fcc0fb7aceaa29886751b69af4bca690f95"
+   },
+   "SupplyNotExactlyInstallable(uint128,uint128)": {
+    "selector": "0xad00b597",
+    "signatureKeccak": "0xad00b597c8795ec81a274ee31121664c7f8180282834083d196bb6920b32f66a"
+   },
+   "SwapsThroughForwardOnly()": {
+    "selector": "0xf17f54b3",
+    "signatureKeccak": "0xf17f54b364a16450a0d38ca4371f832082f3aee04344e17d9f6e4030285f0d97"
+   },
+   "TradingNotStarted()": {
+    "selector": "0xacf75be8",
+    "signatureKeccak": "0xacf75be85408aa5c84b78d99c59849c7979609b09ae95acce4f3d9cdbc0af5dc"
+   },
+   "UnknownLaunch()": {
+    "selector": "0xf6806bf8",
+    "signatureKeccak": "0xf6806bf834a0c7abf93d9170a645af720e5e9cbbe6eafc2b507858892c83fd0c"
+   },
+   "UnsupportedQuoteToken()": {
+    "selector": "0x658d8331",
+    "signatureKeccak": "0x658d833199df6dfb37399ad61c8e4aec56169cd2064150cbda58694037cc8452"
+   },
+   "ZeroLiquidity()": {
+    "selector": "0x10074548",
+    "signatureKeccak": "0x100745484141de1668a86d92bc9492f0aa44f9945862280657cd34aacf118cd5"
+   }
+  },
+  "templateRuntime": {
+   "bytes": 22382,
+   "zeroFilledKeccak": "0x4d44a77f7e4fcc5f7a321475c1dbfd1e0812ebbe8fc46a5e1973373fb6a9bf87"
+  },
+  "creation": {
+   "bytes": 23021,
+   "keccak": "0x2792fd57896f35c6f14b40cd5dd74593ccbf8d14f66be36d9e3c93713f2fe186"
+  },
+  "immutableReferences": {
+   "72835": {
+    "name": "ACCOUNTANT",
+    "locations": [
+     {
+      "start": 3974,
+      "length": 32
+     }
+    ]
+   },
+   "72908": {
+    "name": "ACCOUNTANT",
+    "locations": [
+     {
+      "start": 5314,
+      "length": 32
+     },
+     {
+      "start": 7820,
+      "length": 32
+     },
+     {
+      "start": 14163,
+      "length": 32
+     }
+    ]
+   },
+   "76712": {
+    "name": "CORE",
+    "locations": [
+     {
+      "start": 1526,
+      "length": 32
+     },
+     {
+      "start": 2745,
+      "length": 32
+     },
+     {
+      "start": 4167,
+      "length": 32
+     },
+     {
+      "start": 7351,
+      "length": 32
+     },
+     {
+      "start": 9488,
+      "length": 32
+     },
+     {
+      "start": 9750,
+      "length": 32
+     },
+     {
+      "start": 10093,
+      "length": 32
+     },
+     {
+      "start": 10262,
+      "length": 32
+     },
+     {
+      "start": 10462,
+      "length": 32
+     }
+    ]
+   },
+   "90435": {
+    "name": "QUOTE_TOKEN",
+    "locations": [
+     {
+      "start": 3612,
+      "length": 32
+     },
+     {
+      "start": 11471,
+      "length": 32
+     }
+    ]
+   }
+  },
+  "localFixtures": {
+   "quoteHigh": {
+    "extension": "0x5100000000000000000000000000000000000000",
+    "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+    "quote": "0xffffffffffffffffffffffffffffffffffffffff",
+    "constructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000ffffffffffffffffffffffffffffffffffffffff",
+    "initCodeKeccak": "0xdc8b9222837b8ed16c4f73f768cc7ddbc91801810df2c9c0d645bf881ad8f7c9",
+    "runtimeKeccak": "0x8fb360bb48006819049e6b9a53679ccaa01264e61465ce8e8cd2e8b185d3a8d1",
+    "scope": "constructor-executed synthetic LOCAL fixture, not deployed network pin"
+   },
+   "quoteLow": {
+    "extension": "0x5100000000000000000000000000000000000000",
+    "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+    "quote": "0x0000000000000000000000000000000000010000",
+    "constructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd7010000000000000000000000000000000000000000000000000000000000010000",
+    "initCodeKeccak": "0x5e024905166d12c8b4333d186537a20209ec677c9f4f433799ca0e92140a7835",
+    "runtimeKeccak": "0xa951db07ad354ea45df3ff1b720b69c7cc588c4feb44aaea79cd79639da61f6e",
+    "scope": "constructor-executed synthetic LOCAL fixture, not deployed network pin"
+   }
+  },
+  "abiCompatibility": {
+   "source": "EkuboProtocol/evm-contracts@b1cbb1c1a9a00de62072a63a8f4aab4d97065573",
+   "removedEntries": [
+    [
+     "event",
+     "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))"
+    ],
+    [
+     "function",
+     "create((address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))"
+    ],
+    [
+     "function",
+     "previewInstallation(address,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))"
+    ]
+   ],
+   "addedEntries": [
+    [
+     "event",
+     "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))"
+    ],
+    [
+     "function",
+     "create((address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))"
+    ],
+    [
+     "function",
+     "previewInstallation(address,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))"
+    ]
+   ],
+   "note": "LaunchParameters gains uint64 decayFactor after finalFee; Launch appends uint64 decayFactor. create/previewInstallation/LaunchCreated change signature; getLaunch/feeAt keep selectors."
+  },
+  "baseline": {
+   "revision": "d6aeb58d845aa29454f3ed8df15e84a306a6f26d",
+   "abiSha256": "189ff93c0f6fb64f6e7dd0675872bf6686692f8303e6218b8c2521bfa5ced215",
+   "runtimeBytes": 21959,
+   "creationBytes": 22598,
+   "zeroFilledRuntimeKeccak": "0xa85c864302696dce32b5e2452508219bb08323c142b40fb7c487540db3f75d89",
+   "runtimeBytesDelta": 423,
+   "creationBytesDelta": 423
   }
+ },
+ "IZeroSeedLaunch": {
+  "abiSha256": "60eaec35405f1a750acc93794cd724d744ffa2be9abc87cc41145fb3ea915f40"
+ },
+ "MintableERC20": {
+  "abiSha256": "0f0d0950f409dfb10d8985ba15e203f3d028d127d674a7b89dff9a0bfc66b348",
+  "creation": {
+   "bytes": 4419,
+   "keccak": "0x25da7fd323fdbf874dde8aaef1bce445ec035022d8518cb3046f65a0427a2f52"
+  }
+ }
 }

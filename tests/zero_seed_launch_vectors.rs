@@ -89,6 +89,7 @@ fn fee_schedule(v: &Value) -> ZeroSeedLaunchFeeSchedule {
         fee_duration: num(v, "feeDuration"),
         initial_fee: num(v, "initialFee"),
         final_fee: num(v, "finalFee"),
+        decay_factor: num(v, "decayFactor"),
     }
 }
 
@@ -184,7 +185,7 @@ fn indexer_state(word: &str) -> ZeroSeedLaunchPoolState {
 fn indexer_created_vectors() -> Value {
     let fixture: Value = serde_json::from_str(INDEXER).unwrap();
     let topic = ekubo_sdk::alloy_primitives::keccak256(
-        "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))",
+        "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))",
     ).to_string();
     let mut scenarios = Vec::new();
     for branch in fixture["branches"].as_object().unwrap().values() {
@@ -275,6 +276,7 @@ fn indexer_created_vectors() -> Value {
                 "liquidity": word(4).to_string(), "supply": word(p+4).to_string(),
                 "tradingStart": word(p+9).to_string(), "feeDuration": word(p+10).to_string(),
                 "initialFee": word(p+11).to_string(), "finalFee": word(p+12).to_string(),
+                "decayFactor": word(p+13).to_string(),
                 "state": { "sqrt_ratio": core.sqrt_ratio.to_string(), "tick": core.tick.to_string(), "liquidity": core.liquidity.to_string() },
                 "branch": branch["blocks"][0]["parentHash"], "blockNumber": block,
                 "poolStateWord": state_word["poolStateWord"], "poolId": log["topics"][1]
@@ -316,9 +318,9 @@ fn supported_indexer_same_block_states() {
         for extension in [
             "0x5100000000000000000000000000000000000000",
             if s(created, "constructorQuote") == QUOTE_HIGH {
-                "0x5195c03d30c11be73485ab76a35eb6f59fc52072"
+                "0x51174b5db84c81a906ec55445070fd84c8c8e655"
             } else {
-                "0x510d7c117adeeb89bb33b9acb53995f3280eaa3a"
+                "0x5142e167b32877ca3cf3060010a0a1418e3ef1b9"
             },
         ] {
             let mut bad = instance(created);
@@ -440,7 +442,7 @@ struct GasSample {
 fn parity_with_local_core_state_and_events() {
     let vectors: Value = serde_json::from_str(PARITY).unwrap();
     let scenarios = vectors["scenarios"].as_array().unwrap();
-    assert_eq!(scenarios.len(), 7);
+    assert_eq!(scenarios.len(), 9);
     let mut compared = 0;
     let mut refused = 0;
     let mut claims = 0;
@@ -661,8 +663,8 @@ fn parity_with_local_core_state_and_events() {
             compared += 1;
         }
     }
-    assert_eq!(claims, 6);
-    assert_eq!(compared + refused, 307);
+    assert_eq!(claims, 8);
+    assert_eq!(compared + refused, 407);
     assert!(compared >= 240, "compared {compared}");
 
     // Gas: the uncalibrated estimate stays within 40% of the measured in-test gas for every fill except
@@ -689,7 +691,7 @@ fn parity_with_local_core_state_and_events() {
         }
         worst = worst.max(error.abs());
     }
-    assert_eq!(cold, 12);
+    assert_eq!(cold, 16);
     println!("parity: {compared} executed, {refused} refused, {claims} claims; gas worst={worst}");
     assert!(worst < 0.40, "worst gas estimate error {worst}");
 }
@@ -799,8 +801,8 @@ fn installation_preview_and_binding_match_the_contract() {
         }
         by_label.insert(label.to_owned(), parameters);
     }
-    assert_eq!(previews.len(), 108);
-    assert_eq!(ok, 40);
+    assert_eq!(previews.len(), 120);
+    assert_eq!(ok, 44);
 
     let bindings = vectors["bindings"].as_array().unwrap();
     assert_eq!(bindings.len(), 4 * ok);
@@ -844,6 +846,7 @@ fn frozen_integer_vectors() {
         fee_duration: duration,
         initial_fee: num(fixture, "fee_initial_q64"),
         final_fee: num(fixture, "fee_final_q64"),
+        decay_factor: num(&fixture["fee_decay_factors_q64"], &duration.to_string()),
     };
     let start: u64 = num(fixture, "trading_start");
 
@@ -1219,7 +1222,7 @@ fn manifest_and_local_producer_negative_controls() {
         }
         let mut bad = observed;
         bad.extension_runtime =
-            U256::from_str("0xa85c864302696dce32b5e2452508219bb08323c142b40fb7c487540db3f75d89")
+            U256::from_str("0x4d44a77f7e4fcc5f7a321475c1dbfd1e0812ebbe8fc46a5e1973373fb6a9bf87")
                 .unwrap();
         assert!(
             bad.validate().is_err(),
