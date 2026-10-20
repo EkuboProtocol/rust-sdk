@@ -1,996 +1,11 @@
 {
- "gasMath": [
-  {
-   "raw": "VEC|gasMath|elapsed=0|callBase=3490|linear=955|exponentialD3600=1008|exponentialDmax=961",
-   "elapsed": "0",
-   "callBase": "3490",
-   "linear": "955",
-   "exponentialD3600": "1008",
-   "exponentialDmax": "961"
-  },
-  {
-   "raw": "VEC|gasMath|elapsed=1|callBase=992|linear=1283|exponentialD3600=2991|exponentialDmax=5980",
-   "elapsed": "1",
-   "callBase": "992",
-   "linear": "1283",
-   "exponentialD3600": "2991",
-   "exponentialDmax": "5980"
-  },
-  {
-   "raw": "VEC|gasMath|elapsed=1800|callBase=993|linear=1283|exponentialD3600=4157|exponentialDmax=7147",
-   "elapsed": "1800",
-   "callBase": "993",
-   "linear": "1283",
-   "exponentialD3600": "4157",
-   "exponentialDmax": "7147"
-  },
-  {
-   "raw": "VEC|gasMath|elapsed=3599|callBase=993|linear=1283|exponentialD3600=4361|exponentialDmax=7349",
-   "elapsed": "3599",
-   "callBase": "993",
-   "linear": "1283",
-   "exponentialD3600": "4361",
-   "exponentialDmax": "7349"
-  },
-  {
-   "raw": "VEC|gasMath|elapsed=3600|callBase=994|linear=986|exponentialD3600=1045|exponentialDmax=7254",
-   "elapsed": "3600",
-   "callBase": "994",
-   "linear": "986",
-   "exponentialD3600": "1045",
-   "exponentialDmax": "7254"
-  },
-  {
-   "raw": "VEC|gasMath|elapsed=4294967295|callBase=995|linear=986|exponentialD3600=1045|exponentialDmax=998",
-   "elapsed": "4294967295",
-   "callBase": "995",
-   "linear": "986",
-   "exponentialD3600": "1045",
-   "exponentialDmax": "998"
-  }
- ],
- "gasCurve": [
-  {
-   "raw": "VEC|gasCurve|curve=linear|t=0|firstBuy=102519|secondBuy=34301|exactOutBuy=34773|sell=34277",
-   "curve": "linear",
-   "t": "0",
-   "firstBuy": "102519",
-   "secondBuy": "34301",
-   "exactOutBuy": "34773",
-   "sell": "34277"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=linear|t=1|firstBuy=102858|secondBuy=34640|exactOutBuy=35112|sell=34616",
-   "curve": "linear",
-   "t": "1",
-   "firstBuy": "102858",
-   "secondBuy": "34640",
-   "exactOutBuy": "35112",
-   "sell": "34616"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=linear|t=1800|firstBuy=102858|secondBuy=34640|exactOutBuy=35112|sell=34616",
-   "curve": "linear",
-   "t": "1800",
-   "firstBuy": "102858",
-   "secondBuy": "34640",
-   "exactOutBuy": "35112",
-   "sell": "34616"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=linear|t=3599|firstBuy=102858|secondBuy=34640|exactOutBuy=35112|sell=34616",
-   "curve": "linear",
-   "t": "3599",
-   "firstBuy": "102858",
-   "secondBuy": "34640",
-   "exactOutBuy": "35112",
-   "sell": "34616"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=linear|t=3600|firstBuy=102591|secondBuy=34373|exactOutBuy=34845|sell=34349",
-   "curve": "linear",
-   "t": "3600",
-   "firstBuy": "102591",
-   "secondBuy": "34373",
-   "exactOutBuy": "34845",
-   "sell": "34349"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=exponential|t=0|firstBuy=102528|secondBuy=34310|exactOutBuy=34782|sell=34286",
-   "curve": "exponential",
-   "t": "0",
-   "firstBuy": "102528",
-   "secondBuy": "34310",
-   "exactOutBuy": "34782",
-   "sell": "34286"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=exponential|t=1|firstBuy=104639|secondBuy=36421|exactOutBuy=36893|sell=36397",
-   "curve": "exponential",
-   "t": "1",
-   "firstBuy": "104639",
-   "secondBuy": "36421",
-   "exactOutBuy": "36893",
-   "sell": "36397"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=exponential|t=1800|firstBuy=105805|secondBuy=37587|exactOutBuy=38059|sell=37563",
-   "curve": "exponential",
-   "t": "1800",
-   "firstBuy": "105805",
-   "secondBuy": "37587",
-   "exactOutBuy": "38059",
-   "sell": "37563"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=exponential|t=3599|firstBuy=106008|secondBuy=37790|exactOutBuy=38262|sell=37766",
-   "curve": "exponential",
-   "t": "3599",
-   "firstBuy": "106008",
-   "secondBuy": "37790",
-   "exactOutBuy": "38262",
-   "sell": "37766"
-  },
-  {
-   "raw": "VEC|gasCurve|curve=exponential|t=3600|firstBuy=102723|secondBuy=34505|exactOutBuy=34977|sell=34481",
-   "curve": "exponential",
-   "t": "3600",
-   "firstBuy": "102723",
-   "secondBuy": "34505",
-   "exactOutBuy": "34977",
-   "sell": "34481"
-  }
- ],
- "creatorAccess": [
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=exponential|t=0|rateQ64=922337203685477580|outsiderNet=949129205049968737676762|outsiderQuoteOut=902540577159832435|creatorGross=999083373736809197508878|creatorClaimedToken=49954168686840459832116|creatorQuoteOut=949999999999999999|creatorClaimedQuote=50000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "0",
-   "rateQ64": "922337203685477580",
-   "outsiderNet": "949129205049968737676762",
-   "outsiderQuoteOut": "902540577159832435",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49954168686840459832116",
-   "creatorQuoteOut": "949999999999999999",
-   "creatorClaimedQuote": "50000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=exponential|t=1|rateQ64=921320298688452636|outsiderNet=949184281049892511417660|outsiderQuoteOut=902645280571021660|creatorGross=999083373736809197508878|creatorClaimedToken=49899092686916686091218|creatorQuoteOut=950055126530349289|creatorClaimedQuote=49944873469650710|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "1",
-   "rateQ64": "921320298688452636",
-   "outsiderNet": "949184281049892511417660",
-   "outsiderQuoteOut": "902645280571021660",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49899092686916686091218",
-   "creatorQuoteOut": "950055126530349289",
-   "creatorClaimedQuote": "49944873469650710",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=exponential|t=10|rateQ64=912220825711290707|outsiderNet=949677112311871508688493|outsiderQuoteOut=903582458085752842|creatorGross=999083373736809197508878|creatorClaimedToken=49406261424937688820385|creatorQuoteOut=950548409948864894|creatorClaimedQuote=49451590051135105|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "10",
-   "rateQ64": "912220825711290707",
-   "outsiderNet": "949677112311871508688493",
-   "outsiderQuoteOut": "903582458085752842",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49406261424937688820385",
-   "creatorQuoteOut": "950548409948864894",
-   "creatorClaimedQuote": "49451590051135105",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=exponential|t=60|rateQ64=863355419786439717|outsiderNet=952323683133006189344938|outsiderQuoteOut=908623538675022176|creatorGross=999083373736809197508878|creatorClaimedToken=46759690603803008163940|creatorQuoteOut=953197408912020368|creatorClaimedQuote=46802591087979631|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "60",
-   "rateQ64": "863355419786439717",
-   "outsiderNet": "952323683133006189344938",
-   "outsiderQuoteOut": "908623538675022176",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "46759690603803008163940",
-   "creatorQuoteOut": "953197408912020368",
-   "creatorClaimedQuote": "46802591087979631",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=exponential|t=600|rateQ64=481957789608347955|outsiderNet=972980338289653834079583|outsiderQuoteOut=948450932783145306|creatorGross=999083373736809197508878|creatorClaimedToken=26103035447155363429295|creatorQuoteOut=973873015873015872|creatorClaimedQuote=26126984126984127|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "600",
-   "rateQ64": "481957789608347955",
-   "outsiderNet": "972980338289653834079583",
-   "outsiderQuoteOut": "948450932783145306",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "26103035447155363429295",
-   "creatorQuoteOut": "973873015873015872",
-   "creatorClaimedQuote": "26126984126984127",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=exponential|t=3600|rateQ64=55340232221128654|outsiderNet=996086123615598769962279|outsiderQuoteOut=994011681375567450|creatorGross=999083373736809197508878|creatorClaimedToken=2997250121210427546599|creatorQuoteOut=996999999999999999|creatorClaimedQuote=3000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "outsiderNet": "996086123615598769962279",
-   "outsiderQuoteOut": "994011681375567450",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "2997250121210427546599",
-   "creatorQuoteOut": "996999999999999999",
-   "creatorClaimedQuote": "3000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=linear|t=0|rateQ64=922337203685477580|outsiderNet=949129205049968737676762|outsiderQuoteOut=902540577159832435|creatorGross=999083373736809197508878|creatorClaimedToken=49954168686840459832116|creatorQuoteOut=949999999999999999|creatorClaimedQuote=50000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "0",
-   "rateQ64": "922337203685477580",
-   "outsiderNet": "949129205049968737676762",
-   "outsiderQuoteOut": "902540577159832435",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49954168686840459832116",
-   "creatorQuoteOut": "949999999999999999",
-   "creatorClaimedQuote": "50000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=linear|t=1|rateQ64=922096371193404150|outsiderNet=949142248638459190449577|outsiderQuoteOut=902565373405207087|creatorGross=999083373736809197508878|creatorClaimedToken=49941125098350007059301|creatorQuoteOut=950013055555555554|creatorClaimedQuote=49986944444444445|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "1",
-   "rateQ64": "922096371193404150",
-   "outsiderNet": "949142248638459190449577",
-   "outsiderQuoteOut": "902565373405207087",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49941125098350007059301",
-   "creatorQuoteOut": "950013055555555554",
-   "creatorClaimedQuote": "49986944444444445",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=linear|t=10|rateQ64=919928878764743278|outsiderNet=949259640934873265513230|outsiderQuoteOut=902788554928345447|creatorGross=999083373736809197508878|creatorClaimedToken=49823732801935931995648|creatorQuoteOut=950130555555555554|creatorClaimedQuote=49869444444444445|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "10",
-   "rateQ64": "919928878764743278",
-   "outsiderNet": "949259640934873265513230",
-   "outsiderQuoteOut": "902788554928345447",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49823732801935931995648",
-   "creatorQuoteOut": "950130555555555554",
-   "creatorClaimedQuote": "49869444444444445",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=linear|t=60|rateQ64=907887254161071765|outsiderNet=949911820359395904858051|outsiderQuoteOut=904028954262772923|creatorGross=999083373736809197508878|creatorClaimedToken=49171553377413292650827|creatorQuoteOut=950783333333333332|creatorClaimedQuote=49216666666666667|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "60",
-   "rateQ64": "907887254161071765",
-   "outsiderNet": "949911820359395904858051",
-   "outsiderQuoteOut": "904028954262772923",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "49171553377413292650827",
-   "creatorQuoteOut": "950783333333333332",
-   "creatorClaimedQuote": "49216666666666667",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=linear|t=600|rateQ64=777837708441419426|outsiderNet=956955358144240409706295|outsiderQuoteOut=917479480928502647|creatorGross=999083373736809197508878|creatorClaimedToken=42128015592568787802583|creatorQuoteOut=957833333333333332|creatorClaimedQuote=42166666666666667|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "600",
-   "rateQ64": "777837708441419426",
-   "outsiderNet": "956955358144240409706295",
-   "outsiderQuoteOut": "917479480928502647",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "42128015592568787802583",
-   "creatorQuoteOut": "957833333333333332",
-   "creatorClaimedQuote": "42166666666666667",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I5-F03-D3600|curve=linear|t=3600|rateQ64=55340232221128654|outsiderNet=996086123615598769962279|outsiderQuoteOut=994011681375567450|creatorGross=999083373736809197508878|creatorClaimedToken=2997250121210427546599|creatorQuoteOut=996999999999999999|creatorClaimedQuote=3000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "outsiderNet": "996086123615598769962279",
-   "outsiderQuoteOut": "994011681375567450",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "2997250121210427546599",
-   "creatorQuoteOut": "996999999999999999",
-   "creatorClaimedQuote": "3000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=exponential|t=0|rateQ64=9223372036854775808|outsiderNet=499541686868404598754439|outsiderQuoteOut=250112447606450510|creatorGross=999083373736809197508878|creatorClaimedToken=499541686868404598754439|creatorQuoteOut=499999999999999999|creatorClaimedQuote=500000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "0",
-   "rateQ64": "9223372036854775808",
-   "outsiderNet": "499541686868404598754439",
-   "outsiderQuoteOut": "250112447606450510",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "499541686868404598754439",
-   "creatorQuoteOut": "499999999999999999",
-   "creatorClaimedQuote": "500000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=exponential|t=1|rateQ64=9212618807418150336|outsiderNet=500124086271853865777694|outsiderQuoteOut=250695852040960736|creatorGross=999083373736809197508878|creatorClaimedToken=498959287464955331731184|creatorQuoteOut=500582933735821220|creatorClaimedQuote=499417066264178779|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "1",
-   "rateQ64": "9212618807418150336",
-   "outsiderNet": "500124086271853865777694",
-   "outsiderQuoteOut": "250695852040960736",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "498959287464955331731184",
-   "creatorQuoteOut": "500582933735821220",
-   "creatorClaimedQuote": "499417066264178779",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=exponential|t=10|rateQ64=9116396720829863564|outsiderNet=505335514722993474721713|outsiderQuoteOut=255946509477984426|creatorGross=999083373736809197508878|creatorClaimedToken=493747859013815722787165|creatorQuoteOut=505799143501826662|creatorClaimedQuote=494200856498173337|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "10",
-   "rateQ64": "9116396720829863564",
-   "outsiderNet": "505335514722993474721713",
-   "outsiderQuoteOut": "255946509477984426",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "493747859013815722787165",
-   "creatorQuoteOut": "505799143501826662",
-   "creatorClaimedQuote": "494200856498173337",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=exponential|t=60|rateQ64=8599671045411758411|outsiderNet=533321593406055949082843|outsiderQuoteOut=285073574272819179|creatorGross=999083373736809197508878|creatorClaimedToken=465761780330753248426035|creatorQuoteOut=533810898495194123|creatorClaimedQuote=466189101504805876|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "60",
-   "rateQ64": "8599671045411758411",
-   "outsiderNet": "533321593406055949082843",
-   "outsiderQuoteOut": "285073574272819179",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "465761780330753248426035",
-   "creatorQuoteOut": "533810898495194123",
-   "creatorClaimedQuote": "466189101504805876",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=exponential|t=600|rateQ64=4566593977358319996|outsiderNet=751754734105074660184953|outsiderQuoteOut=566298697865883902|creatorGross=999083373736809197508878|creatorClaimedToken=247328639631734537323925|creatorQuoteOut=752444444444444449|creatorClaimedQuote=247555555555555550|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "600",
-   "rateQ64": "4566593977358319996",
-   "outsiderNet": "751754734105074660184953",
-   "outsiderQuoteOut": "566298697865883902",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "247328639631734537323925",
-   "creatorQuoteOut": "752444444444444449",
-   "creatorClaimedQuote": "247555555555555550",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=exponential|t=3600|rateQ64=55340232221128654|outsiderNet=996086123615598769962279|outsiderQuoteOut=994011681375567450|creatorGross=999083373736809197508878|creatorClaimedToken=2997250121210427546599|creatorQuoteOut=996999999999999999|creatorClaimedQuote=3000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "outsiderNet": "996086123615598769962279",
-   "outsiderQuoteOut": "994011681375567450",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "2997250121210427546599",
-   "creatorQuoteOut": "996999999999999999",
-   "creatorClaimedQuote": "3000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=linear|t=0|rateQ64=9223372036854775808|outsiderNet=499541686868404598754439|outsiderQuoteOut=250112447606450510|creatorGross=999083373736809197508878|creatorClaimedToken=499541686868404598754439|creatorQuoteOut=499999999999999999|creatorClaimedQuote=500000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "0",
-   "rateQ64": "9223372036854775808",
-   "outsiderNet": "499541686868404598754439",
-   "outsiderQuoteOut": "250112447606450510",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "499541686868404598754439",
-   "creatorQuoteOut": "499999999999999999",
-   "creatorClaimedQuote": "500000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=linear|t=1|rateQ64=9220825361353488684|outsiderNet=499679615878612152679542|outsiderQuoteOut=250250553246832009|creatorGross=999083373736809197508878|creatorClaimedToken=499403757858197044829336|creatorQuoteOut=500138055555555555|creatorClaimedQuote=499861944444444444|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "1",
-   "rateQ64": "9220825361353488684",
-   "outsiderNet": "499679615878612152679542",
-   "outsiderQuoteOut": "250250553246832009",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "499403757858197044829336",
-   "creatorQuoteOut": "500138055555555555",
-   "creatorClaimedQuote": "499861944444444444",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=linear|t=10|rateQ64=9197905281841904566|outsiderNet=500920976970480138113790|outsiderQuoteOut=251495218576310473|creatorGross=999083373736809197508878|creatorClaimedToken=498162396766329059395088|creatorQuoteOut=501380555555555555|creatorClaimedQuote=498619444444444444|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "10",
-   "rateQ64": "9197905281841904566",
-   "outsiderNet": "500920976970480138113790",
-   "outsiderQuoteOut": "251495218576310473",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "498162396766329059395088",
-   "creatorQuoteOut": "501380555555555555",
-   "creatorClaimedQuote": "498619444444444444",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=linear|t=60|rateQ64=9070571506777548356|outsiderNet=507817427480857834910545|outsiderQuoteOut=258466225208339190|creatorGross=999083373736809197508878|creatorClaimedToken=491265946255951362598333|creatorQuoteOut=508283333333333332|creatorClaimedQuote=491716666666666667|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "60",
-   "rateQ64": "9070571506777548356",
-   "outsiderNet": "507817427480857834910545",
-   "outsiderQuoteOut": "258466225208339190",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "491265946255951362598333",
-   "creatorQuoteOut": "508283333333333332",
-   "creatorClaimedQuote": "491716666666666667",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=linear|t=600|rateQ64=7695366736082501283|outsiderNet=582299092992936960586305|outsiderQuoteOut=339822163921822551|creatorGross=999083373736809197508878|creatorClaimedToken=416784280743872236922573|creatorQuoteOut=582833333333333332|creatorClaimedQuote=417166666666666667|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "600",
-   "rateQ64": "7695366736082501283",
-   "outsiderNet": "582299092992936960586305",
-   "outsiderQuoteOut": "339822163921822551",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "416784280743872236922573",
-   "creatorQuoteOut": "582833333333333332",
-   "creatorClaimedQuote": "417166666666666667",
-   "creatorQuoteTotal": "999999999999999999"
-  },
-  {
-   "raw": "VEC|creatorAccess|pair=I50-F03-D3600|curve=linear|t=3600|rateQ64=55340232221128654|outsiderNet=996086123615598769962279|outsiderQuoteOut=994011681375567450|creatorGross=999083373736809197508878|creatorClaimedToken=2997250121210427546599|creatorQuoteOut=996999999999999999|creatorClaimedQuote=3000000000000000|creatorQuoteTotal=999999999999999999",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "outsiderNet": "996086123615598769962279",
-   "outsiderQuoteOut": "994011681375567450",
-   "creatorGross": "999083373736809197508878",
-   "creatorClaimedToken": "2997250121210427546599",
-   "creatorQuoteOut": "996999999999999999",
-   "creatorClaimedQuote": "3000000000000000",
-   "creatorQuoteTotal": "999999999999999999"
-  }
- ],
- "roundTrip": [
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=linear|t=0|rateQ64=922337203685477580|quoteIn=1000000000000000000|net=949129205049968737676762|quoteOut=902540577159832435|loss=97459422840167565|creatorTokenFee=49954168686840459832116|creatorQuoteFee=47502135639991181",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "0",
-   "rateQ64": "922337203685477580",
-   "quoteIn": "1000000000000000000",
-   "net": "949129205049968737676762",
-   "quoteOut": "902540577159832435",
-   "loss": "97459422840167565",
-   "creatorTokenFee": "49954168686840459832116",
-   "creatorQuoteFee": "47502135639991181"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=exponential|t=0|rateQ64=922337203685477580|quoteIn=1000000000000000000|net=949129205049968737676762|quoteOut=902540577159832435|loss=97459422840167565|creatorTokenFee=49954168686840459832116|creatorQuoteFee=47502135639991181",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "0",
-   "rateQ64": "922337203685477580",
-   "quoteIn": "1000000000000000000",
-   "net": "949129205049968737676762",
-   "quoteOut": "902540577159832435",
-   "loss": "97459422840167565",
-   "creatorTokenFee": "49954168686840459832116",
-   "creatorQuoteFee": "47502135639991181"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=linear|t=1|rateQ64=922096371193404150|quoteIn=1000000000000000000|net=949142248638459190449577|quoteOut=902565373405207087|loss=97434626594792913|creatorTokenFee=49941125098350007059301|creatorQuoteFee=47490384383719649",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "1",
-   "rateQ64": "922096371193404150",
-   "quoteIn": "1000000000000000000",
-   "net": "949142248638459190449577",
-   "quoteOut": "902565373405207087",
-   "loss": "97434626594792913",
-   "creatorTokenFee": "49941125098350007059301",
-   "creatorQuoteFee": "47490384383719649"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=exponential|t=1|rateQ64=921320298688452636|quoteIn=1000000000000000000|net=949184281049892511417660|quoteOut=902645280571021660|loss=97354719428978340|creatorTokenFee=49899092686916686091218|creatorQuoteFee=47452514140669595",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "1",
-   "rateQ64": "921320298688452636",
-   "quoteIn": "1000000000000000000",
-   "net": "949184281049892511417660",
-   "quoteOut": "902645280571021660",
-   "loss": "97354719428978340",
-   "creatorTokenFee": "49899092686916686091218",
-   "creatorQuoteFee": "47452514140669595"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=linear|t=10|rateQ64=919928878764743278|quoteIn=1000000000000000000|net=949259640934873265513230|quoteOut=902788554928345447|loss=97211445071654553|creatorTokenFee=49823732801935931995648|creatorQuoteFee=47384607748726304",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "10",
-   "rateQ64": "919928878764743278",
-   "quoteIn": "1000000000000000000",
-   "net": "949259640934873265513230",
-   "quoteOut": "902788554928345447",
-   "loss": "97211445071654553",
-   "creatorTokenFee": "49823732801935931995648",
-   "creatorQuoteFee": "47384607748726304"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=exponential|t=10|rateQ64=912220825711290707|quoteIn=1000000000000000000|net=949677112311871508688493|quoteOut=903582458085752842|loss=96417541914247158|creatorTokenFee=49406261424937688820385|creatorQuoteFee=47008220546134403",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "10",
-   "rateQ64": "912220825711290707",
-   "quoteIn": "1000000000000000000",
-   "net": "949677112311871508688493",
-   "quoteOut": "903582458085752842",
-   "loss": "96417541914247158",
-   "creatorTokenFee": "49406261424937688820385",
-   "creatorQuoteFee": "47008220546134403"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=linear|t=60|rateQ64=907887254161071765|quoteIn=1000000000000000000|net=949911820359395904858051|quoteOut=904028954262772923|loss=95971045737227077|creatorTokenFee=49171553377413292650827|creatorQuoteFee=46796457341104150",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "60",
-   "rateQ64": "907887254161071765",
-   "quoteIn": "1000000000000000000",
-   "net": "949911820359395904858051",
-   "quoteOut": "904028954262772923",
-   "loss": "95971045737227077",
-   "creatorTokenFee": "49171553377413292650827",
-   "creatorQuoteFee": "46796457341104150"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=exponential|t=60|rateQ64=863355419786439717|quoteIn=1000000000000000000|net=952323683133006189344938|quoteOut=908623538675022176|loss=91376461324977824|creatorTokenFee=46759690603803008163940|creatorQuoteFee=44613986080867778",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "60",
-   "rateQ64": "863355419786439717",
-   "quoteIn": "1000000000000000000",
-   "net": "952323683133006189344938",
-   "quoteOut": "908623538675022176",
-   "loss": "91376461324977824",
-   "creatorTokenFee": "46759690603803008163940",
-   "creatorQuoteFee": "44613986080867778"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=linear|t=600|rateQ64=777837708441419426|quoteIn=1000000000000000000|net=956955358144240409706295|quoteOut=917479480928502647|loss=82520519071497353|creatorTokenFee=42128015592568787802583|creatorQuoteFee=40390170293180994",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "600",
-   "rateQ64": "777837708441419426",
-   "quoteIn": "1000000000000000000",
-   "net": "956955358144240409706295",
-   "quoteOut": "917479480928502647",
-   "loss": "82520519071497353",
-   "creatorTokenFee": "42128015592568787802583",
-   "creatorQuoteFee": "40390170293180994"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=exponential|t=600|rateQ64=481957789608347955|quoteIn=1000000000000000000|net=972980338289653834079583|quoteOut=948450932783145306|loss=51549067216854694|creatorTokenFee=26103035447155363429295|creatorQuoteFee=25444962600010711",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "600",
-   "rateQ64": "481957789608347955",
-   "quoteIn": "1000000000000000000",
-   "net": "972980338289653834079583",
-   "quoteOut": "948450932783145306",
-   "loss": "51549067216854694",
-   "creatorTokenFee": "26103035447155363429295",
-   "creatorQuoteFee": "25444962600010711"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=linear|t=3600|rateQ64=55340232221128654|quoteIn=1000000000000000000|net=996086123615598769962279|quoteOut=994011681375567450|loss=5988318624432550|creatorTokenFee=2997250121210427546599|creatorQuoteFee=2991008068331698",
-   "pair": "I5-F03-D3600",
-   "curve": "linear",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "quoteIn": "1000000000000000000",
-   "net": "996086123615598769962279",
-   "quoteOut": "994011681375567450",
-   "loss": "5988318624432550",
-   "creatorTokenFee": "2997250121210427546599",
-   "creatorQuoteFee": "2991008068331698"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-D3600|curve=exponential|t=3600|rateQ64=55340232221128654|quoteIn=1000000000000000000|net=996086123615598769962279|quoteOut=994011681375567450|loss=5988318624432550|creatorTokenFee=2997250121210427546599|creatorQuoteFee=2991008068331698",
-   "pair": "I5-F03-D3600",
-   "curve": "exponential",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "quoteIn": "1000000000000000000",
-   "net": "996086123615598769962279",
-   "quoteOut": "994011681375567450",
-   "loss": "5988318624432550",
-   "creatorTokenFee": "2997250121210427546599",
-   "creatorQuoteFee": "2991008068331698"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=linear|t=0|rateQ64=9223372036854775808|quoteIn=1000000000000000000|net=499541686868404598754439|quoteOut=250112447606450510|loss=749887552393549490|creatorTokenFee=499541686868404598754439|creatorQuoteFee=250112447606450511",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "0",
-   "rateQ64": "9223372036854775808",
-   "quoteIn": "1000000000000000000",
-   "net": "499541686868404598754439",
-   "quoteOut": "250112447606450510",
-   "loss": "749887552393549490",
-   "creatorTokenFee": "499541686868404598754439",
-   "creatorQuoteFee": "250112447606450511"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=exponential|t=0|rateQ64=9223372036854775808|quoteIn=1000000000000000000|net=499541686868404598754439|quoteOut=250112447606450510|loss=749887552393549490|creatorTokenFee=499541686868404598754439|creatorQuoteFee=250112447606450511",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "0",
-   "rateQ64": "9223372036854775808",
-   "quoteIn": "1000000000000000000",
-   "net": "499541686868404598754439",
-   "quoteOut": "250112447606450510",
-   "loss": "749887552393549490",
-   "creatorTokenFee": "499541686868404598754439",
-   "creatorQuoteFee": "250112447606450511"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=linear|t=1|rateQ64=9220825361353488684|quoteIn=1000000000000000000|net=499679615878612152679542|quoteOut=250250553246832009|loss=749749446753167991|creatorTokenFee=499403757858197044829336|creatorQuoteFee=250112397476548943",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "1",
-   "rateQ64": "9220825361353488684",
-   "quoteIn": "1000000000000000000",
-   "net": "499679615878612152679542",
-   "quoteOut": "250250553246832009",
-   "loss": "749749446753167991",
-   "creatorTokenFee": "499403757858197044829336",
-   "creatorQuoteFee": "250112397476548943"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=exponential|t=1|rateQ64=9212618807418150336|quoteIn=1000000000000000000|net=500124086271853865777694|quoteOut=250695852040960736|loss=749304147959039264|creatorTokenFee=498959287464955331731184|creatorQuoteFee=250111976484139437",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "1",
-   "rateQ64": "9212618807418150336",
-   "quoteIn": "1000000000000000000",
-   "net": "500124086271853865777694",
-   "quoteOut": "250695852040960736",
-   "loss": "749304147959039264",
-   "creatorTokenFee": "498959287464955331731184",
-   "creatorQuoteFee": "250111976484139437"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=linear|t=10|rateQ64=9197905281841904566|quoteIn=1000000000000000000|net=500920976970480138113790|quoteOut=251495218576310473|loss=748504781423689527|creatorTokenFee=498162396766329059395088|creatorQuoteFee=250110230198305007",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "10",
-   "rateQ64": "9197905281841904566",
-   "quoteIn": "1000000000000000000",
-   "net": "500920976970480138113790",
-   "quoteOut": "251495218576310473",
-   "loss": "748504781423689527",
-   "creatorTokenFee": "498162396766329059395088",
-   "creatorQuoteFee": "250110230198305007"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=exponential|t=10|rateQ64=9116396720829863564|quoteIn=1000000000000000000|net=505335514722993474721713|quoteOut=255946509477984426|loss=744053490522015574|creatorTokenFee=493747859013815722787165|creatorQuoteFee=250077497810711372",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "10",
-   "rateQ64": "9116396720829863564",
-   "quoteIn": "1000000000000000000",
-   "net": "505335514722993474721713",
-   "quoteOut": "255946509477984426",
-   "loss": "744053490522015574",
-   "creatorTokenFee": "493747859013815722787165",
-   "creatorQuoteFee": "250077497810711372"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=linear|t=60|rateQ64=9070571506777548356|quoteIn=1000000000000000000|net=507817427480857834910545|quoteOut=258466225208339190|loss=741533774791660810|creatorTokenFee=491265946255951362598333|creatorQuoteFee=250041939939063880",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "60",
-   "rateQ64": "9070571506777548356",
-   "quoteIn": "1000000000000000000",
-   "net": "507817427480857834910545",
-   "quoteOut": "258466225208339190",
-   "loss": "741533774791660810",
-   "creatorTokenFee": "491265946255951362598333",
-   "creatorQuoteFee": "250041939939063880"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=exponential|t=60|rateQ64=8599671045411758411|quoteIn=1000000000000000000|net=533321593406055949082843|quoteOut=285073574272819179|loss=714926425727180821|creatorTokenFee=465761780330753248426035|creatorQuoteFee=248961184246420166",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "60",
-   "rateQ64": "8599671045411758411",
-   "quoteIn": "1000000000000000000",
-   "net": "533321593406055949082843",
-   "quoteOut": "285073574272819179",
-   "loss": "714926425727180821",
-   "creatorTokenFee": "465761780330753248426035",
-   "creatorQuoteFee": "248961184246420166"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=linear|t=600|rateQ64=7695366736082501283|quoteIn=1000000000000000000|net=582299092992936960586305|quoteOut=339822163921822551|loss=660177836078177449|creatorTokenFee=416784280743872236922573|creatorQuoteFee=243229875978359122",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "600",
-   "rateQ64": "7695366736082501283",
-   "quoteIn": "1000000000000000000",
-   "net": "582299092992936960586305",
-   "quoteOut": "339822163921822551",
-   "loss": "660177836078177449",
-   "creatorTokenFee": "416784280743872236922573",
-   "creatorQuoteFee": "243229875978359122"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=exponential|t=600|rateQ64=4566593977358319996|quoteIn=1000000000000000000|net=751754734105074660184953|quoteOut=566298697865883902|loss=433701302134116098|creatorTokenFee=247328639631734537323925|creatorQuoteFee=186313275080506393",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "600",
-   "rateQ64": "4566593977358319996",
-   "quoteIn": "1000000000000000000",
-   "net": "751754734105074660184953",
-   "quoteOut": "566298697865883902",
-   "loss": "433701302134116098",
-   "creatorTokenFee": "247328639631734537323925",
-   "creatorQuoteFee": "186313275080506393"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=linear|t=3600|rateQ64=55340232221128654|quoteIn=1000000000000000000|net=996086123615598769962279|quoteOut=994011681375567450|loss=5988318624432550|creatorTokenFee=2997250121210427546599|creatorQuoteFee=2991008068331698",
-   "pair": "I50-F03-D3600",
-   "curve": "linear",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "quoteIn": "1000000000000000000",
-   "net": "996086123615598769962279",
-   "quoteOut": "994011681375567450",
-   "loss": "5988318624432550",
-   "creatorTokenFee": "2997250121210427546599",
-   "creatorQuoteFee": "2991008068331698"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I50-F03-D3600|curve=exponential|t=3600|rateQ64=55340232221128654|quoteIn=1000000000000000000|net=996086123615598769962279|quoteOut=994011681375567450|loss=5988318624432550|creatorTokenFee=2997250121210427546599|creatorQuoteFee=2991008068331698",
-   "pair": "I50-F03-D3600",
-   "curve": "exponential",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "quoteIn": "1000000000000000000",
-   "net": "996086123615598769962279",
-   "quoteOut": "994011681375567450",
-   "loss": "5988318624432550",
-   "creatorTokenFee": "2997250121210427546599",
-   "creatorQuoteFee": "2991008068331698"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=linear|t=0|rateQ64=922337203685477580|quoteIn=1000000000000000000|net=949129205049968737676762|quoteOut=902540577159832435|loss=97459422840167565|creatorTokenFee=49954168686840459832116|creatorQuoteFee=47502135639991181",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "linear",
-   "t": "0",
-   "rateQ64": "922337203685477580",
-   "quoteIn": "1000000000000000000",
-   "net": "949129205049968737676762",
-   "quoteOut": "902540577159832435",
-   "loss": "97459422840167565",
-   "creatorTokenFee": "49954168686840459832116",
-   "creatorQuoteFee": "47502135639991181"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=exponential|t=0|rateQ64=922337203685477580|quoteIn=1000000000000000000|net=949129205049968737676762|quoteOut=902540577159832435|loss=97459422840167565|creatorTokenFee=49954168686840459832116|creatorQuoteFee=47502135639991181",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "exponential",
-   "t": "0",
-   "rateQ64": "922337203685477580",
-   "quoteIn": "1000000000000000000",
-   "net": "949129205049968737676762",
-   "quoteOut": "902540577159832435",
-   "loss": "97459422840167565",
-   "creatorTokenFee": "49954168686840459832116",
-   "creatorQuoteFee": "47502135639991181"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=linear|t=1|rateQ64=922096371193404150|quoteIn=1000000000000000000|net=949142248638459190449577|quoteOut=902565373405207087|loss=97434626594792913|creatorTokenFee=49941125098350007059301|creatorQuoteFee=47490384383719649",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "linear",
-   "t": "1",
-   "rateQ64": "922096371193404150",
-   "quoteIn": "1000000000000000000",
-   "net": "949142248638459190449577",
-   "quoteOut": "902565373405207087",
-   "loss": "97434626594792913",
-   "creatorTokenFee": "49941125098350007059301",
-   "creatorQuoteFee": "47490384383719649"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=exponential|t=1|rateQ64=922003403234100432|quoteIn=1000000000000000000|net=949147283822015673037296|quoteOut=902574945528294456|loss=97425054471705544|creatorTokenFee=49936089914793524471582|creatorQuoteFee=47485847984781798",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "exponential",
-   "t": "1",
-   "rateQ64": "922003403234100432",
-   "quoteIn": "1000000000000000000",
-   "net": "949147283822015673037296",
-   "quoteOut": "902574945528294456",
-   "loss": "97425054471705544",
-   "creatorTokenFee": "49936089914793524471582",
-   "creatorQuoteFee": "47485847984781798"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=linear|t=10|rateQ64=919928878764743278|quoteIn=1000000000000000000|net=949259640934873265513230|quoteOut=902788554928345447|loss=97211445071654553|creatorTokenFee=49823732801935931995648|creatorQuoteFee=47384607748726304",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "linear",
-   "t": "10",
-   "rateQ64": "919928878764743278",
-   "quoteIn": "1000000000000000000",
-   "net": "949259640934873265513230",
-   "quoteOut": "902788554928345447",
-   "loss": "97211445071654553",
-   "creatorTokenFee": "49823732801935931995648",
-   "creatorQuoteFee": "47384607748726304"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=exponential|t=10|rateQ64=919004976445628917|quoteIn=1000000000000000000|net=949309679870866289016541|quoteOut=902883695324957387|loss=97116304675042613|creatorTokenFee=49773693865942908492337|creatorQuoteFee=47339511647841645",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "exponential",
-   "t": "10",
-   "rateQ64": "919004976445628917",
-   "quoteIn": "1000000000000000000",
-   "net": "949309679870866289016541",
-   "quoteOut": "902883695324957387",
-   "loss": "97116304675042613",
-   "creatorTokenFee": "49773693865942908492337",
-   "creatorQuoteFee": "47339511647841645"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=linear|t=60|rateQ64=907887254161071765|quoteIn=1000000000000000000|net=949911820359395904858051|quoteOut=904028954262772923|loss=95971045737227077|creatorTokenFee=49171553377413292650827|creatorQuoteFee=46796457341104150",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "linear",
-   "t": "60",
-   "rateQ64": "907887254161071765",
-   "quoteIn": "1000000000000000000",
-   "net": "949911820359395904858051",
-   "quoteOut": "904028954262772923",
-   "loss": "95971045737227077",
-   "creatorTokenFee": "49171553377413292650827",
-   "creatorQuoteFee": "46796457341104150"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=exponential|t=60|rateQ64=902534965489818689|quoteIn=1000000000000000000|net=950201702552238269904779|quoteOut=904580562910813745|loss=95419437089186255|creatorTokenFee=48881671184570927604099|creatorQuoteFee=46534761532622679",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "exponential",
-   "t": "60",
-   "rateQ64": "902534965489818689",
-   "quoteIn": "1000000000000000000",
-   "net": "950201702552238269904779",
-   "quoteOut": "904580562910813745",
-   "loss": "95419437089186255",
-   "creatorTokenFee": "48881671184570927604099",
-   "creatorQuoteFee": "46534761532622679"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=linear|t=600|rateQ64=777837708441419426|quoteIn=1000000000000000000|net=956955358144240409706295|quoteOut=917479480928502647|loss=82520519071497353|creatorTokenFee=42128015592568787802583|creatorQuoteFee=40390170293180994",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "linear",
-   "t": "600",
-   "rateQ64": "777837708441419426",
-   "quoteIn": "1000000000000000000",
-   "net": "956955358144240409706295",
-   "quoteOut": "917479480928502647",
-   "loss": "82520519071497353",
-   "creatorTokenFee": "42128015592568787802583",
-   "creatorQuoteFee": "40390170293180994"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=exponential|t=600|rateQ64=743476184499003893|quoteIn=1000000000000000000|net=958816392651465675926119|quoteOut=921049936066766537|loss=78950063933233463|creatorTokenFee=40266981085343521582759|creatorQuoteFee=38680920182952042",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "exponential",
-   "t": "600",
-   "rateQ64": "743476184499003893",
-   "quoteIn": "1000000000000000000",
-   "net": "958816392651465675926119",
-   "quoteOut": "921049936066766537",
-   "loss": "78950063933233463",
-   "creatorTokenFee": "40266981085343521582759",
-   "creatorQuoteFee": "38680920182952042"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=linear|t=3600|rateQ64=55340232221128654|quoteIn=1000000000000000000|net=996086123615598769962279|quoteOut=994011681375567450|loss=5988318624432550|creatorTokenFee=2997250121210427546599|creatorQuoteFee=2991008068331698",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "linear",
-   "t": "3600",
-   "rateQ64": "55340232221128654",
-   "quoteIn": "1000000000000000000",
-   "net": "996086123615598769962279",
-   "quoteOut": "994011681375567450",
-   "loss": "5988318624432550",
-   "creatorTokenFee": "2997250121210427546599",
-   "creatorQuoteFee": "2991008068331698"
-  },
-  {
-   "raw": "VEC|roundTrip|pair=I5-F03-halfLife1800|curve=exponential|t=3600|rateQ64=272089475087215860|quoteIn=1000000000000000000|net=984346893974191263271990|quoteOut=970730437154175482|loss=29269562845824518|creatorTokenFee=14736479762617934236888|creatorQuoteFee=14532630244124930",
-   "pair": "I5-F03-halfLife1800",
-   "curve": "exponential",
-   "t": "3600",
-   "rateQ64": "272089475087215860",
-   "quoteIn": "1000000000000000000",
-   "net": "984346893974191263271990",
-   "quoteOut": "970730437154175482",
-   "loss": "29269562845824518",
-   "creatorTokenFee": "14736479762617934236888",
-   "creatorQuoteFee": "14532630244124930"
-  }
- ],
- "exactOutBounds": [
-  {
-   "raw": "VEC|exactOutBounds|rate=99|wholeSupply|calcQuote=10000312219037842827258|paid=1000031221903784278172009",
-   "rate": "99",
-   "tags": [
-    "wholeSupply"
-   ],
-   "calcQuote": "10000312219037842827258",
-   "paid": "1000031221903784278172009"
-  },
-  {
-   "raw": "VEC|exactOutBounds|rate=max|signed|lastValidTokenOut=9147280263567190862134907|calcQuote=9223372036854775807|paid=170141183460469231713240559642174554112|firstInvalidTokenOut=9147280263567190862134908|revert=Overflow",
-   "rate": "max",
-   "tags": [
-    "signed"
-   ],
-   "lastValidTokenOut": "9147280263567190862134907",
-   "calcQuote": "9223372036854775807",
-   "paid": "170141183460469231713240559642174554112",
-   "firstInvalidTokenOut": "9147280263567190862134908",
-   "revert": "Overflow"
-  },
-  {
-   "raw": "VEC|exactOutBounds|rate=max|helper|lastSignedOverflowTokenOut=18145179163502972233172123|firstHelperOverflowTokenOut=18145179163502972233172124|revert=AmountBeforeFeeOverflow",
-   "rate": "max",
-   "tags": [
-    "helper"
-   ],
-   "lastSignedOverflowTokenOut": "18145179163502972233172123",
-   "firstHelperOverflowTokenOut": "18145179163502972233172124",
-   "revert": "AmountBeforeFeeOverflow"
-  }
- ],
+ "source": "EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a test/extensions/ZeroSeedLaunchFeeCurve.t.sol",
  "highRate": [
   {
    "raw": "VEC|highRate|rate=50|order=t0|dec=18/18|oneUnit|gross=999970|fee=499985|net=499985",
    "rate": "50",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999970",
    "fee": "499985",
    "net": "499985"
@@ -1000,9 +15,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809197507080",
    "fee": "499541686868404598753540",
@@ -1013,9 +25,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "499541686868404598753540",
    "calcQuote": "500675293119462555",
    "fee": "500675293119462555",
@@ -1026,9 +35,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "999083373736809198007065",
    "grossQuote": "1000900188332363576",
    "fee": "500450094166181788",
@@ -1040,9 +46,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "45",
    "quote": "2"
   },
@@ -1051,9 +54,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999970",
    "fee": "749978",
    "net": "249992"
@@ -1063,9 +63,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809197507080",
    "fee": "749312530302606898130310",
@@ -1076,9 +73,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "249770843434202299376770",
    "calcQuote": "250281308811141195",
    "fee": "750843926433423585",
@@ -1089,9 +83,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "499541686868404599003532",
    "grossQuote": "500450018162742508",
    "fee": "375337513622056881",
@@ -1103,9 +94,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "88",
    "quote": "1"
   },
@@ -1114,9 +102,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999970",
    "fee": "899973",
    "net": "99997"
@@ -1126,9 +111,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809197507080",
    "fee": "899175036363128277734708",
@@ -1139,9 +121,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "99908337373680919772372",
    "calcQuote": "100099007332736869",
    "fee": "900891065994631821",
@@ -1152,9 +131,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "199816674747361839644741",
    "grossQuote": "200179998752713458",
    "fee": "180161998877442113",
@@ -1166,9 +142,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "52",
    "quote": "2"
   },
@@ -1177,9 +150,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999970",
    "fee": "989971",
    "net": "9999"
@@ -1189,9 +159,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809197507080",
    "fee": "989092539999441105486515",
@@ -1202,9 +169,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "9990833737368092020565",
    "calcQuote": "10009089936939140",
    "fee": "990899903756974856",
@@ -1215,9 +179,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "19981667474736184051129",
    "grossQuote": "20017999714752121",
    "fee": "19817819717604600",
@@ -1229,9 +190,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "75",
    "quote": "1"
   },
@@ -1240,9 +198,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999970",
    "fee": "999970",
    "net": "0"
@@ -1252,9 +207,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809197507080",
    "fee": "999083373736809197452920",
@@ -1265,9 +217,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "54160",
    "calcQuote": "1",
    "fee": "18446744073709551615",
@@ -1278,9 +227,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "108320",
    "grossQuote": "0",
    "fee": "0",
@@ -1292,9 +238,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "71",
    "quote": "2"
   },
@@ -1303,9 +246,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999947603316768497",
    "fee": "499973801658384249",
    "net": "499973801658384248"
@@ -1315,9 +255,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999048504527750217302727",
    "fee": "499524252263875108651364",
@@ -1328,9 +265,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "499524252263875108651363",
    "calcQuote": "500676",
    "fee": "500676",
@@ -1341,9 +275,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "999049004501551875686974",
    "grossQuote": "1000900",
    "fee": "500450",
@@ -1355,9 +286,6 @@
    "rate": "50",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "70351824",
    "quote": "2"
   },
@@ -1366,9 +294,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999947603316768497",
    "fee": "749960702487576373",
    "net": "249986900829192124"
@@ -1378,9 +303,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999048504527750217302727",
    "fee": "749286378395812662977046",
@@ -1391,9 +313,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "249762126131937554325681",
    "calcQuote": "250282",
    "fee": "750846",
@@ -1404,9 +323,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "499524502250775937843486",
    "grossQuote": "500450",
    "fee": "375338",
@@ -1418,9 +334,6 @@
    "rate": "75",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "69273805",
    "quote": "1"
   },
@@ -1429,9 +342,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999947603316768497",
    "fee": "899952842985091648",
    "net": "99994760331676849"
@@ -1441,9 +351,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999048504527750217302727",
    "fee": "899143654074975195550791",
@@ -1454,9 +361,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "99904850452775021751936",
    "calcQuote": "100100",
    "fee": "900900",
@@ -1467,9 +371,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "199809800900310375180721",
    "grossQuote": "200180",
    "fee": "180162",
@@ -1481,9 +382,6 @@
    "rate": "90",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "54800283",
    "quote": "2"
   },
@@ -1492,9 +390,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999947603316768497",
    "fee": "989948127283600812",
    "net": "9999476033167685"
@@ -1504,9 +399,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999048504527750217302727",
    "fee": "989058019482472715084207",
@@ -1517,9 +409,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "9990485045277502218520",
    "calcQuote": "10010",
    "fee": "990990",
@@ -1530,9 +419,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "19980980090031037604725",
    "grossQuote": "20018",
    "fee": "19818",
@@ -1544,9 +430,6 @@
    "rate": "99",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "27571787",
    "quote": "1"
   },
@@ -1555,9 +438,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "999947603316768497",
    "fee": "999947603316768497",
    "net": "0"
@@ -1567,9 +447,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999048504527750217302727",
    "fee": "999048504527750217248569",
@@ -1580,9 +457,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "54158",
    "calcQuote": "1",
    "fee": "18446744073709551615",
@@ -1593,9 +467,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "108316",
    "grossQuote": "0",
    "fee": "0",
@@ -1607,9 +478,6 @@
    "rate": "max",
    "order": "t0",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "56048550",
    "quote": "1"
   },
@@ -1618,9 +486,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "722806",
    "fee": "361403",
    "net": "361403"
@@ -1630,9 +495,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809196527088",
    "fee": "499541686868404598263544",
@@ -1643,9 +505,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "499541686868404598263544",
    "calcQuote": "500675293119462554",
    "fee": "500675293119462554",
@@ -1656,9 +515,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "999083373736809196888491",
    "grossQuote": "1000900188332363575",
    "fee": "500450094166181788",
@@ -1670,9 +526,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "240937",
    "quote": "2"
   },
@@ -1681,9 +534,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "722806",
    "fee": "542105",
    "net": "180701"
@@ -1693,9 +543,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809196527088",
    "fee": "749312530302606897395316",
@@ -1706,9 +553,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "249770843434202299131772",
    "calcQuote": "250281308811141195",
    "fee": "750843926433423585",
@@ -1719,9 +563,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "499541686868404598444245",
    "grossQuote": "500450018162742507",
    "fee": "375337513622056881",
@@ -1733,9 +574,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "240937",
    "quote": "3"
   },
@@ -1744,9 +582,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "722806",
    "fee": "650526",
    "net": "72280"
@@ -1756,9 +591,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809196527088",
    "fee": "899175036363128276852716",
@@ -1769,9 +601,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "99908337373680919674372",
    "calcQuote": "100099007332736869",
    "fee": "900891065994631821",
@@ -1782,9 +611,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "199816674747361839421024",
    "grossQuote": "200179998752713458",
    "fee": "180161998877442113",
@@ -1796,9 +622,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "214413",
    "quote": "2"
   },
@@ -1807,9 +630,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "722806",
    "fee": "715578",
    "net": "7228"
@@ -1819,9 +639,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809196527088",
    "fee": "989092539999441104516323",
@@ -1832,9 +649,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "9990833737368092010765",
    "calcQuote": "10009089936939140",
    "fee": "990899903756974856",
@@ -1845,9 +659,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "19981667474736184028758",
    "grossQuote": "20017999714752121",
    "fee": "19817819717604600",
@@ -1859,9 +670,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "209332",
    "quote": "2"
   },
@@ -1870,9 +678,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "722806",
    "fee": "722806",
    "net": "0"
@@ -1882,9 +687,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000000000000000",
    "gross": "999083373736809196527088",
    "fee": "999083373736809196472928",
@@ -1895,9 +697,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "54160",
    "calcQuote": "1",
    "fee": "18446744073709551615",
@@ -1908,9 +707,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "108320",
    "grossQuote": "0",
    "fee": "0",
@@ -1922,9 +718,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
    "token": "295098",
    "quote": "3"
   },
@@ -1933,9 +726,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "641450041727074607",
    "fee": "320725020863537304",
    "net": "320725020863537303"
@@ -1945,9 +735,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999047507021926419318928",
    "fee": "499523753510963209659464",
@@ -1958,9 +745,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "499523753510963209659464",
    "calcQuote": "500675",
    "fee": "500675",
@@ -1971,9 +755,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "999047827746947282856231",
    "grossQuote": "1000899",
    "fee": "500450",
@@ -1985,9 +766,6 @@
    "rate": "50",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "1",
    "quote": "3"
   },
@@ -1996,9 +774,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "641450041727074607",
    "fee": "481087531295305956",
    "net": "160362510431768651"
@@ -2008,9 +783,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999047507021926419318928",
    "fee": "749285630266444814489196",
@@ -2021,9 +793,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "249761876755481604829732",
    "calcQuote": "250282",
    "fee": "750846",
@@ -2034,9 +803,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "499523913873473641428115",
    "grossQuote": "500449",
    "fee": "375337",
@@ -2048,9 +814,6 @@
    "rate": "75",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "1",
    "quote": "3"
   },
@@ -2059,9 +822,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "641450041727074607",
    "fee": "577305037554367147",
    "net": "64145004172707460"
@@ -2071,9 +831,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999047507021926419318928",
    "fee": "899142756319733777365372",
@@ -2084,9 +841,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "99904750702192641953556",
    "calcQuote": "100099",
    "fee": "900891",
@@ -2097,9 +851,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "199809565549389456614572",
    "grossQuote": "200179",
    "fee": "180162",
@@ -2111,9 +862,6 @@
    "rate": "90",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "1",
    "quote": "3"
   },
@@ -2122,9 +870,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "641450041727074607",
    "fee": "635035541309803861",
    "net": "6414500417270746"
@@ -2134,9 +879,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999047507021926419318928",
    "fee": "989057031951707155080246",
@@ -2147,9 +889,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "9990475070219264238682",
    "calcQuote": "10010",
    "fee": "990990",
@@ -2160,9 +899,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "19980956554938945748110",
    "grossQuote": "20017",
    "fee": "19817",
@@ -2174,9 +910,6 @@
    "rate": "99",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "1",
    "quote": "4"
   },
@@ -2185,9 +918,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "oneUnit"
-   ],
    "gross": "641450041727074607",
    "fee": "641450041727074607",
    "net": "0"
@@ -2197,9 +927,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
    "quoteIn": "1000000",
    "gross": "999047507021926419318928",
    "fee": "999047507021926419264770",
@@ -2210,9 +937,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
    "tokenOut": "54158",
    "calcQuote": "1",
    "fee": "18446744073709551615",
@@ -2223,9 +947,6 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "sellAll"
-   ],
    "tokenIn": "108316",
    "grossQuote": "0",
    "fee": "0",
@@ -2237,685 +958,8 @@
    "rate": "max",
    "order": "t1",
    "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
    "token": "1",
    "quote": "3"
-  }
- ],
- "routerMax": [
-  {
-   "raw": "VEC|routerMax|order=t0|oneWei|paid=1|got=0|creatorTokenFee=999970",
-   "order": "t0",
-   "tags": [
-    "oneWei"
-   ],
-   "paid": "1",
-   "got": "0",
-   "creatorTokenFee": "999970"
-  },
-  {
-   "raw": "VEC|routerMax|order=t0|unit|paid=1000000000000000000|got=54160",
-   "order": "t0",
-   "tags": [
-    "unit"
-   ],
-   "paid": "1000000000000000000",
-   "got": "54160"
-  },
-  {
-   "raw": "VEC|routerMax|order=t0|partial|paid=9998312219037842827257|got=54101885",
-   "order": "t0",
-   "tags": [
-    "partial"
-   ],
-   "paid": "9998312219037842827257",
-   "got": "54101885"
-  },
-  {
-   "raw": "VEC|routerMax|order=t1|oneWei|paid=1|got=0|creatorTokenFee=722806",
-   "order": "t1",
-   "tags": [
-    "oneWei"
-   ],
-   "paid": "1",
-   "got": "0",
-   "creatorTokenFee": "722806"
-  },
-  {
-   "raw": "VEC|routerMax|order=t1|unit|paid=1000000000000000000|got=54160",
-   "order": "t1",
-   "tags": [
-    "unit"
-   ],
-   "paid": "1000000000000000000",
-   "got": "54160"
-  },
-  {
-   "raw": "VEC|routerMax|order=t1|partial|paid=9998312219037842827268|got=54101885",
-   "order": "t1",
-   "tags": [
-    "partial"
-   ],
-   "paid": "9998312219037842827268",
-   "got": "54101885"
-  }
- ],
- "bounds": [
-  {
-   "raw": "VEC|bounds|rate=5|helperLastValid=323268248574891540304963272319147442175|signedLastValid=161634124287445770152481636159573721087",
-   "rate": "5",
-   "helperLastValid": "323268248574891540304963272319147442175",
-   "signedLastValid": "161634124287445770152481636159573721087"
-  },
-  {
-   "raw": "VEC|bounds|rate=50|helperLastValid=170141183460469231731687303715884105727|signedLastValid=85070591730234615865843651857942052863",
-   "rate": "50",
-   "helperLastValid": "170141183460469231731687303715884105727",
-   "signedLastValid": "85070591730234615865843651857942052863"
-  },
-  {
-   "raw": "VEC|bounds|rate=75|helperLastValid=85070591730234615865843651857942052863|signedLastValid=42535295865117307932921825928971026431",
-   "rate": "75",
-   "helperLastValid": "85070591730234615865843651857942052863",
-   "signedLastValid": "42535295865117307932921825928971026431"
-  },
-  {
-   "raw": "VEC|bounds|rate=90|helperLastValid=34028236692093846353716158372660641791|signedLastValid=17014118346046923176858079186330320895",
-   "rate": "90",
-   "helperLastValid": "34028236692093846353716158372660641791",
-   "signedLastValid": "17014118346046923176858079186330320895"
-  },
-  {
-   "raw": "VEC|bounds|rate=99|helperLastValid=3402823669209384650129011096233705471|signedLastValid=1701411834604692325064505548116852735",
-   "rate": "99",
-   "helperLastValid": "3402823669209384650129011096233705471",
-   "signedLastValid": "1701411834604692325064505548116852735"
-  },
-  {
-   "raw": "VEC|bounds|rate=max|helperLastValid=18446744073709551615|signedLastValid=9223372036854775807",
-   "rate": "max",
-   "helperLastValid": "18446744073709551615",
-   "signedLastValid": "9223372036854775807"
-  }
- ],
- "create": [
-  {
-   "raw": "VEC|create|order=t0|dec=18/18|ask=-13815500|upper=-9210300|requested=1000000000000000000000000000|installed=999999999999999999999999210|liquidity=1111119116089565312897934|tickLower=-13815500|tickUpper=-9210300|initialTick=-13815500|withdrawable=999999999999999999999999209",
-   "order": "t0",
-   "dec": "18/18",
-   "ask": "-13815500",
-   "upper": "-9210300",
-   "requested": "1000000000000000000000000000",
-   "installed": "999999999999999999999999210",
-   "liquidity": "1111119116089565312897934",
-   "tickLower": "-13815500",
-   "tickUpper": "-9210300",
-   "initialTick": "-13815500",
-   "withdrawable": "999999999999999999999999209"
-  },
-  {
-   "raw": "VEC|create|order=t0|dec=18/6|ask=-41446500|upper=-36841300|requested=1000000000000000000000000000|installed=999999999999999999302656786|liquidity=1111138522742929536|tickLower=-41446500|tickUpper=-36841300|initialTick=-41446500|withdrawable=999999999999999999302656785",
-   "order": "t0",
-   "dec": "18/6",
-   "ask": "-41446500",
-   "upper": "-36841300",
-   "requested": "1000000000000000000000000000",
-   "installed": "999999999999999999302656786",
-   "liquidity": "1111138522742929536",
-   "tickLower": "-41446500",
-   "tickUpper": "-36841300",
-   "initialTick": "-41446500",
-   "withdrawable": "999999999999999999302656785"
-  },
-  {
-   "raw": "VEC|create|order=t1|dec=18/18|ask=-13815500|upper=-9210300|requested=1000000000000000000000000000|installed=999999999999999999999999422|liquidity=1111119116089565312898036|tickLower=9210300|tickUpper=13815500|initialTick=13815500|withdrawable=999999999999999999999999421",
-   "order": "t1",
-   "dec": "18/18",
-   "ask": "-13815500",
-   "upper": "-9210300",
-   "requested": "1000000000000000000000000000",
-   "installed": "999999999999999999999999422",
-   "liquidity": "1111119116089565312898036",
-   "tickLower": "9210300",
-   "tickUpper": "13815500",
-   "initialTick": "13815500",
-   "withdrawable": "999999999999999999999999421"
-  },
-  {
-   "raw": "VEC|create|order=t1|dec=18/6|ask=-41446500|upper=-36841300|requested=1000000000000000000000000000|installed=999999999999999999282285400|liquidity=1111138522742929536|tickLower=36841300|tickUpper=41446500|initialTick=41446500|withdrawable=999999999999999999282285399",
-   "order": "t1",
-   "dec": "18/6",
-   "ask": "-41446500",
-   "upper": "-36841300",
-   "requested": "1000000000000000000000000000",
-   "installed": "999999999999999999282285400",
-   "liquidity": "1111138522742929536",
-   "tickLower": "36841300",
-   "tickUpper": "41446500",
-   "initialTick": "41446500",
-   "withdrawable": "999999999999999999282285399"
-  }
- ],
- "recapture": [
-  {
-   "raw": "VEC|recapture|t0|quoteIn=10e18|netOfFee=9415099531871718329641155|afterClaim=9910631086180756136011948",
-   "tags": [
-    "t0"
-   ],
-   "quoteIn": "10e18",
-   "netOfFee": "9415099531871718329641155",
-   "afterClaim": "9910631086180756136011948"
-  }
- ],
- "fee": [
-  {
-   "raw": "VEC|fee|duration=3600|t=start+-1|feeQ64=922337203685477580",
-   "duration": "3600",
-   "t": "start+-1",
-   "feeQ64": "922337203685477580"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+0|feeQ64=922337203685477580",
-   "duration": "3600",
-   "t": "start+0",
-   "feeQ64": "922337203685477580"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+1|feeQ64=921320298688452636",
-   "duration": "3600",
-   "t": "start+1",
-   "feeQ64": "921320298688452636"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+1800|feeQ64=151673229050500749",
-   "duration": "3600",
-   "t": "start+1800",
-   "feeQ64": "151673229050500749"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+3599|feeQ64=55356139728168999",
-   "duration": "3600",
-   "t": "start+3599",
-   "feeQ64": "55356139728168999"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+3600|feeQ64=55340232221128654",
-   "duration": "3600",
-   "t": "start+3600",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+3601|feeQ64=55340232221128654",
-   "duration": "3600",
-   "t": "start+3601",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+315360000|feeQ64=55340232221128654",
-   "duration": "3600",
-   "t": "start+315360000",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=3600|t=start+18446744073709550615|feeQ64=55340232221128654",
-   "duration": "3600",
-   "t": "start+18446744073709550615",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+-1|feeQ64=922337203685477580",
-   "duration": "600",
-   "t": "start+-1",
-   "feeQ64": "922337203685477580"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+0|feeQ64=922337203685477580",
-   "duration": "600",
-   "t": "start+0",
-   "feeQ64": "922337203685477580"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+1|feeQ64=916253358061131122",
-   "duration": "600",
-   "t": "start+1",
-   "feeQ64": "916253358061131122"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+300|feeQ64=151673229050500755",
-   "duration": "600",
-   "t": "start+300",
-   "feeQ64": "151673229050500755"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+599|feeQ64=55435953504208715",
-   "duration": "600",
-   "t": "start+599",
-   "feeQ64": "55435953504208715"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+600|feeQ64=55340232221128654",
-   "duration": "600",
-   "t": "start+600",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+601|feeQ64=55340232221128654",
-   "duration": "600",
-   "t": "start+601",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+315360000|feeQ64=55340232221128654",
-   "duration": "600",
-   "t": "start+315360000",
-   "feeQ64": "55340232221128654"
-  },
-  {
-   "raw": "VEC|fee|duration=600|t=start+18446744073709550615|feeQ64=55340232221128654",
-   "duration": "600",
-   "t": "start+18446744073709550615",
-   "feeQ64": "55340232221128654"
-  }
- ],
- "gas": [
-  {
-   "raw": "VEC|gas|order=t0|create=1311122|firstBuy=102513|secondBuy=34283|sell=34267|claim=66472",
-   "order": "t0",
-   "create": "1311122",
-   "firstBuy": "102513",
-   "secondBuy": "34283",
-   "sell": "34267",
-   "claim": "66472"
-  },
-  {
-   "raw": "VEC|gas|order=t1|create=1270477|firstBuy=105819|secondBuy=34407|sell=34616|claim=66472",
-   "order": "t1",
-   "create": "1270477",
-   "firstBuy": "105819",
-   "secondBuy": "34407",
-   "sell": "34616",
-   "claim": "66472"
-  }
- ],
- "router": [
-  {
-   "raw": "VEC|router|order=t0|paid=1000000000000000000|got=949129205049968737676762",
-   "order": "t0",
-   "paid": "1000000000000000000",
-   "got": "949129205049968737676762"
-  },
-  {
-   "raw": "VEC|router|order=t1|paid=1000000000000000000|got=949129205049968737430728",
-   "order": "t1",
-   "paid": "1000000000000000000",
-   "got": "949129205049968737430728"
-  }
- ],
- "dust": [
-  {
-   "raw": "VEC|dust|t0|quoteIn=1|net=949971|fee=49999",
-   "tags": [
-    "t0"
-   ],
-   "quoteIn": "1",
-   "net": "949971",
-   "fee": "49999"
-  }
- ],
- "trade": [
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|buyExactIn|quoteIn=1000000000000000000|gross=999083373736809197508878|fee=49954168686840459832116|net=949129205049968737676762",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
-   "quoteIn": "1000000000000000000",
-   "gross": "999083373736809197508878",
-   "fee": "49954168686840459832116",
-   "net": "949129205049968737676762"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|buyExactOut|tokenOut=949129205049968737676762|calcQuote=951668650101832044|fee=50087823689570108|paid=1001756473791402152",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
-   "tokenOut": "949129205049968737676762",
-   "calcQuote": "951668650101832044",
-   "fee": "50087823689570108",
-   "paid": "1001756473791402152"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|sellExactIn|tokenIn=949129205049968737676762|quoteOut=904085217596740440",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "sellExactIn"
-   ],
-   "tokenIn": "949129205049968737676762",
-   "quoteOut": "904085217596740440"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|reverse|leftHeld=0|principalQuote=49957287200176383|principalToken=999950045831313159540166992",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "reverse"
-   ],
-   "leftHeld": "0",
-   "principalQuote": "49957287200176383",
-   "principalToken": "999950045831313159540166992"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|dust|token=102|quote=2",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
-   "token": "102",
-   "quote": "2"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|exhaust|requested=999950046831313159540166992|got=999950045831313159540166903|principalToken=0|principalQuote=10000312219037842827169",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "exhaust"
-   ],
-   "requested": "999950046831313159540166992",
-   "got": "999950045831313159540166903",
-   "principalToken": "0",
-   "principalQuote": "10000312219037842827169"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|upperResidue|positionTokenBefore=999950045831313159540166992|delivered=999950045831313159540166903|residueToken=89",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "upperResidue"
-   ],
-   "positionTokenBefore": "999950045831313159540166992",
-   "delivered": "999950045831313159540166903",
-   "residueToken": "89"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/18|dustExhausted|token=191|quote=90",
-   "order": "t0",
-   "dec": "18/18",
-   "tags": [
-    "dustExhausted"
-   ],
-   "token": "191",
-   "quote": "90"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|buyExactIn|quoteIn=1000000|gross=999048506325137632526244|fee=49952425316256881582986|net=949096081008880750943258",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
-   "quoteIn": "1000000",
-   "gross": "999048506325137632526244",
-   "fee": "49952425316256881582986",
-   "net": "949096081008880750943258"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|buyExactOut|tokenOut=949096081008880750943258|calcQuote=951669|fee=50088|paid=1001757",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
-   "tokenOut": "949096081008880750943258",
-   "calcQuote": "951669",
-   "fee": "50088",
-   "paid": "1001757"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|sellExactIn|tokenIn=949096081008880750943258|quoteOut=904084",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "sellExactIn"
-   ],
-   "tokenIn": "949096081008880750943258",
-   "quoteOut": "904084"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|reverse|leftHeld=0|principalQuote=49957|principalToken=999950047574683742326595783",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "reverse"
-   ],
-   "leftHeld": "0",
-   "principalQuote": "49957",
-   "principalToken": "999950047574683742326595783"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|dust|token=94478017|quote=2",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
-   "token": "94478017",
-   "quote": "2"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|exhaust|requested=999950048574683742326595783|got=999950047574683742326595694|principalToken=0|principalQuote=10000661550",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "exhaust"
-   ],
-   "requested": "999950048574683742326595783",
-   "got": "999950047574683742326595694",
-   "principalToken": "0",
-   "principalQuote": "10000661550"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|upperResidue|positionTokenBefore=999950047574683742326595783|delivered=999950047574683742326595694|residueToken=89",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "upperResidue"
-   ],
-   "positionTokenBefore": "999950047574683742326595783",
-   "delivered": "999950047574683742326595694",
-   "residueToken": "89"
-  },
-  {
-   "raw": "VEC|trade|order=t0|dec=18/6|dustExhausted|token=94478106|quote=100",
-   "order": "t0",
-   "dec": "18/6",
-   "tags": [
-    "dustExhausted"
-   ],
-   "token": "94478106",
-   "quote": "100"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|buyExactIn|quoteIn=1000000000000000000|gross=999083373736809197249895|fee=49954168686840459819167|net=949129205049968737430728",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "buyExactIn"
-   ],
-   "quoteIn": "1000000000000000000",
-   "gross": "999083373736809197249895",
-   "fee": "49954168686840459819167",
-   "net": "949129205049968737430728"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|buyExactOut|tokenOut=949129205049968737430728|calcQuote=951668650101832044|fee=50087823689570108|paid=1001756473791402152",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "buyExactOut"
-   ],
-   "tokenOut": "949129205049968737430728",
-   "calcQuote": "951668650101832044",
-   "fee": "50087823689570108",
-   "paid": "1001756473791402152"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|sellExactIn|tokenIn=949129205049968737430728|quoteOut=904085217596740439",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "sellExactIn"
-   ],
-   "tokenIn": "949129205049968737430728",
-   "quoteOut": "904085217596740439"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|reverse|leftHeld=0|principalQuote=49957287200176384|principalToken=999950045831313159539751430",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "reverse"
-   ],
-   "leftHeld": "0",
-   "principalQuote": "49957287200176384",
-   "principalToken": "999950045831313159539751430"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|dust|token=428825|quote=3",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "dust"
-   ],
-   "token": "428825",
-   "quote": "3"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|exhaust|requested=999950046831313159539751430|got=999950045831313159539751336|principalToken=0|principalQuote=10000312219037842827184",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "exhaust"
-   ],
-   "requested": "999950046831313159539751430",
-   "got": "999950045831313159539751336",
-   "principalToken": "0",
-   "principalQuote": "10000312219037842827184"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|upperResidue|positionTokenBefore=999950045831313159539751430|delivered=999950045831313159539751336|residueToken=94",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "upperResidue"
-   ],
-   "positionTokenBefore": "999950045831313159539751430",
-   "delivered": "999950045831313159539751336",
-   "residueToken": "94"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/18|dustExhausted|token=428919|quote=86",
-   "order": "t1",
-   "dec": "18/18",
-   "tags": [
-    "dustExhausted"
-   ],
-   "token": "428919",
-   "quote": "86"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|buyExactIn|quoteIn=1000000|gross=999048148471968146393535|fee=49952407423598407276350|net=949095741048369739117185",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "buyExactIn"
-   ],
-   "quoteIn": "1000000",
-   "gross": "999048148471968146393535",
-   "fee": "49952407423598407276350",
-   "net": "949095741048369739117185"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|buyExactOut|tokenOut=949095741048369739117185|calcQuote=951669|fee=50088|paid=1001757",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "buyExactOut"
-   ],
-   "tokenOut": "949095741048369739117185",
-   "calcQuote": "951669",
-   "fee": "50088",
-   "paid": "1001757"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|sellExactIn|tokenIn=949095741048369739117185|quoteOut=904084",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "sellExactIn"
-   ],
-   "tokenIn": "949095741048369739117185",
-   "quoteOut": "904084"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|reverse|leftHeld=0|principalQuote=49957|principalToken=999950047592576400875009049",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "reverse"
-   ],
-   "leftHeld": "0",
-   "principalQuote": "49957",
-   "principalToken": "999950047592576400875009049"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|dust|token=1|quote=2",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "dust"
-   ],
-   "token": "1",
-   "quote": "2"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|exhaust|requested=999950048592576400875009049|got=999950047592576400875008959|principalToken=0|principalQuote=10000661550",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "exhaust"
-   ],
-   "requested": "999950048592576400875009049",
-   "got": "999950047592576400875008959",
-   "principalToken": "0",
-   "principalQuote": "10000661550"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|upperResidue|positionTokenBefore=999950047592576400875009049|delivered=999950047592576400875008959|residueToken=90",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "upperResidue"
-   ],
-   "positionTokenBefore": "999950047592576400875009049",
-   "delivered": "999950047592576400875008959",
-   "residueToken": "90"
-  },
-  {
-   "raw": "VEC|trade|order=t1|dec=18/6|dustExhausted|token=91|quote=90",
-   "order": "t1",
-   "dec": "18/6",
-   "tags": [
-    "dustExhausted"
-   ],
-   "token": "91",
-   "quote": "90"
   }
  ]
 }

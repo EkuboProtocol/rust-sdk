@@ -3,20 +3,27 @@
 //! A zero-seed launch mints a fixed supply and installs all of it, in one transaction, as a single
 //! token-only concentrated position from the ask price up to an upper bound, with no quote seed.
 //! The pool fee is 0. The pool, the position and its liquidity never change after creation: only
-//! swaps forwarded through the extension move the price, and every swap's price limit is clamped
-//! to the position bounds. Time only lowers the creator fee, from `initial_fee` at
-//! `trading_start` along an exponential with per-second factor `decay_factor`, rescaled to reach
-//! `final_fee` exactly after `fee_duration`. The creator fee is charged on the calculated side of
-//! the actual fill and saved separately from the position.
+//! swaps forwarded through the extension (`Core.forward` with `abi.encode(PoolKey,
+//! SwapParameters)`) move the price, and every swap's price limit is clamped to the position
+//! bounds. Time only lowers the creator fee, from `initial_fee` at `trading_start` along the fixed
+//! 600 second half-life exponential of [`decay_q128`], rescaled to reach `final_fee` exactly after
+//! `fee_duration`. The creator fee is charged on the calculated side of the actual fill and saved
+//! separately from the position.
+//!
+//! Every launch of one extension deployment uses the quote token fixed in its constructor: native
+//! ETH (`address(0)`, always token0, so the launch token is token1) or one ERC-20. Launches are
+//! created through `ZeroSeedLaunchPeriphery`, which is the launch controller, records the
+//! transferable owner and namespaces the token salt by owner; see
+//! [`periphery_launch_token_address`].
 //!
 //! The model mirrors `ZeroSeedLaunch.handleForwardData` and the `Core` swap loop step by step,
 //! including the tick bitmap word boundaries a swap with `skipAhead` 0 stops at, so it reproduces
 //! the contract's deltas, creator fee and post-swap `Core` state exactly. The installation
 //! functions mirror `previewInstallation` and the binding check of `create`.
 //!
-//! Target: `EkuboProtocol/evm-contracts@b1cbb1c1a9a00de62072a63a8f4aab4d97065573` (draft
-//! exponential creator-fee decay), against the Q0.64-fee `Core` of that commit's base. Not the
-//! Q0.16 `next` Core.
+//! Target: `EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a` (forward-only
+//! extension, native ETH quote, fixed-base fee table, separate periphery), against the Q0.64-fee
+//! `Core` of that commit. Not the Q0.16 `next` Core.
 
 use core::str::FromStr;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -25,6 +32,7 @@ use ruint::aliases::U256;
 use thiserror::Error;
 
 use crate::{
+    alloy_primitives::{B256, Keccak256},
     chain::{
         Chain,
         evm::{EVM_MAX_TICK_SPACING, Evm},
@@ -49,50 +57,104 @@ use crate::{
 
 type Address = <Evm as Chain>::Address;
 
+/// How an instance's constructor quote token settles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZeroSeedLaunchQuoteKind {
+    /// Native ETH, `address(0)`: always token0, no code, no `decimals()` and no approvals. There is
+    /// no quote runtime to bind.
+    Native,
+    /// An ERC-20 quote, bound to the keccak of its executed runtime.
+    Erc20 { quote_runtime: U256 },
+}
+
 /// Offline observation from the LOCAL harness, never a live provider attestation.
 /// Callers must bind these values to the same executed instance/block as the pool state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ZeroSeedLaunchInstance {
     pub chain_id: u64,
     pub extension: Address,
-    pub core: Address,
-    pub constructor_quote: Address,
-    pub quote_token_getter: Address,
+    /// Keccak of the extension's executed runtime (immutables `CORE` and `QUOTE` filled in).
     pub extension_runtime: U256,
+    /// `ZeroSeedLaunchPeriphery` deployed for this extension: the launch controller.
+    pub periphery: Address,
+    /// Keccak of the periphery's executed runtime (immutables `CORE` and `LAUNCH` filled in).
+    pub periphery_runtime: U256,
+    pub core: Address,
     pub core_runtime: U256,
-    pub quote_runtime: U256,
+    /// The extension's constructor quote argument.
+    pub constructor_quote: Address,
+    /// The extension's `quoteToken()` as read.
+    pub quote_token_getter: Address,
+    pub quote_kind: ZeroSeedLaunchQuoteKind,
 }
 
+/// One supported LOCAL instance: the constructor-executed fixtures of the indexer's anvil chain
+/// (chain 31337, no fork) at the target commit.
+struct LocalPin {
+    quote: &'static str,
+    quote_runtime: Option<&'static str>,
+    extension: &'static str,
+    extension_runtime: &'static str,
+    periphery: &'static str,
+    periphery_runtime: &'static str,
+}
+
+const LOCAL_CHAIN_ID: u64 = 31337;
+const LOCAL_CORE: &str = "0x00000000000014aa86c5d3c41765bb24e11bd701";
+const LOCAL_CORE_RUNTIME: &str =
+    "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
+const LOCAL_PINS: [LocalPin; 2] = [
+    LocalPin {
+        quote: "0x0000000000000000000000000000000000000000",
+        quote_runtime: None,
+        extension: "0x5114703a4cf4256f0acb68f992c861d8c4d1b173",
+        extension_runtime: "0x846786a63ba1a2c976f748fdc94b8cbc8f76dc64f07452333d36ff564f281bf7",
+        periphery: "0xb27e16c3d01850191c1e027f7a3372cd2e1fb324",
+        periphery_runtime: "0x57d0ee27c634ac08d08b60bf8e6c2f185c7e9444613ccfde5ac9bbb5e3f84f2a",
+    },
+    LocalPin {
+        quote: "0xffffffffffffffffffffffffffffffffffffffff",
+        quote_runtime: Some("0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"),
+        extension: "0x519435a42752da78e395999218d0ecc4fdcbcf4b",
+        extension_runtime: "0x56e32aeac03464c3babd754fc21e0594c42d82db9d9c0cc3dd1ce1ec20273750",
+        periphery: "0x94e1b338def908449e6ea7c7d254630b45d27562",
+        periphery_runtime: "0xb78ea649f2e1817c851f7417a604d1565a346c6bec022abc821e3f1110739ac8",
+    },
+];
+
 impl ZeroSeedLaunchInstance {
-    /// Fail closed against the two constructor-executed WETH LOCAL manifest entries.
-    /// There are NO approved live entries. Synthetic six-decimal arithmetic is not supported.
+    /// The quote token of every launch of this instance.
+    #[must_use]
+    pub fn quote(&self) -> Address {
+        self.constructor_quote
+    }
+
+    /// Fail closed against the two constructor-executed LOCAL manifest entries: the native ETH
+    /// instance and the WETH instance. There are NO approved live entries. Synthetic six-decimal
+    /// arithmetic is not supported.
     pub fn validate(&self) -> Result<(), ZeroSeedLaunchParameterError> {
         let addr = |s| Address::from_str(s).expect("static manifest address");
         let hash = |s| U256::from_str(s).expect("static manifest hash");
-        let high = addr("0xffffffffffffffffffffffffffffffffffffffff");
-        let low = addr("0x0000000000000000000000000000000000010000");
-        let (extension, runtime) = if self.constructor_quote == high {
-            (
-                addr("0x5142e167b32877ca3cf3060010a0a1418e3ef1b9"),
-                hash("0x8fb360bb48006819049e6b9a53679ccaa01264e61465ce8e8cd2e8b185d3a8d1"),
-            )
-        } else if self.constructor_quote == low {
-            (
-                addr("0x51174b5db84c81a906ec55445070fd84c8c8e655"),
-                hash("0xa951db07ad354ea45df3ff1b720b69c7cc588c4feb44aaea79cd79639da61f6e"),
-            )
-        } else {
-            return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
+        let pin = LOCAL_PINS
+            .iter()
+            .find(|pin| addr(pin.quote) == self.constructor_quote)
+            .ok_or(ZeroSeedLaunchParameterError::UnsupportedInstance)?;
+        let quote_kind_matches = match (self.quote_kind, pin.quote_runtime) {
+            (ZeroSeedLaunchQuoteKind::Native, None) => self.constructor_quote.is_zero(),
+            (ZeroSeedLaunchQuoteKind::Erc20 { quote_runtime }, Some(pinned)) => {
+                !self.constructor_quote.is_zero() && quote_runtime == hash(pinned)
+            }
+            _ => false,
         };
-        if self.chain_id != 31337
-            || self.extension != extension
-            || self.core != addr("0x00000000000014aa86c5d3c41765bb24e11bd701")
+        if self.chain_id != LOCAL_CHAIN_ID
+            || self.extension != addr(pin.extension)
+            || self.extension_runtime != hash(pin.extension_runtime)
+            || self.periphery != addr(pin.periphery)
+            || self.periphery_runtime != hash(pin.periphery_runtime)
+            || self.core != addr(LOCAL_CORE)
+            || self.core_runtime != hash(LOCAL_CORE_RUNTIME)
             || self.quote_token_getter != self.constructor_quote
-            || self.extension_runtime != runtime
-            || self.core_runtime
-                != hash("0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a")
-            || self.quote_runtime
-                != hash("0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c")
+            || !quote_kind_matches
         {
             return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
         }
@@ -105,8 +167,13 @@ impl ZeroSeedLaunchInstance {
 #[derive(Clone, Copy, Debug)]
 pub struct ZeroSeedLaunchLocalPreview<'a> {
     pub instance: &'a ZeroSeedLaunchInstance,
+    /// The account that calls `periphery.create`, and so the initial launch owner.
+    pub owner: Address,
+    /// `LaunchParameters.salt` as passed to the periphery, before owner namespacing.
+    pub salt: B256,
     pub name: &'a str,
     pub symbol: &'a str,
+    pub decimals: u8,
     /// Observed code presence at the predicted token address (same local snapshot).
     pub predicted_token_has_code: bool,
     pub build_time: u64,
@@ -114,6 +181,20 @@ pub struct ZeroSeedLaunchLocalPreview<'a> {
 }
 
 impl ZeroSeedLaunchLocalPreview<'_> {
+    /// The launch token address `periphery.create` deploys for this owner, salt and metadata.
+    #[must_use]
+    pub fn predicted_token(&self) -> Address {
+        periphery_launch_token_address(
+            self.instance.extension,
+            self.instance.periphery,
+            self.owner,
+            self.salt,
+            self.name,
+            self.symbol,
+            self.decimals,
+        )
+    }
+
     /// Re-run at build, use and owner review with fresh `now`; never rewrite signed start.
     pub fn validate(
         &self,
@@ -122,14 +203,18 @@ impl ZeroSeedLaunchLocalPreview<'_> {
     ) -> Result<(), ZeroSeedLaunchParameterError> {
         type E = ZeroSeedLaunchParameterError;
         self.instance.validate()?;
-        if parameters.quote_token != self.instance.constructor_quote {
-            return Err(E::UnsupportedQuoteToken);
-        }
         if self.name.len() > 31 || self.symbol.len() > 31 {
             return Err(E::MetadataTooLong);
         }
         if self.predicted_token_has_code {
             return Err(E::LaunchTokenExists);
+        }
+        // The launch token is token1 exactly when the quote sorts below it; a native quote always
+        // does.
+        if parameters.range.launch_token_is_token1
+            != (self.instance.constructor_quote < self.predicted_token())
+        {
+            return Err(E::TokenOrderMismatch);
         }
         let min_start = self.build_time.checked_add(300).ok_or(E::Overflow)?;
         let max_start = self.build_time.checked_add(86400).ok_or(E::Overflow)?;
@@ -171,7 +256,9 @@ pub fn check_launch_binding(
     check_launch_binding_math(parameters, liquidity, now)
 }
 
-/// Mirrors all five contract sink refusals. Atomic full two-asset claim, not a per-side claim.
+/// Mirrors the six `InvalidRecipient` refusals of `ZeroSeedLaunchPeriphery.claimFees`: zero,
+/// Core, the extension, the periphery, token0 and token1. For a native quote the zero address is
+/// also token0. Atomic full two-asset claim, not a per-side claim.
 pub fn validate_claim_recipient(
     instance: &ZeroSeedLaunchInstance,
     key: &ZeroSeedLaunchPoolKey,
@@ -186,12 +273,141 @@ pub fn validate_claim_recipient(
     if recipient.is_zero()
         || recipient == instance.core
         || recipient == instance.extension
+        || recipient == instance.periphery
         || recipient == key.token0
         || recipient == key.token1
     {
         return Err(ZeroSeedLaunchParameterError::InvalidRecipient);
     }
     Ok(())
+}
+
+/// Creation code of `MintableERC20` at the target, without constructor arguments.
+pub static MINTABLE_ERC20_CREATION_CODE: [u8; 4419] =
+    decode_hex(include_str!("zero_seed_launch/MintableERC20.creation.hex"));
+
+/// Keccak of [`MINTABLE_ERC20_CREATION_CODE`].
+pub const MINTABLE_ERC20_CREATION_CODE_KECCAK: &str =
+    "0x25da7fd323fdbf874dde8aaef1bce445ec035022d8518cb3046f65a0427a2f52";
+
+const fn decode_hex<const N: usize>(hex: &str) -> [u8; N] {
+    const fn nibble(c: u8) -> u8 {
+        match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => c - b'a' + 10,
+            b'A'..=b'F' => c - b'A' + 10,
+            _ => panic!("invalid hex digit"),
+        }
+    }
+    let bytes = hex.as_bytes();
+    assert!(bytes.len() == 2 * N || (bytes.len() == 2 * N + 1 && bytes[2 * N] == b'\n'));
+    let mut out = [0u8; N];
+    let mut i = 0;
+    while i < N {
+        out[i] = (nibble(bytes[2 * i]) << 4) | nibble(bytes[2 * i + 1]);
+        i += 1;
+    }
+    out
+}
+
+fn address_word(address: Address) -> [u8; 32] {
+    let mut word = [0u8; 32];
+    word[12..].copy_from_slice(address.as_slice());
+    word
+}
+
+fn usize_word(value: usize) -> [u8; 32] {
+    let mut word = [0u8; 32];
+    word[24..].copy_from_slice(&(value as u64).to_be_bytes());
+    word
+}
+
+/// `keccak256(abi.encode(address, bytes32))`.
+fn keccak_address_salt(address: Address, salt: B256) -> B256 {
+    let mut hasher = Keccak256::new();
+    hasher.update(address_word(address));
+    hasher.update(salt.as_slice());
+    hasher.finalize()
+}
+
+/// The salt the periphery passes to the extension for `owner`: `keccak256(abi.encode(owner,
+/// user_salt))`.
+#[must_use]
+pub fn periphery_launch_salt(owner: Address, user_salt: B256) -> B256 {
+    keccak_address_salt(owner, user_salt)
+}
+
+/// The CREATE2 salt of a launch token: `keccak256(abi.encode(controller, salt))`, with `salt` the
+/// extension-level `LaunchParameters.salt` (for the periphery, [`periphery_launch_salt`]).
+#[must_use]
+pub fn extension_token_salt(controller: Address, salt: B256) -> B256 {
+    keccak_address_salt(controller, salt)
+}
+
+/// `keccak256(MintableERC20.creationCode ++ abi.encode(extension, name, symbol, decimals))`.
+#[must_use]
+pub fn launch_token_init_code_hash(
+    extension: Address,
+    name: &str,
+    symbol: &str,
+    decimals: u8,
+) -> B256 {
+    let padded = |len: usize| len.div_ceil(32) * 32;
+    let mut hasher = Keccak256::new();
+    hasher.update(&MINTABLE_ERC20_CREATION_CODE[..]);
+    hasher.update(address_word(extension));
+    hasher.update(usize_word(4 * 32));
+    hasher.update(usize_word(4 * 32 + 32 + padded(name.len())));
+    let mut decimals_word = [0u8; 32];
+    decimals_word[31] = decimals;
+    hasher.update(decimals_word);
+    for text in [name, symbol] {
+        hasher.update(usize_word(text.len()));
+        hasher.update(text.as_bytes());
+        hasher.update(&[0u8; 32][..padded(text.len()) - text.len()]);
+    }
+    hasher.finalize()
+}
+
+/// The launch token `extension` deploys for a creation forwarded by `controller` with the
+/// extension-level `salt`: `CREATE2(extension, extension_token_salt(controller, salt),
+/// launch_token_init_code_hash(..))`.
+#[must_use]
+pub fn launch_token_address(
+    extension: Address,
+    controller: Address,
+    salt: B256,
+    name: &str,
+    symbol: &str,
+    decimals: u8,
+) -> Address {
+    let mut hasher = Keccak256::new();
+    hasher.update([0xff]);
+    hasher.update(extension.as_slice());
+    hasher.update(extension_token_salt(controller, salt).as_slice());
+    hasher.update(launch_token_init_code_hash(extension, name, symbol, decimals).as_slice());
+    Address::from_slice(&hasher.finalize()[12..])
+}
+
+/// The launch token `periphery.create` deploys when `owner` calls it with `user_salt`.
+#[must_use]
+pub fn periphery_launch_token_address(
+    extension: Address,
+    periphery: Address,
+    owner: Address,
+    user_salt: B256,
+    name: &str,
+    symbol: &str,
+    decimals: u8,
+) -> Address {
+    launch_token_address(
+        extension,
+        periphery,
+        periphery_launch_salt(owner, user_salt),
+        name,
+        symbol,
+        decimals,
+    )
 }
 
 /// Highest creator fee rate the contract accepts, Q0.64: `floor(2**64 * 99 / 100)`, 99%.
@@ -209,16 +425,15 @@ const TWO_POW_128: U256 = U256::from_limbs([0, 0, 1, 0]);
 
 // Gas estimates fitted to the in-test gas of the forwarded swap frame (test locker
 // `forwardSwap`, token settlement included) of the parity vectors generated at
-// `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`: worst error
-// 40% on non-cold fills. Unchanged for the exponential schedule of `b1cbb1c1`: the contract
-// measures +2,947 to +3,150 gas per swap strictly inside the fee window (two `powQ64`
-// evaluations and a division) and within +132 at the endpoints; against the regenerated
-// parity vectors the estimate's error on interior fills is -27% to +18% (mean -3%), and the
-// worst non-cold error, 39.3%, is on an endpoint fill. They exclude the 21,000 transaction base, calldata, the router and any account
-// abstraction overhead. A swap that writes a zero storage slot, such as the first creator fee after
-// a claim or the first launch tokens a holder receives, costs about 20,000 more per slot, which
-// the pool state cannot predict; the first swap of a launch costs about 60,000-70,000 more.
-// Calibrate against execution before relying on them.
+// `EkuboProtocol/evm-contracts@d6aeb58d845aa29454f3ed8df15e84a306a6f26d`, not refitted since.
+// Against the parity vectors regenerated at the target (fixed-base fee table, native ETH settled
+// by value, WETH and six-decimal ERC-20 quotes) the estimate's error on the 370 fills that are not
+// a launch's first fill or a known zero-slot write is -39.4% to +26.8% (mean +2.0%). They exclude
+// the 21,000 transaction base, calldata, the router and any account abstraction overhead. A swap
+// that writes a zero storage slot, such as the first creator fee after a claim or the first launch
+// tokens a holder receives, costs about 20,000 more per slot, which the pool state cannot predict;
+// the first swap of a launch costs about 50,000-70,000 more. Calibrate against execution before
+// relying on them.
 
 /// A forwarded launch swap that stays within one tick bitmap word.
 pub const ZERO_SEED_LAUNCH_SWAP_GAS_UNCALIBRATED: u64 = 33_500;
@@ -278,27 +493,50 @@ impl ZeroSeedLaunchRange {
     }
 }
 
-/// 2**64: the Q0.64 unit, exactly 100%. Not encodable as a `u64` fee or decay factor.
+/// 2**64: the Q0.64 unit, exactly 100%. Not encodable as a `u64` fee.
 pub const ZERO_SEED_LAUNCH_Q64: u128 = 1 << 64;
 
-/// `powQ64` from `math/feeDecay.sol`: `factor ** exponent` in Q0.64 by square-and-multiply,
-/// flooring after every multiply.
+/// `round(2**128 * 2**(-2**i / 600))` for bit `i` of the elapsed seconds: the fixed-base Q128
+/// table of `math/feeDecay.sol`, a 600 second half-life. Only nonzero constants exist.
+pub const ZERO_SEED_LAUNCH_DECAY_TABLE_Q128: [u128; 17] = [
+    339_889_484_297_159_900_493_648_602_831_395_569_057,
+    339_497_055_287_118_257_930_533_248_299_650_400_736,
+    338_713_556_013_920_184_336_129_943_844_147_573_651,
+    337_151_977_828_609_613_753_562_640_265_082_287_810,
+    334_050_386_396_171_404_885_545_237_344_599_070_716,
+    327_932_539_264_834_336_949_184_815_807_600_758_235,
+    316_030_922_441_737_935_988_095_136_387_330_274_498,
+    293_507_844_215_098_455_952_964_317_090_465_751_204,
+    253_162_852_354_938_356_992_240_649_094_357_060_196,
+    188_347_784_201_757_897_225_807_540_435_664_088_841,
+    104_251_325_552_682_051_605_813_724_741_512_712_010,
+    31_939_177_389_160_626_453_527_783_486_618_815_759,
+    2_997_836_947_964_109_484_105_344_435_429_137_776,
+    26_410_496_811_510_722_015_611_852_309_540_293,
+    2_049_810_421_099_131_403_277_778_219_901,
+    12_347_753_427_443_481_862_030,
+    448_060,
+];
+
+/// Elapsed seconds from which [`decay_q128`] is exactly 0: `2**17`, one past the table. Without
+/// the cutoff higher bits would alias to their low 17 bits.
+pub const ZERO_SEED_LAUNCH_DECAY_ZERO_FROM: u64 = 1 << 17;
+
+/// `decayQ128` from `math/feeDecay.sol`: `2**(-elapsed / 600)` in Q128.
 ///
-/// The operation order is normative: for each set exponent bit multiply the running result by the
-/// current factor and floor, shift, then square and floor the factor only if bits remain. Both
-/// operands of every product are at most 2**64 and a `u64` factor is below 2**64, so every product
-/// is below 2**128 and the result is at most 2**64. `pow_q64(b, 0)` is 2**64.
+/// 0 from [`ZERO_SEED_LAUNCH_DECAY_ZERO_FROM`] on; otherwise start at 2**128 and, for every set
+/// bit `i` of `elapsed` in ascending order, multiply by `ZERO_SEED_LAUNCH_DECAY_TABLE_Q128[i]`
+/// and floor to Q128. The operation order is normative. The running value is at most 2**128 and
+/// every constant is below it, so each product fits 256 bits. Non-increasing in `elapsed`.
 #[must_use]
-pub fn pow_q64(factor: u64, mut exponent: u64) -> u128 {
-    let mut result = ZERO_SEED_LAUNCH_Q64;
-    let mut base = u128::from(factor);
-    while exponent != 0 {
-        if exponent & 1 != 0 {
-            result = (result * base) >> 64;
-        }
-        exponent >>= 1;
-        if exponent != 0 {
-            base = (base * base) >> 64;
+pub fn decay_q128(elapsed: u64) -> U256 {
+    if elapsed >= ZERO_SEED_LAUNCH_DECAY_ZERO_FROM {
+        return U256::ZERO;
+    }
+    let mut result = TWO_POW_128;
+    for (bit, constant) in ZERO_SEED_LAUNCH_DECAY_TABLE_Q128.iter().enumerate() {
+        if (elapsed >> bit) & 1 != 0 {
+            result = (result * U256::from(*constant)) >> 128;
         }
     }
     result
@@ -316,19 +554,14 @@ pub struct ZeroSeedLaunchFeeSchedule {
     pub initial_fee: u64,
     /// Creator fee from `trading_start + fee_duration` on, Q0.64.
     pub final_fee: u64,
-    /// Per-second Q0.64 multiplier of the unscaled exponential, in `(0, 2**64)`. A literal
-    /// encoded factor, not a half-life. `LaunchParameters.decayFactor`.
-    pub decay_factor: u64,
 }
 
 impl ZeroSeedLaunchFeeSchedule {
     /// `feeAt`: the creator fee at `timestamp`, Q0.64.
     ///
-    /// `initial_fee` until `trading_start`, then
-    /// `final_fee + floor((initial_fee - final_fee) * (b**t - b**D) / (2**64 - b**D))` with
-    /// `b**n = pow_q64(decay_factor, n)`, `t` the elapsed seconds and `D` the duration, then
-    /// `final_fee` from `elapsed >= fee_duration` on. Elapsed time saturates at the duration
-    /// before any narrowing, as in the contract.
+    /// `initial_fee` until `trading_start`, then [`decayed_fee`] of the elapsed seconds, which is
+    /// `final_fee` from `elapsed >= fee_duration` on. Elapsed time is not narrowed, as in the
+    /// contract.
     #[must_use]
     pub fn fee_at(&self, timestamp: u64) -> u64 {
         if timestamp <= self.trading_start {
@@ -337,49 +570,44 @@ impl ZeroSeedLaunchFeeSchedule {
         decayed_fee(
             self.initial_fee,
             self.final_fee,
-            self.decay_factor,
             self.fee_duration,
             timestamp - self.trading_start,
         )
     }
 }
 
-/// `decayedFee` from `math/feeDecay.sol`, for `final_fee <= initial_fee`.
+/// `decayedFee` from `math/feeDecay.sol`.
 ///
-/// Below the duration `pow_q64` is non-increasing in the exponent, so `b**t >= b**D`; and
-/// `b**D <= b < 2**64`, so the divisor is at least 1. `(initial - final) < 2**64` and
-/// `b**t - b**D <= 2**64`, so the numerator fits a `u128` and the quotient is at most
-/// `initial - final`.
+/// `initial_fee` at 0 elapsed, `final_fee` from `duration` on, and in between, with
+/// `E = decay_q128(duration)`,
+/// `final_fee + floor((initial_fee - final_fee) * (decay_q128(elapsed) - E) / (2**128 - E))`.
+/// `decay_q128` is non-increasing, so `decay_q128(elapsed) >= E` below the duration, and
+/// `E < 2**128` for a positive duration. The numerator is below 2**192 and the quotient at most
+/// `initial_fee - final_fee`. Creation requires `final_fee <= initial_fee`; for other inputs the
+/// subtraction wraps as in the contract's `unchecked` block.
 #[must_use]
-pub fn decayed_fee(
-    initial_fee: u64,
-    final_fee: u64,
-    decay_factor: u64,
-    duration: u32,
-    elapsed: u64,
-) -> u64 {
+pub fn decayed_fee(initial_fee: u64, final_fee: u64, duration: u32, elapsed: u64) -> u64 {
     if elapsed == 0 {
         return initial_fee;
     }
     if elapsed >= u64::from(duration) {
         return final_fee;
     }
-    let endpoint = pow_q64(decay_factor, u64::from(duration));
-    let excess = u128::from(initial_fee - final_fee) * (pow_q64(decay_factor, elapsed) - endpoint)
-        / (ZERO_SEED_LAUNCH_Q64 - endpoint);
-    final_fee + excess as u64
+    let endpoint = decay_q128(u64::from(duration));
+    let excess = U256::from(initial_fee.wrapping_sub(final_fee)) * (decay_q128(elapsed) - endpoint)
+        / (TWO_POW_128 - endpoint);
+    final_fee.wrapping_add(excess.to::<u64>())
 }
 
 /// The launch inputs `previewInstallation` and `create` validate.
 ///
-/// The token name, symbol, decimals and salt only determine the token address, so they are not
-/// part of this model: take the token address, and with it `range.launch_token_is_token1`, from
-/// `previewInstallation`.
+/// The quote token is the instance's constructor quote, not a parameter. The token name, symbol,
+/// decimals and salt only determine the token address, so they are not part of this model: take
+/// the token address, and with it `range.launch_token_is_token1`, from `previewInstallation` or
+/// [`periphery_launch_token_address`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZeroSeedLaunchParameters {
-    /// Quote token. Supported entrypoints require the exact constructor-pinned instance quote.
-    pub quote_token: Address,
     /// Requested supply for a preview, or the bound installed supply for `create`.
     pub supply: u128,
     pub range: ZeroSeedLaunchRange,
@@ -420,7 +648,11 @@ pub enum ZeroSeedLaunchParameterError {
     InvalidRecipient,
     #[error("invalid or stale LOCAL start/expiry context")]
     InvalidLocalTiming,
-    /// `UnsupportedQuoteToken`, or a quote that mismatches the supported constructor instance.
+    /// The range's token order disagrees with the predicted token and the instance quote.
+    #[error("launch token order does not match the predicted token and quote")]
+    TokenOrderMismatch,
+    /// `UnsupportedQuoteToken`: the extension constructor refuses a code-less ERC-20 quote. No
+    /// launch parameter carries a quote any more.
     #[error("quote token is not supported")]
     UnsupportedQuoteToken,
     /// `InvalidParameters`: supply, tick spacing or range out of bounds.
@@ -429,7 +661,7 @@ pub enum ZeroSeedLaunchParameterError {
     /// `FeeTooHigh`: initial fee above the 99% cap.
     #[error("creator fee above the cap")]
     FeeTooHigh,
-    /// `InvalidFeeSchedule`: final fee above the initial fee, zero duration or zero decay factor.
+    /// `InvalidFeeSchedule`: final fee above the initial fee or zero duration.
     #[error("invalid fee schedule")]
     InvalidFeeSchedule,
     /// `InvalidTradingStart`: trading start before the creation block.
@@ -461,9 +693,6 @@ pub fn validate_launch_parameters_math(
     now: u64,
 ) -> Result<(), ZeroSeedLaunchParameterError> {
     type E = ZeroSeedLaunchParameterError;
-    if parameters.quote_token.is_zero() {
-        return Err(E::UnsupportedQuoteToken);
-    }
     if parameters.supply == 0 || parameters.supply > i128::MAX as u128 {
         return Err(E::InvalidParameters);
     }
@@ -480,7 +709,7 @@ pub fn validate_launch_parameters_math(
     if fee.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {
         return Err(E::FeeTooHigh);
     }
-    if fee.final_fee > fee.initial_fee || fee.fee_duration == 0 || fee.decay_factor == 0 {
+    if fee.final_fee > fee.initial_fee || fee.fee_duration == 0 {
         return Err(E::InvalidFeeSchedule);
     }
     if fee.trading_start < now {
@@ -579,8 +808,7 @@ pub struct ZeroSeedLaunchConfig {
     pub range: ZeroSeedLaunchRange,
     /// The event's `liquidity`, the constant liquidity of the launch position.
     pub liquidity: u128,
-    /// `LaunchParameters.tradingStart`, `feeDuration`, `initialFee`, `finalFee` and
-    /// `decayFactor`.
+    /// `LaunchParameters.tradingStart`, `feeDuration`, `initialFee` and `finalFee`.
     pub fee: ZeroSeedLaunchFeeSchedule,
 }
 
@@ -719,7 +947,8 @@ struct SwapOutcome {
 }
 
 impl ZeroSeedLaunchPool {
-    /// Creates a supported LOCAL launch pool; missing/mismatched provenance refuses it.
+    /// Creates a supported LOCAL launch pool; missing/mismatched provenance refuses it, as does a
+    /// pool key whose extension or quote is not the instance's.
     ///
     /// `key` is the pool key from `LaunchCreated`, `launch` the rest of that event and `state`
     /// `Core.poolState` of the pool at the block being quoted. No live instance is supported.
@@ -763,13 +992,15 @@ impl ZeroSeedLaunchPool {
         if extension.is_zero() {
             return Err(E::MissingExtension);
         }
-        let quote_token = if launch.range.launch_token_is_token1 {
-            key.token0
-        } else {
+        // A native quote is `address(0)` and so always token0; the launch token is a CREATE2
+        // deployment and never `address(0)`.
+        let launch_token = if launch.range.launch_token_is_token1 {
             key.token1
+        } else {
+            key.token0
         };
-        if quote_token.is_zero() {
-            return Err(E::UnsupportedQuoteToken);
+        if launch_token.is_zero() {
+            return Err(E::InvalidLaunchConfig);
         }
 
         let range = launch.range;
@@ -795,7 +1026,6 @@ impl ZeroSeedLaunchPool {
             || fee_schedule.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE
             || fee_schedule.final_fee > fee_schedule.initial_fee
             || fee_schedule.fee_duration == 0
-            || fee_schedule.decay_factor == 0
         {
             return Err(E::InvalidLaunchConfig);
         }
@@ -1353,6 +1583,84 @@ mod tests {
         );
     }
 
+    /// Independent vectors from Foundry `cast abi-encode`, `cast keccak` and
+    /// `cast compute-address` over the embedded creation code: six decimals, an empty name and a
+    /// controller-namespaced salt, none of which the receipts exercise.
+    #[test]
+    fn token_prediction_matches_cast() {
+        let extension = Address::from_str("0x5114703a4cf4256f0acb68f992c861d8c4d1b173").unwrap();
+        let controller = Address::from_str("0xb27e16c3d01850191c1e027f7a3372cd2e1fb324").unwrap();
+        let salt = B256::from(U256::from(1).to_be_bytes::<32>());
+        let hash = |s| B256::from_str(s).unwrap();
+        assert_eq!(
+            launch_token_init_code_hash(extension, "Zero Seed", "ZERO", 6),
+            hash("0x489e01af17be9fa3f51ca36008b8260e5d01bccf8bc21fd0875904f3474a6d34")
+        );
+        assert_eq!(
+            launch_token_init_code_hash(extension, "", "A longer token symbol, 31 byte", 6),
+            hash("0xb563b428ec60f9844d5d8c00b3fa21340e584a99b9c53775e309e718a49e0378")
+        );
+        assert_eq!(
+            extension_token_salt(controller, salt),
+            hash("0xe3b04b156b5b93b417dc7582589e75189e84de3e3317bc5bf8b13cfb42f15c2f")
+        );
+        assert_eq!(
+            launch_token_address(extension, controller, salt, "Zero Seed", "ZERO", 6),
+            Address::from_str("0x2f600c4d433C424a7e3B4a77F5098d32505a7f14").unwrap()
+        );
+    }
+
+    /// A native quote is `address(0)`, so a launch token ordered as token0 would be `address(0)`.
+    #[test]
+    fn native_quote_requires_launch_token1() {
+        let range = ZeroSeedLaunchRange {
+            launch_token_is_token1: false,
+            ask_tick: -13_815_500,
+            upper_tick: -9_210_300,
+            tick_spacing: 100,
+        };
+        let launch = ZeroSeedLaunchConfig {
+            range,
+            liquidity: 1_000_000,
+            fee: ZeroSeedLaunchFeeSchedule {
+                trading_start: 0,
+                fee_duration: 3600,
+                initial_fee: 0,
+                final_fee: 0,
+            },
+        };
+        let state = ZeroSeedLaunchPoolState {
+            sqrt_ratio: to_sqrt_ratio::<Evm>(range.ask_tick).unwrap(),
+            tick: range.ask_tick,
+            liquidity: 1_000_000,
+        };
+        let key = |token0: &str| ZeroSeedLaunchPoolKey {
+            token0: Address::from_str(token0).unwrap(),
+            token1: Address::from_str("0x00000000000000000000000000000000000f0000").unwrap(),
+            config: PoolConfig {
+                extension: Address::from_str("0x5100000000000000000000000000000000000000").unwrap(),
+                fee: 0,
+                pool_type_config: TickSpacing(100),
+            },
+        };
+        assert!(
+            ZeroSeedLaunchPool::new_math(
+                key("0x0000000000000000000000000000000000000001"),
+                launch,
+                state
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            ZeroSeedLaunchPool::new_math(
+                key("0x0000000000000000000000000000000000000000"),
+                launch,
+                state
+            ),
+            Err(ZeroSeedLaunchPoolConstructionError::InvalidLaunchConfig)
+        );
+    }
+
     #[test]
     fn fee_schedule_is_monotone_and_bounded() {
         let schedule = ZeroSeedLaunchFeeSchedule {
@@ -1360,7 +1668,6 @@ mod tests {
             fee_duration: 3_600,
             initial_fee: ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
             final_fee: 0,
-            decay_factor: 18_425_445_863_997_925_462,
         };
         let mut previous = schedule.fee_at(0);
         for t in (0..6_000).chain([u64::MAX - 1, u64::MAX]) {
