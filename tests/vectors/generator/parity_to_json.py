@@ -78,11 +78,12 @@ for raw in sys.stdin:
 
 json.dump(
     {
-        "version": 1,
+        "version": 2,
         "label": "LOCAL FIXTURE PARITY VECTORS - not live evidence",
         "source": {
-            "contracts": "EkuboProtocol/evm-contracts@b1cbb1c1a9a00de62072a63a8f4aab4d97065573 (tree 3f9196ebe47ebbff04459d08d645f8ca3168244a)",
+            "contracts": "EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a (tree 64649a281f113674584f192ff11b642071fdeac3)",
             "core": "local Core built at that commit, runtime keccak 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a (asserted in every scenario)",
+            "flow": "launches created through ZeroSeedLaunchPeriphery; swaps are Core.forward(extension, abi.encode(PoolKey, SwapParameters)) from a test locker; native ETH settled by value",
             "generator": "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol",
         },
         "scenarios": list(scenarios.values()),

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: ekubo-license-v1.eth
 pragma solidity =0.8.33;
 
-// SDK parity generator. Not part of evm-contracts: it is copied into a detached worktree of the draft exponential
-// fee-decay head b1cbb1c1a9a00de62072a63a8f4aab4d97065573, run with `forge test --match-contract ZeroSeedLaunchSdkParity -vv`,
-// and its `PARITY|` log lines are converted to JSON by `parity_to_json.py`. Every value it prints is read from the
-// local Core and ZeroSeedLaunch state or from their emitted events, never recomputed. Local fixture only.
+// SDK parity generator. Not part of evm-contracts: it is copied into a scratch copy of
+// EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a as test/extensions/, run with
+// `forge test --offline --match-contract ZeroSeedLaunchSdkParity -vv`, and its `PARITY|` log lines are converted to
+// JSON by `parity_to_json.py`. Launches are created through ZeroSeedLaunchPeriphery and every swap is a
+// `Core.forward(extension, abi.encode(PoolKey, SwapParameters))` from the test locker of ZeroSeedLaunch.t.sol, which
+// settles native ETH by value and ERC-20s by payFrom/withdraw. Every value it prints is read from the local Core,
+// extension and periphery state or from their emitted events, never recomputed. Local fixture only.
 
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
@@ -13,15 +16,14 @@ import {ICore} from "../../src/interfaces/ICore.sol";
 import {IZeroSeedLaunch} from "../../src/interfaces/extensions/IZeroSeedLaunch.sol";
 import {CoreLib} from "../../src/libraries/CoreLib.sol";
 import {PoolKey} from "../../src/types/poolKey.sol";
-import {PoolId} from "../../src/types/poolId.sol";
-import {PoolConfig} from "../../src/types/poolConfig.sol";
 import {PoolState} from "../../src/types/poolState.sol";
 import {PositionId} from "../../src/types/positionId.sol";
 import {PoolBalanceUpdate} from "../../src/types/poolBalanceUpdate.sol";
-import {SwapParameters, createSwapParameters} from "../../src/types/swapParameters.sol";
+import {createSwapParameters} from "../../src/types/swapParameters.sol";
 import {SqrtRatio, toSqrtRatio} from "../../src/types/sqrtRatio.sol";
 import {tickToSqrtRatio} from "../../src/math/ticks.sol";
 import {MIN_SQRT_RATIO, MAX_SQRT_RATIO} from "../../src/types/sqrtRatio.sol";
+import {NATIVE_TOKEN_ADDRESS} from "../../src/math/constants.sol";
 import {MAX_CREATOR_FEE} from "../../src/extensions/ZeroSeedLaunch.sol";
 import {MintableERC20} from "../../src/MintableERC20.sol";
 import {ZeroSeedLaunchBase} from "./ZeroSeedLaunch.t.sol";
@@ -31,9 +33,12 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
 
     bytes32 constant CORE_CODEHASH = 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a;
     bytes32 constant LAUNCH_CREATED = keccak256(
-        "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(address,string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,uint64,bytes32))"
+        "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))"
     );
     bytes32 constant LAUNCH_SWAPPED = keccak256("LaunchSwapped(bytes32,address,int128,int128,uint64,uint128,bool)");
+    bytes32 constant CREATOR_FEES_CLAIMED = keccak256("CreatorFeesClaimed(bytes32,address,uint128,uint128)");
+    bytes32 constant LAUNCH_OWNER_CHANGED = keccak256("LaunchOwnerChanged(bytes32,address,address)");
+    bytes32 constant LAUNCH_FEES_CLAIMED = keccak256("LaunchFeesClaimed(bytes32,address,address,uint128,uint128)");
 
     struct Ctx {
         string tag;
@@ -62,15 +67,17 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         (a, b) = launch.creatorFees(key);
     }
 
+    /// @dev Core's and the test account's balances of token0 and token1. For native ETH the test account is this
+    /// contract plus the swapper that pays its ETH debts (`_balance`).
     function _balances(Ctx memory c) private view returns (string memory) {
         return string.concat(
-            _s(ERC20(c.key.token0).balanceOf(CORE)),
+            _s(_balance(c.key.token0, CORE)),
             ",",
-            _s(ERC20(c.key.token1).balanceOf(CORE)),
+            _s(_balance(c.key.token1, CORE)),
             ",",
-            _s(ERC20(c.key.token0).balanceOf(address(this))),
+            _s(_balance(c.key.token0, address(this))),
             ",",
-            _s(ERC20(c.key.token1).balanceOf(address(this)))
+            _s(_balance(c.key.token1, address(this)))
         );
     }
 
@@ -105,9 +112,9 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             "|tokenAllowance=",
             _s(ERC20(c.token).allowance(address(this), address(swapper))),
             "|heldQuote=",
-            _s(ERC20(c.quote).balanceOf(address(this))),
+            _s(_balance(c.quote, address(this))),
             "|coreQuote=",
-            _s(ERC20(c.quote).balanceOf(CORE)),
+            _s(_balance(c.quote, CORE)),
             "|pre=",
             pre,
             "|preBalances=",
@@ -136,7 +143,8 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         ev = "none";
         for (uint256 k; k < logs.length; k++) {
-            if (logs[k].topics.length > 0 && logs[k].topics[0] == LAUNCH_SWAPPED) {
+            if (logs[k].emitter == address(launch) && logs[k].topics.length > 0 && logs[k].topics[0] == LAUNCH_SWAPPED)
+            {
                 (int128 d0, int128 d1, uint64 rate, uint128 feeAmount, bool feeIs1) =
                     abi.decode(logs[k].data, (int128, int128, uint64, uint128, bool));
                 ev = string.concat(_i(d0), ",", _i(d1), ",", _s(rate), ",", _s(feeAmount), ",", feeIs1 ? "1" : "0");
@@ -209,14 +217,14 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         uint64 initialFee,
         string memory name
     ) private {
-        address quote = _quote(tokenIs0, quoteDecimals);
+        _quote(tokenIs0, quoteDecimals);
         IZeroSeedLaunch.LaunchParameters memory p =
-            _parameters(quote, quoteDecimals == 18 ? ASK_18_18 : ASK_18_6, REQUESTED_SUPPLY, duration);
+            _parameters(quoteDecimals == 18 ? ASK_18_18 : ASK_18_6, REQUESTED_SUPPLY, duration);
         p.initialFee = initialFee;
         _bind(p, creator);
         vm.recordLogs();
         vm.prank(creator);
-        IZeroSeedLaunch.Installation memory inst = launch.create(p);
+        IZeroSeedLaunch.Installation memory inst = periphery.create(p);
         MintableERC20(inst.token).approve(address(swapper), type(uint256).max);
         Ctx memory c = _logCreate(
             string.concat("scenario=", tokenIs0 ? "t0" : "t1", "_18_", _s(quoteDecimals), "_", _s(duration), "_", name),
@@ -225,6 +233,19 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             quoteDecimals
         );
         _program(c, inst, duration);
+    }
+
+    function _owner(Vm.Log[] memory logs) private view returns (address owner) {
+        for (uint256 k; k < logs.length; k++) {
+            if (
+                logs[k].emitter == address(periphery) && logs[k].topics.length == 4
+                    && logs[k].topics[0] == LAUNCH_OWNER_CHANGED
+            ) {
+                assertEq(logs[k].topics[2], bytes32(0), "created from the zero owner");
+                owner = address(uint160(uint256(logs[k].topics[3])));
+            }
+        }
+        assertEq(owner, creator, "owner of record");
     }
 
     function _logCreate(
@@ -239,9 +260,10 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         c.tag = tag;
         c.key = inst.poolKey;
         c.token = inst.token;
-        c.quote = p.quoteToken;
+        c.quote = activeQuote;
         c.tokenIs1 = !tokenIs0;
         c.unit = 10 ** quoteDecimals;
+        address owner = _owner(logs);
 
         // Pool construction inputs, from the emitted LaunchCreated event and Core state only.
         bool found;
@@ -267,10 +289,28 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                         _s(key.config.concentratedTickSpacing()),
                         "|token=",
                         vm.toString(address(uint160(uint256(logs[k].topics[2])))),
-                        "|tickLower=",
-                        _i(pos.tickLower()),
-                        "|tickUpper=",
-                        _i(pos.tickUpper()),
+                        "|controller=",
+                        vm.toString(address(uint160(uint256(logs[k].topics[3])))),
+                        string.concat(
+                            "|owner=",
+                            vm.toString(owner),
+                            "|periphery=",
+                            vm.toString(address(periphery)),
+                            "|name=",
+                            ep.name,
+                            "|symbol=",
+                            ep.symbol,
+                            "|decimals=",
+                            _s(ep.decimals),
+                            "|userSalt=",
+                            vm.toString(p.salt),
+                            "|extensionSalt=",
+                            vm.toString(ep.salt),
+                            "|tickLower=",
+                            _i(pos.tickLower()),
+                            "|tickUpper=",
+                            _i(pos.tickUpper())
+                        ),
                         string.concat(
                             "|liquidity=",
                             _s(liquidity),
@@ -288,20 +328,24 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                             _s(ep.initialFee),
                             "|finalFee=",
                             _s(ep.finalFee),
-                            "|decayFactor=",
-                            _s(ep.decayFactor),
                             "|quoteDecimals=",
                             _s(quoteDecimals),
                             "|state=",
-                            _state(key),
+                            _state(key)
+                        ),
+                        string.concat(
                             "|coreCodehash=",
                             vm.toString(CORE.codehash),
                             "|extensionCodehash=",
                             vm.toString(address(launch).codehash),
+                            "|peripheryCodehash=",
+                            vm.toString(address(periphery).codehash),
                             "|constructorQuote=",
                             vm.toString(launch.quoteToken()),
+                            "|quoteKind=",
+                            activeQuote == NATIVE_TOKEN_ADDRESS ? "native" : "erc20",
                             "|quoteCodehash=",
-                            vm.toString(p.quoteToken.codehash),
+                            activeQuote == NATIVE_TOKEN_ADDRESS ? "none" : vm.toString(activeQuote.codehash),
                             "|createTs=",
                             _s(block.timestamp)
                         )
@@ -310,6 +354,41 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             }
         }
         assertTrue(found, "LaunchCreated");
+    }
+
+    /// @dev The owner claims through the periphery to this contract. Logs the ledger read before, the periphery's
+    /// return values and both claim events of the same transaction.
+    function _claim(Ctx memory c) private {
+        (uint128 l0, uint128 l1) = _fees(c.key);
+        vm.recordLogs();
+        vm.prank(creator);
+        (uint128 r0, uint128 r1) = periphery.claimFees(c.key, address(this));
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        string memory extensionEvent = "none";
+        string memory peripheryEvent = "none";
+        for (uint256 k; k < logs.length; k++) {
+            if (logs[k].topics.length == 0) continue;
+            if (logs[k].emitter == address(launch) && logs[k].topics[0] == CREATOR_FEES_CLAIMED) {
+                assertEq(address(uint160(uint256(logs[k].topics[2]))), address(periphery), "controller");
+                (uint128 a0, uint128 a1) = abi.decode(logs[k].data, (uint128, uint128));
+                extensionEvent = string.concat(_s(a0), ",", _s(a1));
+            }
+            if (logs[k].emitter == address(periphery) && logs[k].topics[0] == LAUNCH_FEES_CLAIMED) {
+                assertEq(address(uint160(uint256(logs[k].topics[2]))), creator, "owner");
+                assertEq(address(uint160(uint256(logs[k].topics[3]))), address(this), "recipient");
+                (uint128 a0, uint128 a1) = abi.decode(logs[k].data, (uint128, uint128));
+                peripheryEvent = string.concat(_s(a0), ",", _s(a1));
+            }
+        }
+        (uint128 a0, uint128 a1) = _fees(c.key);
+        console2.log(
+            string.concat(
+                string.concat("PARITY|claim|", c.tag, "|amount0=", _s(l0), "|amount1=", _s(l1)),
+                string.concat("|returned=", _s(r0), ",", _s(r1), "|ledgerAfter=", _s(a0), ",", _s(a1)),
+                string.concat("|extensionEvent=", extensionEvent, "|peripheryEvent=", peripheryEvent),
+                string.concat("|post=", _state(c.key))
+            )
+        );
     }
 
     function _program(Ctx memory c, IZeroSeedLaunch.Installation memory inst, uint32 duration) private {
@@ -385,13 +464,9 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             tokenIs0 ? MIN_SQRT_RATIO.toFixed() : MAX_SQRT_RATIO.toFixed()
         );
         _sell(c, "sellAllExactIn", ts + 3, int128(uint128(_held(c))), false, 0);
-        // The creator claims its fee ledger and sells the token side too: the price returns to the ask.
-        (uint128 l0, uint128 l1) = _fees(c.key);
-        vm.prank(creator);
-        launch.claimFees(c.key, address(this));
-        console2.log(
-            string.concat("PARITY|claim|", c.tag, "|amount0=", _s(l0), "|amount1=", _s(l1), "|post=", _state(c.key))
-        );
+        // The owner claims the fee ledger through the periphery and sells the token side too: the price returns to
+        // the ask.
+        _claim(c);
         _sell(c, "sellClaimedExactIn", ts + 4, int128(uint128(_held(c))), false, 0);
         _sell(c, "sellAtAskExactIn", ts + 4, 1e18, false, 0);
         _sell(c, "sellAtAskExactOut", ts + 4, 1, true, 0);
@@ -402,7 +477,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         _scenario(true, 18, DURATION);
     }
 
-    function test_parity_t1_18_18() public {
+    function test_parity_t1_18_18_native() public {
         _scenario(false, 18, DURATION);
     }
 
@@ -418,6 +493,10 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         _scenario(true, 18, DURATION_SHORT);
     }
 
+    function test_parity_t1_18_18_600_native() public {
+        _scenario(false, 18, DURATION_SHORT);
+    }
+
     function test_parity_t1_18_6_600() public {
         _scenario(false, 6, DURATION_SHORT);
     }
@@ -426,19 +505,23 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         _highRateScenario(true, 18, DURATION, 9223372036854775808, "rate50");
     }
 
+    function test_parity_t1_18_18_3600_rate50_native() public {
+        _highRateScenario(false, 18, DURATION, 9223372036854775808, "rate50");
+    }
+
     function test_parity_t1_18_6_600_rate99() public {
         _highRateScenario(false, 6, DURATION_SHORT, MAX_CREATOR_FEE, "rate99");
     }
 
     /// @dev A launch near the top of the price range, where one raw token costs about int128.max raw quote.
     function test_parity_overflow() public {
-        address quote = _quote(true, 18);
-        IZeroSeedLaunch.LaunchParameters memory p = _parameters(quote, 88_000_000, 1_000_000, DURATION);
+        _quote(true, 18);
+        IZeroSeedLaunch.LaunchParameters memory p = _parameters(88_000_000, 1_000_000, DURATION);
         p.upperTick = 88_722_800;
         _bind(p, creator);
         vm.recordLogs();
         vm.prank(creator);
-        IZeroSeedLaunch.Installation memory inst = launch.create(p);
+        IZeroSeedLaunch.Installation memory inst = periphery.create(p);
         Ctx memory c = _logCreate("scenario=overflow_t0_18_18_3600", inst, p, 18);
         _buy(c, "buyOneTokenExactOut", START, 1, true, 0);
         _buy(c, "buyTwoTokensExactOut", START, 2, true, 0);
@@ -449,14 +532,14 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         _sell(c, "sellExactOutMax", START + DURATION, type(int128).max, true, 0);
     }
 
-    // ---- Installation preview and binding, read from previewInstallation and create reverts. ----
+    // ---- Installation preview and binding, read from the periphery's previewInstallation and create reverts. ----
 
     function _logPreview(string memory label, IZeroSeedLaunch.LaunchParameters memory p) private {
         string memory head = string.concat(
             "PARITY|preview|label=",
             label,
             "|quote=",
-            vm.toString(p.quoteToken),
+            vm.toString(activeQuote),
             "|supply=",
             _s(p.supply),
             "|askTick=",
@@ -474,13 +557,11 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 _s(p.initialFee),
                 "|finalFee=",
                 _s(p.finalFee),
-                "|decayFactor=",
-                _s(p.decayFactor),
                 "|now=",
                 _s(block.timestamp)
             )
         );
-        try launch.previewInstallation(creator, p) returns (IZeroSeedLaunch.Installation memory inst) {
+        try periphery.previewInstallation(creator, p) returns (IZeroSeedLaunch.Installation memory inst) {
             console2.log(
                 string.concat(
                     head,
@@ -521,7 +602,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             uint256 snap = vm.snapshotState();
             vm.prank(creator);
             string memory out;
-            try launch.create(q) returns (IZeroSeedLaunch.Installation memory) {
+            try periphery.create(q) returns (IZeroSeedLaunch.Installation memory) {
                 out = "ok=1";
             } catch (bytes memory err) {
                 out = string.concat("ok=0|err=", vm.toString(err));
@@ -539,9 +620,10 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         e.liquidity = inst.liquidity;
         uint256 snap2 = vm.snapshotState();
         vm.prank(creator);
-        IZeroSeedLaunch.Installation memory made = launch.create(e);
+        IZeroSeedLaunch.Installation memory made = periphery.create(e);
         assertEq(made.liquidity, inst.liquidity);
         assertEq(made.installedSupply, inst.installedSupply);
+        assertEq(made.token, inst.token);
         vm.revertToState(snap2);
         console2.log(
             string.concat(
@@ -555,23 +637,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
         pure
         returns (IZeroSeedLaunch.LaunchParameters memory q)
     {
-        q = IZeroSeedLaunch.LaunchParameters({
-            quoteToken: p.quoteToken,
-            name: p.name,
-            symbol: p.symbol,
-            decimals: p.decimals,
-            supply: p.supply,
-            liquidity: p.liquidity,
-            askTick: p.askTick,
-            upperTick: p.upperTick,
-            tickSpacing: p.tickSpacing,
-            tradingStart: p.tradingStart,
-            feeDuration: p.feeDuration,
-            initialFee: p.initialFee,
-            finalFee: p.finalFee,
-            decayFactor: p.decayFactor,
-            salt: p.salt
-        });
+        q = abi.decode(abi.encode(p), (IZeroSeedLaunch.LaunchParameters));
     }
 
     function test_parity_preview() public {
@@ -581,10 +647,10 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
             string memory o = tokenIs0 ? "t0" : "t1";
             for (uint256 d; d < 2; d++) {
                 uint8 dec = d == 0 ? 18 : 6;
-                address quote = _quote(tokenIs0, dec);
+                _quote(tokenIs0, dec);
                 string memory g = string.concat(o, "_18_", _s(dec));
                 int32 ask = dec == 18 ? ASK_18_18 : ASK_18_6;
-                IZeroSeedLaunch.LaunchParameters memory p = _parameters(quote, ask, REQUESTED_SUPPLY, DURATION);
+                IZeroSeedLaunch.LaunchParameters memory p = _parameters(ask, REQUESTED_SUPPLY, DURATION);
                 _logPreview(string.concat(g, "_frozen"), p);
                 uint128[6] memory supplies = [
                     uint128(1),
@@ -657,11 +723,8 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 r.feeDuration = 0;
                 _logPreview(string.concat(g, "_duration0"), r);
                 r = _clone(p);
-                r.decayFactor = 0;
-                _logPreview(string.concat(g, "_factor0"), r);
-                r = _clone(p);
-                r.decayFactor = type(uint64).max;
-                _logPreview(string.concat(g, "_factorMax"), r);
+                r.feeDuration = type(uint32).max;
+                _logPreview(string.concat(g, "_durationMax"), r);
                 r = _clone(p);
                 r.initialFee = type(uint64).max;
                 _logPreview(string.concat(g, "_feeMaxEncodable"), r);
@@ -671,12 +734,6 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 r = _clone(p);
                 r.tradingStart = uint64(block.timestamp);
                 _logPreview(string.concat(g, "_startNow"), r);
-                r = _clone(p);
-                r.quoteToken = address(0);
-                _logPreview(string.concat(g, "_nativeQuote"), r);
-                r = _clone(p);
-                r.quoteToken = address(0xdead);
-                _logPreview(string.concat(g, "_codelessQuote"), r);
             }
             vm.revertToState(snap);
         }
