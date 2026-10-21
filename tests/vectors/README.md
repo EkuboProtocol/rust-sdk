@@ -84,7 +84,7 @@ with 256-bit intermediates (`r * TABLE < 2**256`, numerator `< 2**192`). Cap `fl
 | `zero-seed-launch-fee-decay-vectors.json` | `7004b29f91540f1b29a568b525d215227565b36d1b490687ae604f5f145b835b` | `gen-fee-decay-table.py --json`: table, decay samples, 200 fee rows, digests |
 | `zero-seed-launch-fee-curve-rows.json` | `96a8dbdee103f3da920fd2744e823e9469e118d20c478553e30cb029980988f2` | the 100 executed `VEC|highRate` rows of `ZeroSeedLaunchFeeCurve.t.sol` (rows identical to the previous target's; only the source commit changed) |
 | `zero-seed-launch-parity.json` | `198f8cfe38ecdd2e94804b4c06e2bf6bda499a47bb8b1523865f5d09c55be491` | `generator/ZeroSeedLaunchSdkParity.t.sol` |
-| `zero-seed-launch-indexer.json` | `c4cea4e1d1accf56fcf7beb90743321cd6b1c4761e304651c3636dc9136d482b` | indexer `scripts/zeroSeedLaunchFixture.ts` LOCAL anvil receipt, verbatim. This is still the receipt of the PREVIOUS target (`4f1a306`, two instances with constructor quotes); the receipt of this target replaces it, and the tests that read it are ignored until then |
+| `zero-seed-launch-indexer.json` | `5dd281b580fb68dfaba00778d2241adf42c7b64ec5e8a70bfab8c9111ecf0ebb` | indexer `scripts/zeroSeedLaunchFixture.ts` LOCAL anvil receipt at this target, verbatim: one instance, two native and two ERC-20 launches, swaps through `LaunchTestRouter` |
 | `pins/pins.json` | `36f4467d21c662a06ebdaf1864057c085bd7b57cbe5e41229f21589499a16884` | `generator/pins_from_artifacts.py` |
 | `pins/*.abi.json` | `999068f8...d4bf`, `df24d9f0...7305`, `fa77fe07...abba` | canonical ABIs of `ZeroSeedLaunch`, `ZeroSeedLaunchPeriphery`, `MintableERC20` |
 
@@ -135,11 +135,20 @@ What the tests check:
     fails closed;
   - the 92 manifest selectors, topics and errors recomputed from the pinned ABI files, whose bytes
     hash to the manifest's ABI sha256 (`jq -cS .abi`, no trailing newline);
-  - ignored until the receipt of this target lands: `indexer_launches_decode_bind_and_predict`,
-    `indexer_trades_ledgers_owners_and_fees_replay`, `local_fixture_pins_match_the_indexer_receipt`.
-    They expect one `instances` entry without a quote, and per launch `quote`, `quoteKind`
-    (`native`/`erc20`), `quoteRuntimeKeccak` (null for native) and installations with
-    `requestedSupply`, `installedSupply`, `sinkSupply` and `liquidity`.
+  - indexer receipt: one instance with no quote, equal to the compiled-in pin (addresses,
+    salts, executed runtimes, template runtimes, creation code and ABI hashes); every
+    `LaunchCreated` decoded from raw log data with its per-launch quote, pool key
+    `sorted(token, quote)`, owner of record, extension salt and the CREATE2 token prediction;
+    requested, installed and sink supply against the SDK installation of the requested supply,
+    the returned `Installation`, Core's `PositionUpdated` of the creation (launch-token delta ==
+    installed, quote delta 0, liquidity delta == computed liquidity), the mints to Core and to
+    `address(0)`, `totalSupply` and the sink balance; all four launches (two native, two ERC-20,
+    one extension) quote through supported `new` and refuse each other's quote; all 19 swaps
+    replayed against `LaunchSwapped` and the Core swap log, 8 claims against the extension ledger
+    (accrued from `LaunchSwapped`, claimed from `CreatorFeesClaimed` only, payouts equal and never
+    added again), owner transfers, and all 41 snapshots (`Core` state, `creatorFees`, owner,
+    controller, `feeAt(block time)`, `totalSupply`, sink balance), across the prefix and both
+    reorg branches.
 - `pins/pins.json` (`generator/pins_from_artifacts.py`): per contract ABI hash, selectors, topics,
   errors, zero-filled runtime and creation keccak, all asserted equal to the consumer manifest;
   the local fixture (`localFixture`) recomputed from the artifacts: the extension at the first
@@ -147,7 +156,8 @@ What the tests check:
   periphery at salt 0, init-code keccaks, and the unique immutable assignment that turns each
   template runtime into the executed runtime (extension: `core`, `core`; periphery: `core`,
   `extension`, `core`); and the one reviewed LOCAL ERC-20 quote (`localQuotes`, the plain
-  18-decimal `test/TestToken.sol` at the top of the address space).
+  18-decimal `test/TestToken.sol` at the top of the address space). The script cross-checks both
+  against the indexer receipt.
 
 ## Supported surface versus arithmetic
 

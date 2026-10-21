@@ -186,10 +186,17 @@ if receipt["provenance"]["evmContractsHead"] == head:
         assert instance[field].lower() == fixture[field], field
     for field in ("extensionRuntimeKeccak", "peripheryRuntimeKeccak"):
         assert instance[field] == fixture[field], field
+    for field in ("extensionSalt", "peripherySalt"):
+        assert instance[field] == fixture[field], field
+    erc20 = {"quote": receipt["addresses"]["erc20Quote"].lower(),
+             "runtimeKeccak": receipt["provenance"]["erc20QuoteRuntimeKeccak"]}
+    assert erc20 in [{"quote": q["quote"], "runtimeKeccak": q["runtimeKeccak"]} for q in pins["localQuotes"]]
     for launch in receipt["launches"].values():
+        assert launch["instance"] == instance["label"]
         if launch["quoteKind"] == "erc20":
-            assert {"quote": launch["quote"].lower(), "runtimeKeccak": launch["quoteRuntimeKeccak"]} in [
-                {"quote": q["quote"], "runtimeKeccak": q["runtimeKeccak"]} for q in pins["localQuotes"]]
+            assert launch["quote"].lower() == erc20["quote"]
+        else:
+            assert int(launch["quote"], 16) == 0
     print("indexer receipt instance and quotes match the local fixture pins")
 else:
     print("indexer receipt is for", receipt["provenance"]["evmContractsHead"], "- local fixture not cross-checked")

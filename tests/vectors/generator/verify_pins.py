@@ -12,13 +12,12 @@ expected = {
     "zero-seed-launch-fee-curve-all-seconds.json": "fc9be5e4d59d8163f7a5566a7076bb9628d8ff30af5efde1eb554ba9b93bddce",
     "zero-seed-launch-fee-curve-rows.json": "96a8dbdee103f3da920fd2744e823e9469e118d20c478553e30cb029980988f2",
     "zero-seed-launch-parity.json": "198f8cfe38ecdd2e94804b4c06e2bf6bda499a47bb8b1523865f5d09c55be491",
+    "zero-seed-launch-indexer.json": "5dd281b580fb68dfaba00778d2241adf42c7b64ec5e8a70bfab8c9111ecf0ebb",
     "pins/pins.json": "36f4467d21c662a06ebdaf1864057c085bd7b57cbe5e41229f21589499a16884",
     "pins/ZeroSeedLaunch.abi.json": "999068f8e41867e972f4485c0105f584a2c10d7537615e6b4517807548fcd4bf",
     "pins/ZeroSeedLaunchPeriphery.abi.json": "df24d9f07d45323da7e46c0f6e64ce24f8f522442d60cb07880ddf742ebe7305",
     "pins/MintableERC20.abi.json": "fa77fe077e7630e8d08191428bbdf6529fb32d0bbe49b8a7245887fbd1f1abba",
 }
-# The indexer receipt of the previous target, kept until the receipt of TARGET replaces it.
-PREVIOUS_INDEXER_RECEIPT = "c4cea4e1d1accf56fcf7beb90743321cd6b1c4761e304651c3636dc9136d482b"
 for name, digest in expected.items():
     actual = hashlib.sha256((root / name).read_bytes()).hexdigest()
     assert actual == digest, (name, actual, digest)
@@ -75,31 +74,35 @@ for creation in parity["creations"]:
         assert int(creation["balanceOfZero"]) == int(creation["sinkSupply"])
         assert int(creation["installedSupply"]) + int(creation["sinkSupply"]) == int(creation["requestedSupply"])
 
-receipt_path = root / "zero-seed-launch-indexer.json"
-indexer = json.loads(receipt_path.read_text())
-if indexer["provenance"]["evmContractsHead"] == TARGET:
-    assert indexer["chainId"] == 31337
-    assert indexer["provenance"]["launchAbiSha256"] == expected["pins/ZeroSeedLaunch.abi.json"]
-    assert indexer["provenance"]["peripheryAbiSha256"] == expected["pins/ZeroSeedLaunchPeriphery.abi.json"]
-    (instance,) = indexer["instances"]
-    assert "quote" not in instance
-    for field in ("extension", "periphery"):
-        assert instance[field].lower() == fixture[field]
-    for field in ("extensionRuntimeKeccak", "peripheryRuntimeKeccak"):
-        assert instance[field] == fixture[field]
-    kinds = set()
-    for launch in indexer["launches"].values():
-        kinds.add(launch["quoteKind"])
-        if launch["quoteKind"] == "native":
-            assert launch["quoteRuntimeKeccak"] is None and int(launch["quote"], 16) == 0
-        else:
-            assert launch["quote"].lower() == local_quote["quote"]
-            assert launch["quoteRuntimeKeccak"] == local_quote["runtimeKeccak"]
-    assert kinds == {"native", "erc20"}
-    receipt = "indexer receipt of the target checked against the local fixture"
-else:
-    assert hashlib.sha256(receipt_path.read_bytes()).hexdigest() == PREVIOUS_INDEXER_RECEIPT
-    receipt = "indexer receipt PENDING (previous target's receipt still in place)"
+indexer = json.loads((root / "zero-seed-launch-indexer.json").read_text())
+assert indexer["chainId"] == 31337
+assert indexer["provenance"]["evmContractsHead"] == TARGET
+assert indexer["provenance"]["launchAbiSha256"] == expected["pins/ZeroSeedLaunch.abi.json"]
+assert indexer["provenance"]["peripheryAbiSha256"] == expected["pins/ZeroSeedLaunchPeriphery.abi.json"]
+assert indexer["provenance"]["coreRuntimeKeccak"] == fixture["coreRuntimeKeccak"]
+(instance,) = indexer["instances"]
+assert "quote" not in instance
+for field in ("extension", "periphery"):
+    assert instance[field].lower() == fixture[field]
+for field in ("extensionRuntimeKeccak", "peripheryRuntimeKeccak", "extensionSalt", "peripherySalt"):
+    assert instance[field] == fixture[field]
+assert indexer["addresses"]["erc20Quote"].lower() == local_quote["quote"]
+assert indexer["provenance"]["erc20QuoteRuntimeKeccak"] == local_quote["runtimeKeccak"]
+kinds = []
+for label, launch in indexer["launches"].items():
+    kinds.append(launch["quoteKind"])
+    assert launch["instance"] == instance["label"]
+    if launch["quoteKind"] == "native":
+        assert int(launch["quote"], 16) == 0 and launch["tokenIsToken1"]
+    else:
+        assert launch["quote"].lower() == local_quote["quote"]
+    installation = indexer["installations"][label]
+    assert int(installation["installedSupply"]) + int(installation["sinkSupply"]) == int(installation["requestedSupply"])
+    assert installation["totalSupply"] == installation["requestedSupply"]
+    assert installation["sinkBalance"] == installation["sinkSupply"]
+    assert installation["coreInstalledDelta"] == installation["installedSupply"]
+assert sorted(kinds) == ["erc20", "erc20", "native", "native"]
 print(f"PASS: {len(expected)} exact SHA256 receipts, 92 manifest ABI entries, 13 parity scenarios, 522 step slots, "
       f"129 previews and creations, 1 supported LOCAL instance serving native and ERC-20 quotes, "
-      f"1 reviewed LOCAL ERC-20 quote; live lists EMPTY; {receipt}")
+      f"1 reviewed LOCAL ERC-20 quote; live lists EMPTY; indexer receipt of the target: 1 instance, "
+      f"{len(kinds)} launches (native and ERC-20)")

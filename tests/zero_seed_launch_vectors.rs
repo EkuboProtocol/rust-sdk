@@ -61,6 +61,10 @@ const LAUNCH_OWNER_CHANGED: &str =
     "0x478004cf03e8c3b648608ce0259ce479c813aa671a383230ee7763fe5da22391";
 const LAUNCH_FEES_CLAIMED: &str =
     "0x908c6b2c19765fe47aef218b4f71ea1a10a9e156d9d5c3500c3a298e01428805";
+/// Core `PositionUpdated(address,bytes32,bytes32,int128,bytes32,bytes32)`.
+const POSITION_UPDATED: &str = "0x704b3ab4a76158ad4d66625a2a43be81edbffd24630e8fde5174e97035370a07";
+/// ERC-20 `Transfer(address,address,uint256)`.
+const TRANSFER: &str = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 fn address(s: &str) -> Address {
     Address::from_str(s).unwrap()
@@ -286,14 +290,148 @@ fn fixture_quote(fixture: &Value, recorded: &Value) -> ZeroSeedLaunchQuoteObserv
     let quote = address(s(recorded, "quote"));
     let runtime = match s(recorded, "quoteKind") {
         "native" => {
-            assert!(recorded["quoteRuntimeKeccak"].is_null());
             assert_eq!(quote, Address::ZERO);
             None
         }
-        "erc20" => Some(s(recorded, "quoteRuntimeKeccak")),
+        "erc20" => {
+            // The receipt's one ERC-20 quote and its executed runtime.
+            assert_eq!(quote, address(s(&fixture["addresses"], "erc20Quote")));
+            Some(s(&fixture["provenance"], "erc20QuoteRuntimeKeccak"))
+        }
         other => panic!("quote kind {other}"),
     };
     quote_observation(fixture["chainId"].as_u64().unwrap(), quote, runtime)
+}
+
+/// The creation transaction's own records of the installation: the `Installation` the periphery
+/// returned, Core's `PositionUpdated` (launch-token delta == installed supply, quote delta 0,
+/// liquidity delta == computed liquidity), the launch token's mint to Core and the sink mint to
+/// `address(0)`, and the recorded `totalSupply` and sink balance.
+fn assert_receipt_installation(
+    branch_logs: &[Value],
+    created: &Value,
+    recorded: &Value,
+    installation: &Value,
+    expected: &ZeroSeedLaunchInstallation,
+    key: &EvmZeroSeedLaunchPoolKey,
+    token: Address,
+    instance: &ZeroSeedLaunchInstance,
+) {
+    let label = s(recorded, "label");
+    let requested: u128 = num(installation, "requestedSupply");
+    let installed: u128 = num(installation, "installedSupply");
+    let sink: u128 = num(installation, "sinkSupply");
+    assert_eq!(expected.installed_supply, installed, "{label} installed");
+    assert_eq!(expected.sink_supply, sink, "{label} sink");
+    assert_eq!(installed + sink, requested, "{label}");
+    assert_eq!(
+        num::<u128>(installation, "totalSupply"),
+        requested,
+        "{label}"
+    );
+    assert_eq!(num::<u128>(installation, "sinkBalance"), sink, "{label}");
+    assert_eq!(num::<u128>(installation, "coreInstalledDelta"), installed);
+    assert_eq!(num::<u128>(installation, "coreQuoteDelta"), 0);
+    assert_eq!(
+        num::<u128>(installation, "coreLiquidityDelta"),
+        expected.liquidity
+    );
+    for field in [
+        "requestedSupply",
+        "installedSupply",
+        "sinkSupply",
+        "liquidity",
+    ] {
+        assert_eq!(
+            s(recorded, field),
+            s(installation, field),
+            "{label} {field}"
+        );
+    }
+    assert_eq!(s(recorded, "quote"), s(installation, "quote"));
+    assert_eq!(s(recorded, "quoteKind"), s(installation, "quoteKind"));
+    assert_eq!(
+        recorded["tokenIsToken1"].as_bool(),
+        Some(token == key.token1),
+        "{label} order"
+    );
+    assert_eq!(num::<i32>(recorded, "initialTick"), expected.initial_tick);
+
+    // The returned Installation struct.
+    let returned = &installation["installation"];
+    assert_eq!(address(s(returned, "token")), token);
+    assert_eq!(address(s(&returned["poolKey"], "token0")), key.token0);
+    assert_eq!(address(s(&returned["poolKey"], "token1")), key.token1);
+    assert_eq!(s(returned, "positionId"), s(recorded, "positionId"));
+    assert_eq!(num::<i32>(returned, "initialTick"), expected.initial_tick);
+    assert_eq!(num::<u128>(returned, "liquidity"), expected.liquidity);
+    assert_eq!(num::<u128>(returned, "installedSupply"), installed);
+
+    // The raw logs of the creation transaction.
+    let tx = &created["transactionHash"];
+    assert_eq!(tx.as_str(), Some(s(installation, "creationTransaction")));
+    assert_eq!(
+        hex_u64(created, "blockNumber"),
+        installation["creationBlock"].as_u64().unwrap()
+    );
+    let in_tx: Vec<&Value> = branch_logs
+        .iter()
+        .filter(|l| &l["transactionHash"] == tx)
+        .collect();
+    let updates: Vec<_> = in_tx
+        .iter()
+        .filter(|l| {
+            address(s(l, "address")) == instance.core
+                && l["topics"][0].as_str() == Some(POSITION_UPDATED)
+        })
+        .collect();
+    assert_eq!(updates.len(), 1, "{label} one PositionUpdated");
+    let data = data_bytes(updates[0]);
+    assert_eq!(word_address(&data, 0), instance.extension, "locker");
+    assert_eq!(
+        format!("{:#066x}", word(&data, 1)),
+        s(recorded, "poolId"),
+        "{label} pool id"
+    );
+    assert_eq!(
+        format!("{:#066x}", word(&data, 2)),
+        s(recorded, "positionId"),
+        "{label} position"
+    );
+    assert_eq!(
+        word_i128(&data, 3),
+        expected.liquidity as i128,
+        "{label} liquidity delta"
+    );
+    let delta0 = i128::from_be_bytes(data[128..144].try_into().unwrap());
+    let delta1 = i128::from_be_bytes(data[144..160].try_into().unwrap());
+    let (token_delta, quote_delta) = if token == key.token1 {
+        (delta1, delta0)
+    } else {
+        (delta0, delta1)
+    };
+    assert_eq!(
+        token_delta, installed as i128,
+        "{label} Core installed delta"
+    );
+    assert_eq!(quote_delta, 0, "{label} no quote side");
+    let mints: Vec<(Address, u128)> = in_tx
+        .iter()
+        .filter(|l| {
+            address(s(l, "address")) == token
+                && l["topics"][0].as_str() == Some(TRANSFER)
+                && topic_address(l, 1) == Address::ZERO
+        })
+        .map(|l| (topic_address(l, 2), word_u128(&data_bytes(l), 0)))
+        .collect();
+    let mut expected_mints = vec![(instance.core, installed)];
+    if sink != 0 {
+        expected_mints.push((Address::ZERO, sink));
+    }
+    assert_eq!(
+        mints, expected_mints,
+        "{label} mints: installed to Core, sink to address(0)"
+    );
 }
 
 fn data_bytes(log: &Value) -> Vec<u8> {
@@ -549,7 +687,16 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
                 preview_installation_math(&parameters, 0).unwrap()
             );
             assert_eq!(installed.liquidity, config.liquidity);
-            assert_supply(installation, &installed, label);
+            assert_receipt_installation(
+                branch["logs"].as_array().unwrap(),
+                log,
+                recorded,
+                installation,
+                &installed,
+                &key,
+                token,
+                &instance,
+            );
 
             let created_state = initial_state(&range, config.liquidity);
             let previous = launches.insert(
@@ -585,7 +732,6 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
 }
 
 #[test]
-#[ignore]
 fn indexer_launches_decode_bind_and_predict() {
     let fixture = indexer();
     let launches = indexed_launches(&fixture);
@@ -634,7 +780,6 @@ struct Ledger {
 /// owners from `LaunchOwnerChanged`, and every recorded snapshot: `Core` state, `creatorFees`,
 /// `feeAt(block time)`, owner and controller.
 #[test]
-#[ignore]
 fn indexer_trades_ledgers_owners_and_fees_replay() {
     let fixture = indexer();
     let launches = indexed_launches(&fixture);
@@ -812,6 +957,12 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                     assert_eq!(ledger.paid[side], ledger.claimed[side], "no double count");
                 }
                 assert_eq!(address(s(observed, "launchOwner")), ledger.owner);
+                let installation = &fixture["installations"][label];
+                assert_eq!(
+                    s(observed, "totalSupply"),
+                    s(installation, "requestedSupply")
+                );
+                assert_eq!(s(observed, "sinkBalance"), s(installation, "sinkSupply"));
                 assert_eq!(
                     address(s(observed, "controller")),
                     launch.instance.periphery
@@ -831,13 +982,15 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
     }
     assert_eq!(swaps_checked, swap_actions);
     assert_eq!(claims_checked, claim_actions);
-    assert!(swaps_checked > 0 && claims_checked > 0 && snapshots_checked > 0);
+    assert_eq!(
+        (swaps_checked, claims_checked, snapshots_checked),
+        (19, 8, 41)
+    );
 }
 
 /// The receipt's single instance and its ERC-20 quotes are exactly the pinned local fixture, which
 /// the SDK compiles in.
 #[test]
-#[ignore]
 fn local_fixture_pins_match_the_indexer_receipt() {
     let fixture = indexer();
     let pins = pins();
@@ -854,13 +1007,53 @@ fn local_fixture_pins_match_the_indexer_receipt() {
             "{field}"
         );
     }
+    for field in ["extensionSalt", "peripherySalt"] {
+        assert_eq!(s(entry, field), s(pinned, field), "{field}");
+    }
+    let provenance = &fixture["provenance"];
+    assert_eq!(s(provenance, "coreRuntimeKeccak"), CORE_RUNTIME);
+    for (contract, template, creation, abi) in [
+        (
+            "ZeroSeedLaunch",
+            "launchRuntimeTemplateKeccak",
+            "launchCreationKeccak",
+            "launchAbiSha256",
+        ),
+        (
+            "ZeroSeedLaunchPeriphery",
+            "peripheryRuntimeTemplateKeccak",
+            "peripheryCreationKeccak",
+            "peripheryAbiSha256",
+        ),
+    ] {
+        let pinned = &pins[contract];
+        assert_eq!(
+            s(provenance, template),
+            s(&pinned["templateRuntime"], "zeroFilledKeccak")
+        );
+        assert_eq!(s(provenance, creation), s(&pinned["creation"], "keccak"));
+        assert_eq!(s(provenance, abi), s(pinned, "abiSha256"));
+    }
+    assert_eq!(
+        s(entry, "extensionRuntimeTemplateKeccak"),
+        s(provenance, "launchRuntimeTemplateKeccak")
+    );
+    assert_eq!(
+        s(entry, "peripheryRuntimeTemplateKeccak"),
+        s(provenance, "peripheryRuntimeTemplateKeccak")
+    );
+    let mut kinds = Vec::new();
     for recorded in fixture["launches"].as_object().unwrap().values() {
+        assert_eq!(s(recorded, "instance"), s(entry, "label"));
+        kinds.push(s(recorded, "quoteKind"));
         let quote = fixture_quote(&fixture, recorded);
         match quote.supported_kind().unwrap() {
             ZeroSeedLaunchQuoteKind::Native => assert_eq!(quote.quote, Address::ZERO),
             ZeroSeedLaunchQuoteKind::Erc20 { .. } => assert_eq!(quote, pinned_erc20_quote()),
         }
     }
+    kinds.sort_unstable();
+    assert_eq!(kinds, ["erc20", "erc20", "native", "native"]);
 }
 
 // ---------------------------------------------------------------------------------------------
