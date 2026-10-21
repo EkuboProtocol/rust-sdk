@@ -1,7 +1,7 @@
 {
- "source": "EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a",
+ "source": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08",
  "ZeroSeedLaunch": {
-  "abiSha256": "21f9e2c0166ab28ce8573c481de5b0fc2f37dd7595d496d326f0a2d1a544254e",
+  "abiSha256": "999068f8e41867e972f4485c0105f584a2c10d7537615e6b4517807548fcd4bf",
   "functions": {
    "afterCollectFees(bytes32,(address,address,bytes32),bytes32,uint128,uint128)": "0x751fd5df",
    "afterInitializePool(address,(address,address,bytes32),int32,uint96)": "0x948374ff",
@@ -15,12 +15,11 @@
    "feeAt(bytes32,uint256)": "0xe81084ec",
    "forwarded_2374103877(bytes32)": "0x00000001",
    "getLaunch(bytes32)": "0x7d1d589c",
-   "previewInstallation(address,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x42b9fe08",
-   "quoteToken()": "0x217a4b70"
+   "previewInstallation(address,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x917c1163"
   },
   "events": {
    "CreatorFeesClaimed(bytes32,address,uint128,uint128)": "0xf0ffdfa84530baef2e9f8bbb160545a59bfef8da319fa27aa69e4f3c8f05a41d",
-   "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x085ada2e6f98dc43ec420caff7f39c25cbc16c81595684b19c4fca014dae5f2d",
+   "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x3a4e811187f4a8c0b72396e9d7ca13aeed62eb97a599a24af1ed99066041098f",
    "LaunchSwapped(bytes32,address,int128,int128,uint64,uint128,bool)": "0x3e58795f52a8e88efdec2da89ea3798175f8764145ccd7bf5e40633a7d571f6d"
   },
   "errors": {
@@ -42,7 +41,6 @@
    "MinMaxBounds()": "0xabfa4a31",
    "PositionsThroughCreateOnly()": "0x74a99003",
    "StableswapMustBeFullRange()": "0x72b1019d",
-   "SupplyNotExactlyInstallable(uint128,uint128)": "0xad00b597",
    "SwapsThroughForwardOnly()": "0xf17f54b3",
    "TradingNotStarted()": "0xacf75be8",
    "UnknownForwardAction()": "0xe5c78d9a",
@@ -51,18 +49,18 @@
    "ZeroLiquidity()": "0x10074548"
   },
   "templateRuntime": {
-   "bytes": 20432,
-   "zeroFilledKeccak": "0x25637ad2d1071b641f275d3b1037616b8836d2445501c05d38618764fa924167"
+   "bytes": 20184,
+   "zeroFilledKeccak": "0x39a99e30dfff34873b7a820416ae4bc33a337612c644c45e68c51ac6564a9f4d"
   },
   "creation": {
-   "bytes": 21008,
-   "keccak": "0x50dc9c4148f4c81f8f689a2b62ed70c9590366fdb963072b4f2b89361f1dcd7c"
+   "bytes": 20674,
+   "keccak": "0x78906a80dd0e4aeb1b7c94698a1e7917c20dc7b031a4513759ea12495f374384"
   },
   "immutableReferences": {
    "73285": {
     "locations": [
      {
-      "start": 2739,
+      "start": 2418,
       "length": 32
      }
     ]
@@ -70,31 +68,19 @@
    "77162": {
     "locations": [
      {
-      "start": 857,
+      "start": 846,
       "length": 32
      },
      {
-      "start": 4501,
+      "start": 6258,
       "length": 32
      },
      {
-      "start": 5721,
+      "start": 7399,
       "length": 32
      },
      {
-      "start": 7607,
-      "length": 32
-     }
-    ]
-   },
-   "90873": {
-    "locations": [
-     {
-      "start": 2378,
-      "length": 32
-     },
-     {
-      "start": 10332,
+      "start": 9094,
       "length": 32
      }
     ]
@@ -102,14 +88,14 @@
   }
  },
  "ZeroSeedLaunchPeriphery": {
-  "abiSha256": "5c563488b843aee923d0d819a66489eeee543dd20d1582de1f5df643f5d08a75",
+  "abiSha256": "df24d9f07d45323da7e46c0f6e64ce24f8f522442d60cb07880ddf742ebe7305",
   "functions": {
    "LAUNCH()": "0x096e3c3e",
    "claimFees((address,address,bytes32),address)": "0x6906b4c0",
-   "create((string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x687ba810",
+   "create((string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x662af306",
    "launchOwner(bytes32)": "0x60ac0b66",
    "locked_6416899205(uint256)": "0x00000000",
-   "previewInstallation(address,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x42b9fe08",
+   "previewInstallation(address,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x917c1163",
    "transferLaunch(bytes32,address)": "0x8b1cb36f"
   },
   "events": {
@@ -124,22 +110,22 @@
    "OwnerOnly()": "0x596dcdb8"
   },
   "templateRuntime": {
-   "bytes": 5541,
-   "zeroFilledKeccak": "0x271683d2c3cf5e518fc5aa531f8568191b166a262a43e05d13325f0630dd5d7a"
+   "bytes": 5552,
+   "zeroFilledKeccak": "0x08216f696368b4398afb8c43ca3eff0cccdcea00e71397178b78b2b94f957dbb"
   },
   "creation": {
-   "bytes": 5761,
-   "keccak": "0x79a8ef83d84f8110f6fec96a2d964a39913f81ab23a304fb19fb577fe29ef56c"
+   "bytes": 5772,
+   "keccak": "0xb36a0535c61c790f3600a0c45dd92763a1934652de322ddd1c175f3cda2dc046"
   },
   "immutableReferences": {
    "72634": {
     "locations": [
      {
-      "start": 1063,
+      "start": 1399,
       "length": 32
      },
      {
-      "start": 4390,
+      "start": 4401,
       "length": 32
      }
     ]
@@ -147,19 +133,19 @@
    "72637": {
     "locations": [
      {
-      "start": 999,
+      "start": 311,
       "length": 32
      },
      {
-      "start": 1818,
+      "start": 1335,
       "length": 32
      },
      {
-      "start": 2019,
+      "start": 2015,
       "length": 32
      },
      {
-      "start": 4335,
+      "start": 4346,
       "length": 32
      }
     ]
@@ -167,15 +153,15 @@
    "73358": {
     "locations": [
      {
-      "start": 2125,
+      "start": 2121,
       "length": 32
      },
      {
-      "start": 4629,
+      "start": 4640,
       "length": 32
      },
      {
-      "start": 5250,
+      "start": 5261,
       "length": 32
      }
     ]
@@ -271,68 +257,49 @@
    }
   }
  },
- "localFixtures": {
-  "native": {
-   "chainId": 31337,
-   "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
-   "coreRuntimeKeccak": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-   "quote": "0x0000000000000000000000000000000000000000",
-   "quoteKind": "native",
-   "quoteRuntimeKeccak": null,
-   "extension": "0x5114703a4cf4256f0acb68f992c861d8c4d1b173",
-   "extensionConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd7010000000000000000000000000000000000000000000000000000000000000000",
-   "extensionInitCodeKeccak": "0xb690682ad6d38f8c0e8938e8e80f7dc68e3f56b4da75ed89d1f09789fae782c6",
-   "extensionRuntimeKeccak": "0x846786a63ba1a2c976f748fdc94b8cbc8f76dc64f07452333d36ff564f281bf7",
-   "periphery": "0xb27e16c3d01850191c1e027f7a3372cd2e1fb324",
-   "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd7010000000000000000000000005114703a4cf4256f0acb68f992c861d8c4d1b173",
-   "peripheryInitCodeKeccak": "0x905ee280da75e2edba7d10be50c0ea0345100ffcad3eb8f2ca8ae51080ef53e2",
-   "peripheryRuntimeKeccak": "0x57d0ee27c634ac08d08b60bf8e6c2f185c7e9444613ccfde5ac9bbb5e3f84f2a",
-   "scope": "constructor-executed LOCAL anvil fixture (chain 31337, no fork), not a deployed network pin",
-   "extensionImmutables": {
-    "73285": "core",
-    "77162": "core",
-    "90873": "quote"
-   },
-   "peripheryImmutables": {
-    "72634": "core",
-    "72637": "extension",
-    "73358": "core"
-   }
+ "localFixture": {
+  "chainId": 31337,
+  "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
+  "coreRuntimeKeccak": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
+  "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+  "extension": "0x519ddb6580e97e08e639d601dc6e378285c3ef34",
+  "extensionSalt": "0x00000000000000000000000000000000000000000000000000000000000000db",
+  "extensionConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701",
+  "extensionInitCodeKeccak": "0x2dfacfc189bf3a11e77f51a159d33825aa05617980c23a824191d3e56179565e",
+  "extensionRuntimeKeccak": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
+  "extensionImmutables": {
+   "73285": "core",
+   "77162": "core"
   },
-  "weth": {
-   "chainId": 31337,
-   "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
-   "coreRuntimeKeccak": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-   "quote": "0xffffffffffffffffffffffffffffffffffffffff",
-   "quoteKind": "erc20",
-   "quoteRuntimeKeccak": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
-   "extension": "0x519435a42752da78e395999218d0ecc4fdcbcf4b",
-   "extensionConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000ffffffffffffffffffffffffffffffffffffffff",
-   "extensionInitCodeKeccak": "0x683b29fff069a013fa3a92164e1d23d0bedc4a01234232abadcbc2933f262ed9",
-   "extensionRuntimeKeccak": "0x56e32aeac03464c3babd754fc21e0594c42d82db9d9c0cc3dd1ce1ec20273750",
-   "periphery": "0x94e1b338def908449e6ea7c7d254630b45d27562",
-   "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000519435a42752da78e395999218d0ecc4fdcbcf4b",
-   "peripheryInitCodeKeccak": "0xeb1f206277a10dfa1bd428c10b22a21ba6b502dfaada74cd903827931999be1a",
-   "peripheryRuntimeKeccak": "0xb78ea649f2e1817c851f7417a604d1565a346c6bec022abc821e3f1110739ac8",
-   "scope": "constructor-executed LOCAL anvil fixture (chain 31337, no fork), not a deployed network pin",
-   "extensionImmutables": {
-    "73285": "core",
-    "77162": "core",
-    "90873": "quote"
-   },
-   "peripheryImmutables": {
-    "72634": "core",
-    "72637": "extension",
-    "73358": "core"
-   }
-  }
+  "periphery": "0x094511cf93e73feca154da35a2404e8bde1111b4",
+  "peripherySalt": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000519ddb6580e97e08e639d601dc6e378285c3ef34",
+  "peripheryInitCodeKeccak": "0x0c55bd2c1e83bf3c5a9fab803eaacd11080fca00c87f6e57b5cee9b4a8b0d650",
+  "peripheryRuntimeKeccak": "0x91a98d2669389244ad8553d84f5c7e3c2947d5d4b5abb519be93d68142cce7c1",
+  "peripheryImmutables": {
+   "72634": "core",
+   "72637": "extension",
+   "73358": "core"
+  },
+  "scope": "constructor-executed LOCAL anvil fixture (chain 31337, no fork), not a deployed network pin; one extension and one periphery serve every quote"
  },
+ "localQuotes": [
+  {
+   "chainId": 31337,
+   "quote": "0xffffffffffffffffffffffffffffffffffffffff",
+   "runtimeKeccak": "0xe8ccd7c4eb891208d5e04a27a31dfaf2b9bce01e083d7b36f10b6dd6ea643e63",
+   "source": "test/TestToken.sol:TestToken (plain 18-decimal ERC-20, no immutables), relocated",
+   "scope": "LOCAL fixture ERC-20 quote only; no live quote is reviewed"
+  }
+ ],
  "consumerManifest": {
-  "frozenCommit": "4f1a3060b099e8a50469848118f44c0c65cfab9a",
+  "frozenCommit": "40af6cb359b0de2f61f15e47b6622a00c48b5b08",
+  "frozenTree": "f9925da3e2047b5ab5e45729056a3595043aa804",
+  "manifestSha256": "6dce9c6bcb0dd1be2a542109b546a4199db55b01f5a0bdcfead13e721eadea6b",
   "abiSha256Convention": "sha256 of `jq -cS .abi` of the Foundry artifact, no trailing newline",
   "abiSha256": {
-   "ZeroSeedLaunch": "21f9e2c0166ab28ce8573c481de5b0fc2f37dd7595d496d326f0a2d1a544254e",
-   "ZeroSeedLaunchPeriphery": "5c563488b843aee923d0d819a66489eeee543dd20d1582de1f5df643f5d08a75",
+   "ZeroSeedLaunch": "999068f8e41867e972f4485c0105f584a2c10d7537615e6b4517807548fcd4bf",
+   "ZeroSeedLaunchPeriphery": "df24d9f07d45323da7e46c0f6e64ce24f8f522442d60cb07880ddf742ebe7305",
    "MintableERC20": "fa77fe077e7630e8d08191428bbdf6529fb32d0bbe49b8a7245887fbd1f1abba"
   },
   "abi": {
@@ -350,12 +317,11 @@
      "feeAt(bytes32,uint256)": "0xe81084ec",
      "forwarded_2374103877(bytes32)": "0x00000001",
      "getLaunch(bytes32)": "0x7d1d589c",
-     "previewInstallation(address,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x42b9fe08",
-     "quoteToken()": "0x217a4b70"
+     "previewInstallation(address,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x917c1163"
     },
     "events": {
      "CreatorFeesClaimed(bytes32,address,uint128,uint128)": "0xf0ffdfa84530baef2e9f8bbb160545a59bfef8da319fa27aa69e4f3c8f05a41d",
-     "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x085ada2e6f98dc43ec420caff7f39c25cbc16c81595684b19c4fca014dae5f2d",
+     "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x3a4e811187f4a8c0b72396e9d7ca13aeed62eb97a599a24af1ed99066041098f",
      "LaunchSwapped(bytes32,address,int128,int128,uint64,uint128,bool)": "0x3e58795f52a8e88efdec2da89ea3798175f8764145ccd7bf5e40633a7d571f6d"
     },
     "errors": {
@@ -377,7 +343,6 @@
      "MinMaxBounds()": "0xabfa4a31",
      "PositionsThroughCreateOnly()": "0x74a99003",
      "StableswapMustBeFullRange()": "0x72b1019d",
-     "SupplyNotExactlyInstallable(uint128,uint128)": "0xad00b597",
      "SwapsThroughForwardOnly()": "0xf17f54b3",
      "TradingNotStarted()": "0xacf75be8",
      "UnknownForwardAction()": "0xe5c78d9a",
@@ -390,10 +355,10 @@
     "functions": {
      "LAUNCH()": "0x096e3c3e",
      "claimFees((address,address,bytes32),address)": "0x6906b4c0",
-     "create((string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x687ba810",
+     "create((string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x662af306",
      "launchOwner(bytes32)": "0x60ac0b66",
      "locked_6416899205(uint256)": "0x00000000",
-     "previewInstallation(address,(string,string,uint8,uint128,uint128,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x42b9fe08",
+     "previewInstallation(address,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))": "0x917c1163",
      "transferLaunch(bytes32,address)": "0x8b1cb36f"
     },
     "events": {
@@ -407,10 +372,56 @@
      "InvalidRecipient()": "0x9c8d2cd2",
      "OwnerOnly()": "0x596dcdb8"
     }
+   },
+   "MintableERC20": {
+    "functions": {
+     "DOMAIN_SEPARATOR()": "0x3644e515",
+     "allowance(address,address)": "0xdd62ed3e",
+     "approve(address,uint256)": "0x095ea7b3",
+     "balanceOf(address)": "0x70a08231",
+     "cancelOwnershipHandover()": "0x54d1f13d",
+     "completeOwnershipHandover(address)": "0xf04e283e",
+     "decimals()": "0x313ce567",
+     "mint(address,uint128)": "0xbe29184f",
+     "name()": "0x06fdde03",
+     "nonces(address)": "0x7ecebe00",
+     "owner()": "0x8da5cb5b",
+     "ownershipHandoverExpiresAt(address)": "0xfee81cf4",
+     "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)": "0xd505accf",
+     "renounceOwnership()": "0x715018a6",
+     "requestOwnershipHandover()": "0x25692962",
+     "symbol()": "0x95d89b41",
+     "totalSupply()": "0x18160ddd",
+     "transfer(address,uint256)": "0xa9059cbb",
+     "transferFrom(address,address,uint256)": "0x23b872dd",
+     "transferOwnership(address)": "0xf2fde38b"
+    },
+    "events": {
+     "Approval(address,address,uint256)": "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+     "OwnershipHandoverCanceled(address)": "0xfa7b8eab7da67f412cc9575ed43464468f9bfbae89d1675917346ca6d8fe3c92",
+     "OwnershipHandoverRequested(address)": "0xdbf36a107da19e49527a7176a1babf963b4b0ff8cde35ee35d6cd8f1f9ac7e1d",
+     "OwnershipTransferred(address,address)": "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
+     "Transfer(address,address,uint256)": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+    },
+    "errors": {
+     "AllowanceOverflow()": "0xf9067066",
+     "AllowanceUnderflow()": "0x8301ab38",
+     "AlreadyInitialized()": "0x0dc149f0",
+     "InsufficientAllowance()": "0x13be252b",
+     "InsufficientBalance()": "0xf4d678b8",
+     "InvalidPermit()": "0xddafbaef",
+     "NewOwnerIsZeroAddress()": "0x7448fbae",
+     "NoHandoverRequest()": "0x6f5e8818",
+     "PackedStringTooLong()": "0x73c9e700",
+     "Permit2AllowanceIsFixedAtInfinity()": "0x3f68539a",
+     "PermitExpired()": "0x1a15a3cc",
+     "TotalSupplyOverflow()": "0xe5cfe957",
+     "Unauthorized()": "0x82b42900"
+    }
    }
   },
   "structs": {
-   "LaunchParameters": "(string name,string symbol,uint8 decimals,uint128 supply,uint128 liquidity,int32 askTick,int32 upperTick,uint32 tickSpacing,uint64 tradingStart,uint32 feeDuration,uint64 initialFee,uint64 finalFee,bytes32 salt)",
+   "LaunchParameters": "(string name,string symbol,uint8 decimals,uint128 supply,address quoteToken,int32 askTick,int32 upperTick,uint32 tickSpacing,uint64 tradingStart,uint32 feeDuration,uint64 initialFee,uint64 finalFee,bytes32 salt)",
    "Launch": "(address controller,uint64 tradingStart,uint32 feeDuration,uint64 initialFee,uint64 finalFee,int32 tickLower,int32 tickUpper)",
    "Installation": "(address token,(address token0,address token1,bytes32 config) poolKey,bytes32 positionId,int32 initialTick,uint128 liquidity,uint128 installedSupply)"
   },

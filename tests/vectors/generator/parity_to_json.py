@@ -20,7 +20,7 @@ def fields(line):
     return out
 
 
-scenarios, previews, bindings = {}, [], []
+scenarios, previews, creations = {}, [], []
 for raw in sys.stdin:
     line = raw.strip()
     if not line.startswith("PARITY|"):
@@ -49,6 +49,7 @@ for raw in sys.stdin:
             "post": state(f["post"]),
             "pre_balances": f["preBalances"].split(","),
             "post_balances": f["postBalances"].split(","),
+            "via_router": f["viaRouter"] == "1",
         }
         if step["ok"]:
             d0, d1, rate, fee, fee1 = f["event"].split(",")
@@ -72,23 +73,23 @@ for raw in sys.stdin:
     elif kind == "preview":
         f["ok"] = f["ok"] == "1"
         previews.append(f)
-    elif kind == "binding":
+    elif kind == "creation":
         f["ok"] = f["ok"] == "1"
-        bindings.append(f)
+        creations.append(f)
 
 json.dump(
     {
-        "version": 2,
+        "version": 3,
         "label": "LOCAL FIXTURE PARITY VECTORS - not live evidence",
         "source": {
-            "contracts": "EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a (tree 64649a281f113674584f192ff11b642071fdeac3)",
+            "contracts": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08 (tree f9925da3e2047b5ab5e45729056a3595043aa804)",
             "core": "local Core built at that commit, runtime keccak 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a (asserted in every scenario)",
-            "flow": "launches created through ZeroSeedLaunchPeriphery; swaps are Core.forward(extension, abi.encode(PoolKey, SwapParameters)) from a test locker; native ETH settled by value",
+            "flow": "one extension (constructor (core)) and one periphery per test serve native and ERC-20 quotes; launches created through ZeroSeedLaunchPeriphery with the requested supply unchanged; swaps are Core.forward(extension, abi.encode(PoolKey, SwapParameters)) from the test locker or test/LaunchTestRouter.sol; native ETH settled by value",
             "generator": "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol",
         },
         "scenarios": list(scenarios.values()),
         "previews": previews,
-        "bindings": bindings,
+        "creations": creations,
     },
     sys.stdout,
     indent=1,

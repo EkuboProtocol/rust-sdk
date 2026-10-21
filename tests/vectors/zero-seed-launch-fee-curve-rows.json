@@ -1,5 +1,5 @@
 {
- "source": "EkuboProtocol/evm-contracts@4f1a3060b099e8a50469848118f44c0c65cfab9a test/extensions/ZeroSeedLaunchFeeCurve.t.sol",
+ "source": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08 test/extensions/ZeroSeedLaunchFeeCurve.t.sol",
  "highRate": [
   {
    "raw": "VEC|highRate|rate=50|order=t0|dec=18/18|oneUnit|gross=999970|fee=499985|net=499985",

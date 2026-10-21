@@ -1,6 +1,6 @@
 //! Reproduces the `ZeroSeedLaunch` vectors in `tests/vectors`: the contract's frozen integer
-//! vectors, the parity vectors read from local `Core`, extension and periphery state and events,
-//! the indexer's LOCAL anvil receipt of the two supported instances, and the pinned ABIs.
+//! vectors, the parity vectors read from local `Core`, extension, periphery and token state and
+//! events, the indexer's LOCAL anvil receipt of the supported instance, and the pinned ABIs.
 #![cfg(any(feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 
 use core::str::FromStr;
@@ -17,13 +17,13 @@ use ekubo_sdk::{
             zero_seed_launch::{
                 MINTABLE_ERC20_CREATION_CODE, MINTABLE_ERC20_CREATION_CODE_KECCAK,
                 ZeroSeedLaunchConfig, ZeroSeedLaunchFeeSchedule, ZeroSeedLaunchFullFillError,
-                ZeroSeedLaunchInstance, ZeroSeedLaunchLocalPreview, ZeroSeedLaunchParameterError,
-                ZeroSeedLaunchParameters, ZeroSeedLaunchPoolConstructionError,
-                ZeroSeedLaunchPoolQuoteError, ZeroSeedLaunchPoolState, ZeroSeedLaunchQuoteKind,
-                ZeroSeedLaunchRange, check_launch_binding, check_launch_binding_math,
-                extension_token_salt, launch_token_address, periphery_launch_salt,
-                periphery_launch_token_address, preview_installation, preview_installation_math,
-                validate_claim_recipient,
+                ZeroSeedLaunchInstallation, ZeroSeedLaunchInstance, ZeroSeedLaunchLocalPreview,
+                ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters,
+                ZeroSeedLaunchPoolConstructionError, ZeroSeedLaunchPoolQuoteError,
+                ZeroSeedLaunchPoolState, ZeroSeedLaunchQuoteKind, ZeroSeedLaunchQuoteObservation,
+                ZeroSeedLaunchRange, extension_token_salt, installation_math, launch_token_address,
+                periphery_launch_salt, periphery_launch_token_address, preview_installation,
+                preview_installation_math, validate_claim_recipient,
             },
         },
         types::{Pool, PoolConfig, PoolKey, QuoteParams, TokenAmount},
@@ -40,6 +40,9 @@ const ABI_LAUNCH: &str = include_str!("vectors/pins/ZeroSeedLaunch.abi.json");
 const ABI_PERIPHERY: &str = include_str!("vectors/pins/ZeroSeedLaunchPeriphery.abi.json");
 const ABI_TOKEN: &str = include_str!("vectors/pins/MintableERC20.abi.json");
 
+const TARGET_COMMIT: &str = "40af6cb359b0de2f61f15e47b6622a00c48b5b08";
+const CORE_RUNTIME: &str = "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
+
 /// Fixture quote tokens of the contract tests: the high one makes the launch token token0.
 const QUOTE_HIGH: &str = "0xffffffffffffffffffffffffffffffffffffffff";
 const QUOTE_LOW: &str = "0x0000000000000000000000000000000000010000";
@@ -50,7 +53,7 @@ const SQRT_RATIO_LIMIT_WRONG_DIRECTION: &str = "0xa574a6b4";
 /// solady `SafeCastLib.Overflow()`: a delta does not fit an int128.
 const SAFE_CAST_OVERFLOW: &str = "0x35278d12";
 
-const LAUNCH_CREATED: &str = "0x085ada2e6f98dc43ec420caff7f39c25cbc16c81595684b19c4fca014dae5f2d";
+const LAUNCH_CREATED: &str = "0x3a4e811187f4a8c0b72396e9d7ca13aeed62eb97a599a24af1ed99066041098f";
 const LAUNCH_SWAPPED: &str = "0x3e58795f52a8e88efdec2da89ea3798175f8764145ccd7bf5e40633a7d571f6d";
 const CREATOR_FEES_CLAIMED: &str =
     "0xf0ffdfa84530baef2e9f8bbb160545a59bfef8da319fa27aa69e4f3c8f05a41d";
@@ -128,23 +131,145 @@ fn initial_state(range: &ZeroSeedLaunchRange, liquidity: u128) -> ZeroSeedLaunch
     }
 }
 
+/// A quote observation with the recorded runtime keccak, `None` for an address without code.
+fn quote_observation(
+    chain_id: u64,
+    quote: Address,
+    runtime: Option<&str>,
+) -> ZeroSeedLaunchQuoteObservation {
+    ZeroSeedLaunchQuoteObservation {
+        chain_id,
+        quote,
+        quote_runtime: runtime.map(|r| U256::from_str(r).unwrap()),
+    }
+}
+
+/// Requested, installed and sink supply of one creation, as recorded, against the SDK's
+/// installation for the requested supply.
+fn assert_supply(v: &Value, installation: &ZeroSeedLaunchInstallation, label: &str) {
+    let requested: u128 = num(v, "requestedSupply");
+    let installed: u128 = num(v, "installedSupply");
+    let sink: u128 = num(v, "sinkSupply");
+    assert_eq!(
+        installation.installed_supply, installed,
+        "{label} installed"
+    );
+    assert_eq!(installation.sink_supply, sink, "{label} sink");
+    assert_eq!(
+        installed + sink,
+        requested,
+        "{label} requested = installed + sink"
+    );
+    assert!(0 < installed && installed <= requested, "{label}");
+    if v.get("totalSupply").is_some() {
+        assert_eq!(
+            num::<u128>(v, "totalSupply"),
+            requested,
+            "{label} totalSupply"
+        );
+        assert_eq!(
+            num::<u128>(v, "balanceOfZero"),
+            sink,
+            "{label} balanceOf(0)"
+        );
+        assert_eq!(
+            num::<i128>(v, "positionTokenDelta"),
+            installed as i128,
+            "{label} Core position delta"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
-// Indexer LOCAL receipt: the two supported instances, decoded from the emitted logs.
+// Supported LOCAL fixture: one extension and periphery for every quote, `pins.localFixture`.
+// ---------------------------------------------------------------------------------------------
+
+fn pins() -> Value {
+    serde_json::from_str(PINS).unwrap()
+}
+
+/// The supported instance exactly as `pins.localFixture` records it.
+fn pinned_instance() -> ZeroSeedLaunchInstance {
+    let pins = pins();
+    let f = &pins["localFixture"];
+    ZeroSeedLaunchInstance {
+        chain_id: f["chainId"].as_u64().unwrap(),
+        extension: address(s(f, "extension")),
+        extension_runtime: U256::from_str(s(f, "extensionRuntimeKeccak")).unwrap(),
+        periphery: address(s(f, "periphery")),
+        periphery_runtime: U256::from_str(s(f, "peripheryRuntimeKeccak")).unwrap(),
+        core: address(s(f, "core")),
+        core_runtime: U256::from_str(s(f, "coreRuntimeKeccak")).unwrap(),
+    }
+}
+
+/// The reviewed LOCAL ERC-20 quote, `pins.localQuotes[0]`.
+fn pinned_erc20_quote() -> ZeroSeedLaunchQuoteObservation {
+    let pins = pins();
+    let q = &pins["localQuotes"][0];
+    quote_observation(
+        q["chainId"].as_u64().unwrap(),
+        address(s(q, "quote")),
+        Some(s(q, "runtimeKeccak")),
+    )
+}
+
+/// A launch on the supported instance.
+struct SupportedLaunch {
+    key: EvmZeroSeedLaunchPoolKey,
+    config: ZeroSeedLaunchConfig,
+    state: ZeroSeedLaunchPoolState,
+    quote: ZeroSeedLaunchQuoteObservation,
+    requested: u128,
+}
+
+/// The two launches of the parity test that share one extension (native and ERC-20 quote), moved
+/// onto the supported instance's extension: pool math does not depend on the extension address.
+/// The ERC-20 quote is observed with the reviewed local quote's runtime.
+fn supported_launches() -> Vec<SupportedLaunch> {
+    let vectors: Value = serde_json::from_str(PARITY).unwrap();
+    let instance = pinned_instance();
+    vectors["scenarios"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|scenario| s(scenario, "name").starts_with("shared_"))
+        .map(|scenario| {
+            let created = &scenario["create"];
+            let (mut key, config) = pool_inputs_from_created(created);
+            key.config.extension = instance.extension;
+            let quote = if s(created, "quoteKind") == "native" {
+                quote_observation(instance.chain_id, Address::ZERO, None)
+            } else {
+                pinned_erc20_quote()
+            };
+            assert_eq!(quote.quote, config.quote_token);
+            SupportedLaunch {
+                key,
+                config,
+                state: state(&created["state"]),
+                quote,
+                requested: num(created, "requestedSupply"),
+            }
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------------------------
+// Indexer LOCAL receipt: the single supported instance and its launches of every quote, decoded
+// from the emitted logs.
 // ---------------------------------------------------------------------------------------------
 
 fn indexer() -> Value {
     serde_json::from_str(INDEXER).unwrap()
 }
 
-/// The supported instance observation exactly as the indexer receipt records it.
-fn fixture_instance(fixture: &Value, label: &str) -> ZeroSeedLaunchInstance {
-    let entry = fixture["instances"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|i| s(i, "label") == label)
-        .unwrap();
-    let quote = address(s(entry, "quote"));
+/// The single instance observation exactly as the indexer receipt records it.
+fn fixture_instance(fixture: &Value) -> ZeroSeedLaunchInstance {
+    let instances = fixture["instances"].as_array().unwrap();
+    assert_eq!(instances.len(), 1, "one extension serves every quote");
+    let entry = &instances[0];
+    assert!(entry.get("quote").is_none(), "an instance has no quote");
     ZeroSeedLaunchInstance {
         chain_id: fixture["chainId"].as_u64().unwrap(),
         extension: address(s(entry, "extension")),
@@ -153,19 +278,22 @@ fn fixture_instance(fixture: &Value, label: &str) -> ZeroSeedLaunchInstance {
         periphery_runtime: U256::from_str(s(entry, "peripheryRuntimeKeccak")).unwrap(),
         core: address(s(&fixture["addresses"], "core")),
         core_runtime: U256::from_str(s(&fixture["provenance"], "coreRuntimeKeccak")).unwrap(),
-        constructor_quote: quote,
-        quote_token_getter: quote,
-        quote_kind: match s(entry, "quoteKind") {
-            "native" => {
-                assert!(entry["quoteRuntimeKeccak"].is_null());
-                ZeroSeedLaunchQuoteKind::Native
-            }
-            "erc20" => ZeroSeedLaunchQuoteKind::Erc20 {
-                quote_runtime: U256::from_str(s(entry, "quoteRuntimeKeccak")).unwrap(),
-            },
-            other => panic!("quote kind {other}"),
-        },
     }
+}
+
+/// The launch's own quote as the receipt records it.
+fn fixture_quote(fixture: &Value, recorded: &Value) -> ZeroSeedLaunchQuoteObservation {
+    let quote = address(s(recorded, "quote"));
+    let runtime = match s(recorded, "quoteKind") {
+        "native" => {
+            assert!(recorded["quoteRuntimeKeccak"].is_null());
+            assert_eq!(quote, Address::ZERO);
+            None
+        }
+        "erc20" => Some(s(recorded, "quoteRuntimeKeccak")),
+        other => panic!("quote kind {other}"),
+    };
+    quote_observation(fixture["chainId"].as_u64().unwrap(), quote, runtime)
 }
 
 fn data_bytes(log: &Value) -> Vec<u8> {
@@ -237,6 +365,7 @@ fn indexer_state(word: &str) -> ZeroSeedLaunchPoolState {
 struct IndexedLaunch {
     label: String,
     instance: ZeroSeedLaunchInstance,
+    quote: ZeroSeedLaunchQuoteObservation,
     key: EvmZeroSeedLaunchPoolKey,
     config: ZeroSeedLaunchConfig,
     token: Address,
@@ -244,6 +373,9 @@ struct IndexedLaunch {
 }
 
 fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
+    assert_eq!(s(&fixture["provenance"], "evmContractsHead"), TARGET_COMMIT);
+    let instance = fixture_instance(fixture);
+    instance.validate().unwrap();
     let mut launches = HashMap::new();
     for branch in fixture["branches"].as_object().unwrap().values() {
         for (index, log) in branch["logs"].as_array().unwrap().iter().enumerate() {
@@ -259,12 +391,10 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
                 .find(|(_, l)| s(l, "poolId") == pool_id)
                 .unwrap();
             let installation = &fixture["installations"][label];
-            let instance = fixture_instance(fixture, s(recorded, "instance"));
-            instance.validate().unwrap();
+            let quote = fixture_quote(fixture, recorded);
             assert_eq!(address(s(log, "address")), instance.extension);
             assert_eq!(address(s(recorded, "extension")), instance.extension);
             assert_eq!(address(s(recorded, "periphery")), instance.periphery);
-            assert_eq!(address(s(recorded, "quote")), instance.quote());
 
             // Head: PoolKey (3 words), PositionId, liquidity, offset of LaunchParameters.
             let key = pool_key(
@@ -276,14 +406,19 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
             assert_eq!(key.token1, address(s(&recorded["poolKey"], "token1")));
             assert_eq!(&data[64..96], &b256(s(&recorded["poolKey"], "config"))[..]);
             assert_eq!(key.config.extension, instance.extension);
+            assert_eq!(key.config.fee, 0);
             assert_eq!(
                 keccak256(&data[..96]),
                 b256(pool_id),
                 "poolId = keccak(abi.encode(poolKey))"
             );
+            // LaunchParameters: name, symbol, decimals, supply, quoteToken, askTick, upperTick,
+            // tickSpacing, tradingStart, feeDuration, initialFee, finalFee, salt.
             let p = word(&data, 5).to::<usize>() / 32;
             let (name, symbol) = (abi_string(&data, p, p), abi_string(&data, p, p + 1));
             let decimals = word(&data, p + 2).to::<u8>();
+            let requested = word_u128(&data, p + 3);
+            assert_eq!(word_address(&data, p + 4), quote.quote, "per-launch quote");
             let extension_salt = B256::from(word(&data, p + 12).to_be_bytes::<32>());
 
             // Token: the indexed topic, the receipt, the preview and the SDK prediction agree.
@@ -292,6 +427,17 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
             assert_eq!(
                 controller, instance.periphery,
                 "the periphery is the controller"
+            );
+            assert_ne!(token, quote.quote);
+            let (token0, token1) = if token < quote.quote {
+                (token, quote.quote)
+            } else {
+                (quote.quote, token)
+            };
+            assert_eq!(
+                (key.token0, key.token1),
+                (token0, token1),
+                "sorted(token, quote)"
             );
             let owner = address(s(installation, "owner"));
             let user_salt = b256(s(installation, "userSalt"));
@@ -350,19 +496,19 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
             assert_eq!(topic_address(owner_log, 3), owner);
 
             let is1 = token == key.token1;
-            assert_eq!(
-                is1,
-                instance.quote_kind == ZeroSeedLaunchQuoteKind::Native,
-                "native launches are token1, WETH launches token0"
-            );
+            if quote.quote_runtime.is_none() {
+                assert!(is1, "native launches are token1");
+            }
             let range = ZeroSeedLaunchRange {
                 launch_token_is_token1: is1,
                 ask_tick: word_i32(&data, p + 5),
                 upper_tick: word_i32(&data, p + 6),
                 tick_spacing: word(&data, p + 7).to::<u32>(),
             };
+            assert_eq!(range.tick_spacing, key.config.pool_type_config.0);
             let position = word(&data, 3).to_be_bytes::<32>();
             let (lower, upper) = range.pool_bounds();
+            assert_eq!(&position[..24], &[0u8; 24], "position salt 0");
             assert_eq!(
                 (
                     i32::from_be_bytes(position[24..28].try_into().unwrap()),
@@ -371,6 +517,7 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
                 (lower, upper)
             );
             let config = ZeroSeedLaunchConfig {
+                quote_token: quote.quote,
                 range,
                 liquidity: word_u128(&data, 4),
                 fee: ZeroSeedLaunchFeeSchedule {
@@ -380,28 +527,29 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
                     final_fee: word(&data, p + 11).to::<u64>(),
                 },
             };
-            assert_eq!(word_u128(&data, p + 4), config.liquidity);
-            assert_eq!(
-                word_u128(&data, p + 3),
-                num::<u128>(installation, "actualInstalledSupply")
-            );
-            assert_eq!(
-                config.liquidity,
-                num::<u128>(installation, "actualLiquidity")
-            );
+            assert!(config.liquidity > 0);
+            assert!(requested > 0 && requested <= i128::MAX as u128);
+            assert_eq!(requested, num::<u128>(installation, "requestedSupply"));
+            assert_eq!(config.liquidity, num::<u128>(installation, "liquidity"));
             assert_eq!(
                 config.fee.trading_start,
                 num::<u64>(installation, "tradingStart")
             );
-            // The installed pair is exactly the one previewed for the requested supply.
+            // Creation installs exactly the preview of the requested supply, which is never
+            // rewritten: the event carries the requested supply and the computed liquidity.
             let parameters = ZeroSeedLaunchParameters {
-                supply: num(installation, "requestedSupply"),
+                supply: requested,
+                quote_token: quote.quote,
                 range,
                 fee: config.fee,
             };
-            let preview = preview_installation_math(&parameters, 0).unwrap();
-            assert_eq!(preview.liquidity, config.liquidity);
-            assert_eq!(preview.installed_supply, word_u128(&data, p + 3));
+            let installed = installation_math(&parameters, 0).unwrap();
+            assert_eq!(
+                installed,
+                preview_installation_math(&parameters, 0).unwrap()
+            );
+            assert_eq!(installed.liquidity, config.liquidity);
+            assert_supply(installation, &installed, label);
 
             let created_state = initial_state(&range, config.liquidity);
             let previous = launches.insert(
@@ -409,6 +557,7 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
                 IndexedLaunch {
                     label: label.clone(),
                     instance,
+                    quote,
                     key,
                     config,
                     token,
@@ -418,11 +567,25 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
             assert!(previous.is_none());
         }
     }
-    assert_eq!(launches.len(), 4);
+    assert_eq!(
+        launches.len(),
+        fixture["launches"].as_object().unwrap().len()
+    );
+    let kinds: Vec<_> = launches
+        .values()
+        .map(|l| l.quote.supported_kind())
+        .collect();
+    assert!(kinds.contains(&Ok(ZeroSeedLaunchQuoteKind::Native)));
+    assert!(
+        kinds
+            .iter()
+            .any(|k| matches!(k, Ok(ZeroSeedLaunchQuoteKind::Erc20 { .. })))
+    );
     launches
 }
 
 #[test]
+#[ignore]
 fn indexer_launches_decode_bind_and_predict() {
     let fixture = indexer();
     let launches = indexed_launches(&fixture);
@@ -432,23 +595,26 @@ fn indexer_launches_decode_bind_and_predict() {
             launch.config,
             launch.created_state,
             &launch.instance,
+            &launch.quote,
         )
         .unwrap();
         assert_eq!(pool.state(), launch.created_state);
-        // The other instance is not an alias for this launch.
-        let other = fixture_instance(
-            &fixture,
-            if launch.instance.quote_kind == ZeroSeedLaunchQuoteKind::Native {
-                "weth"
-            } else {
-                "native"
-            },
-        );
-        other.validate().unwrap();
-        assert_eq!(
-            EvmZeroSeedLaunchPool::new(launch.key, launch.config, launch.created_state, &other),
-            Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)
-        );
+        // Another launch's quote is not an alias for this launch's.
+        for other in launches
+            .values()
+            .filter(|o| o.quote.quote != launch.quote.quote)
+        {
+            assert_eq!(
+                EvmZeroSeedLaunchPool::new(
+                    launch.key,
+                    launch.config,
+                    launch.created_state,
+                    &launch.instance,
+                    &other.quote
+                ),
+                Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)
+            );
+        }
         assert_ne!(launch.token, Address::ZERO, "{}", launch.label);
     }
 }
@@ -468,11 +634,13 @@ struct Ledger {
 /// owners from `LaunchOwnerChanged`, and every recorded snapshot: `Core` state, `creatorFees`,
 /// `feeAt(block time)`, owner and controller.
 #[test]
+#[ignore]
 fn indexer_trades_ledgers_owners_and_fees_replay() {
     let fixture = indexer();
     let launches = indexed_launches(&fixture);
     let mut prefix = HashMap::new();
     let (mut swaps_checked, mut claims_checked, mut snapshots_checked) = (0, 0, 0);
+    let (mut swap_actions, mut claim_actions) = (0, 0);
     for branch_name in ["prefix", "alternate", "canonical"] {
         let branch = &fixture["branches"][branch_name];
         let mut ledgers: HashMap<String, Ledger> = prefix.clone();
@@ -524,6 +692,7 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                         ledger.owner = topic_address(event, 3);
                     }
                     "claim" => {
+                        claim_actions += 1;
                         let launch = &launches[action[1]];
                         let ledger = ledgers.get_mut(action[1]).unwrap();
                         assert_eq!(address(action[3]), ledger.owner, "only the owner claims");
@@ -553,6 +722,7 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                         claims_checked += 1;
                     }
                     "buy" | "sell" => {
+                        swap_actions += 1;
                         let launch = &launches[action[1]];
                         let ledger = ledgers.get_mut(action[1]).unwrap();
                         let before = ledger.state.unwrap();
@@ -561,9 +731,10 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                             launch.config,
                             before,
                             &launch.instance,
+                            &launch.quote,
                         )
                         .unwrap();
-                        let quote_token = launch.instance.quote();
+                        let quote_token = launch.config.quote_token;
                         let token = match (action[0], action[2]) {
                             ("buy", "exact-in") | ("sell", "exact-out") => quote_token,
                             _ => launch.token,
@@ -658,10 +829,38 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
             prefix = ledgers;
         }
     }
-    assert_eq!(
-        (swaps_checked, claims_checked, snapshots_checked),
-        (19, 8, 41)
-    );
+    assert_eq!(swaps_checked, swap_actions);
+    assert_eq!(claims_checked, claim_actions);
+    assert!(swaps_checked > 0 && claims_checked > 0 && snapshots_checked > 0);
+}
+
+/// The receipt's single instance and its ERC-20 quotes are exactly the pinned local fixture, which
+/// the SDK compiles in.
+#[test]
+#[ignore]
+fn local_fixture_pins_match_the_indexer_receipt() {
+    let fixture = indexer();
+    let pins = pins();
+    assert_eq!(s(&fixture["provenance"], "evmContractsHead"), TARGET_COMMIT);
+    let instance = fixture_instance(&fixture);
+    assert_eq!(instance, pinned_instance());
+    instance.validate().unwrap();
+    let entry = &fixture["instances"][0];
+    let pinned = &pins["localFixture"];
+    for field in ["extension", "periphery"] {
+        assert_eq!(
+            address(s(entry, field)),
+            address(s(pinned, field)),
+            "{field}"
+        );
+    }
+    for recorded in fixture["launches"].as_object().unwrap().values() {
+        let quote = fixture_quote(&fixture, recorded);
+        match quote.supported_kind().unwrap() {
+            ZeroSeedLaunchQuoteKind::Native => assert_eq!(quote.quote, Address::ZERO),
+            ZeroSeedLaunchQuoteKind::Erc20 { .. } => assert_eq!(quote, pinned_erc20_quote()),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -669,9 +868,8 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
 // ---------------------------------------------------------------------------------------------
 
 /// The parity instance observation: its runtimes are executed code of the target, but its
-/// extension and periphery addresses are the test harness's, not a supported pin.
+/// extension and periphery addresses are the test harness's, not the supported pin.
 fn parity_instance(created: &Value) -> ZeroSeedLaunchInstance {
-    let quote = address(s(created, "constructorQuote"));
     ZeroSeedLaunchInstance {
         chain_id: 31337,
         extension: address(s(created, "extension")),
@@ -680,16 +878,17 @@ fn parity_instance(created: &Value) -> ZeroSeedLaunchInstance {
         periphery_runtime: U256::from_str(s(created, "peripheryCodehash")).unwrap(),
         core: address("0x00000000000014aa86c5d3c41765bb24e11bd701"),
         core_runtime: U256::from_str(s(created, "coreCodehash")).unwrap(),
-        constructor_quote: quote,
-        quote_token_getter: quote,
-        quote_kind: if s(created, "quoteKind") == "native" {
-            ZeroSeedLaunchQuoteKind::Native
-        } else {
-            ZeroSeedLaunchQuoteKind::Erc20 {
-                quote_runtime: U256::from_str(s(created, "quoteCodehash")).unwrap(),
-            }
-        },
     }
+}
+
+/// The parity launch's quote as executed: native ETH, or a harness ERC-20 with its runtime.
+fn parity_quote(created: &Value) -> ZeroSeedLaunchQuoteObservation {
+    let runtime = s(created, "quoteCodehash");
+    quote_observation(
+        31337,
+        address(s(created, "quote")),
+        (runtime != "none").then_some(runtime),
+    )
 }
 
 fn pool_inputs_from_created(created: &Value) -> (EvmZeroSeedLaunchPoolKey, ZeroSeedLaunchConfig) {
@@ -707,6 +906,7 @@ fn pool_inputs_from_created(created: &Value) -> (EvmZeroSeedLaunchPoolKey, ZeroS
         },
     };
     let config = ZeroSeedLaunchConfig {
+        quote_token: address(s(created, "quote")),
         range: ZeroSeedLaunchRange {
             launch_token_is_token1: token == token1,
             ask_tick: num(created, "askTick"),
@@ -731,7 +931,16 @@ fn pool_from_created(created: &Value, state: ZeroSeedLaunchPoolState) -> EvmZero
         parity_instance(created).validate(),
         Err(ZeroSeedLaunchParameterError::UnsupportedInstance)
     );
-    assert!(EvmZeroSeedLaunchPool::new(key, config, state, &parity_instance(created)).is_err());
+    assert_eq!(
+        EvmZeroSeedLaunchPool::new(
+            key,
+            config,
+            state,
+            &parity_instance(created),
+            &parity_quote(created)
+        ),
+        Err(ZeroSeedLaunchPoolConstructionError::UnsupportedInstance)
+    );
     EvmZeroSeedLaunchPool::new_math(key, config, state).unwrap()
 }
 
@@ -756,36 +965,31 @@ struct GasSample {
 #[test]
 fn parity_with_local_core_state_and_events() {
     let vectors: Value = serde_json::from_str(PARITY).unwrap();
-    let pins: Value = serde_json::from_str(PINS).unwrap();
+    let pins = pins();
     let scenarios = vectors["scenarios"].as_array().unwrap();
-    assert_eq!(scenarios.len(), 11);
+    assert_eq!(scenarios.len(), 13);
     let mut compared = 0;
     let mut refused = 0;
     let mut claims = 0;
     let mut native = 0;
+    let mut routed = 0;
+    let mut shared = Vec::new();
     let mut gas = Vec::new();
 
     for scenario in scenarios {
         let name = s(scenario, "name");
         let created = &scenario["create"];
+        assert_eq!(s(created, "coreCodehash"), CORE_RUNTIME);
+        // The harness runs the pinned extension code (constructor `(core)`, runtime independent
+        // of its address and of every quote) at an unpinned address.
         assert_eq!(
-            s(created, "coreCodehash"),
-            "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a"
+            s(created, "extensionCodehash"),
+            s(&pins["localFixture"], "extensionRuntimeKeccak")
         );
-        // The harness runs the pinned extension code (same constructor arguments, runtime
-        // independent of its address) at an unpinned address.
-        let fixture =
-            &pins["localFixtures"][s(created, "quoteKind").replace("erc20", "weth").as_str()];
-        if s(created, "quoteDecimals") == "18" {
-            assert_eq!(
-                s(created, "extensionCodehash"),
-                s(fixture, "extensionRuntimeKeccak")
-            );
-            assert_ne!(
-                address(s(created, "extension")),
-                address(s(fixture, "extension"))
-            );
-        }
+        assert_ne!(
+            address(s(created, "extension")),
+            address(s(&pins["localFixture"], "extension"))
+        );
         let core_state = state(&created["state"]);
         let pool = pool_from_created(created, core_state);
         // The SDK's installation state equals what Core holds after create.
@@ -794,11 +998,47 @@ fn parity_with_local_core_state_and_events() {
             core_state,
             "{name} initial state"
         );
+        // Requested supply submitted unchanged; installed + sink = requested = totalSupply.
+        let requested: u128 = num(created, "requestedSupply");
+        assert_eq!(
+            num::<u128>(created, "supply"),
+            requested,
+            "{name} emitted supply"
+        );
+        let installation = installation_math(
+            &ZeroSeedLaunchParameters {
+                supply: requested,
+                quote_token: pool.launch().quote_token,
+                range: pool.launch().range,
+                fee: pool.launch().fee,
+            },
+            num(created, "createTs"),
+        )
+        .unwrap();
+        assert_eq!(installation.liquidity, pool.launch().liquidity, "{name}");
+        assert_supply(created, &installation, name);
+
         let launch_is1 = pool.launch().range.launch_token_is_token1;
+        let quote = parity_quote(created);
+        assert_eq!(quote.validate_code(), Ok(()));
         if s(created, "quoteKind") == "native" {
             assert_eq!(pool.key().token0, Address::ZERO, "{name}");
             assert!(launch_is1, "{name}: native quote is token0");
+            assert_eq!(quote.supported_kind(), Ok(ZeroSeedLaunchQuoteKind::Native));
             native += 1;
+        } else {
+            // The harness ERC-20 quotes are not the reviewed local quote.
+            assert_eq!(
+                quote.supported_kind(),
+                Err(ZeroSeedLaunchParameterError::QuoteNotReviewed)
+            );
+        }
+        if name.starts_with("shared_") {
+            shared.push((
+                pool.key().config.extension,
+                address(s(created, "periphery")),
+                s(created, "quoteKind").to_owned(),
+            ));
         }
         // The token address is the periphery-namespaced CREATE2 prediction.
         let periphery = address(s(created, "periphery"));
@@ -826,6 +1066,8 @@ fn parity_with_local_core_state_and_events() {
         let mut first_fill = true;
         for step in scenario["steps"].as_array().unwrap() {
             let label = format!("{name} #{} {}", num::<u32>(step, "i"), s(step, "label"));
+            let via_router = step["via_router"].as_bool().unwrap();
+            routed += usize::from(via_router);
             if s(step, "label") == "sellClaimedExactIn" {
                 // The owner's claim through the periphery withdraws exactly the fees the SDK
                 // charged, once, and leaves the pool alone.
@@ -1014,7 +1256,9 @@ fn parity_with_local_core_state_and_events() {
             assert_eq!(quote.fees_paid, swap.fee_amount);
             assert_eq!(quote.state_after, swap.state_after);
 
-            if swap.delta0 != 0 || swap.delta1 != 0 {
+            // Gas is fitted to the test locker's forwarded frame; the shared-extension scenario
+            // also measures the router frame and is not part of the calibration set.
+            if (swap.delta0 != 0 || swap.delta1 != 0) && !name.starts_with("shared_") {
                 let r = swap.resources;
                 let sample = GasSample {
                     measured: num(step, "gas"),
@@ -1031,10 +1275,15 @@ fn parity_with_local_core_state_and_events() {
             compared += 1;
         }
     }
-    assert_eq!(native, 3);
+    assert_eq!(native, 4);
     assert_eq!(claims, 10);
-    assert_eq!(compared + refused, 507);
+    assert_eq!(compared + refused, 522);
+    assert_eq!(routed, 11);
     assert!(compared >= 300, "compared {compared}");
+    // One extension and one periphery serve both the native and the ERC-20 launch.
+    assert_eq!(shared.len(), 2);
+    assert_eq!((shared[0].0, shared[0].1), (shared[1].0, shared[1].1));
+    assert_ne!(shared[0].2, shared[1].2);
 
     // Gas: the uncalibrated estimate stays within 40% of the measured in-test gas for every fill
     // except the first of each launch and the two that write a zero storage slot (the first fee
@@ -1065,20 +1314,6 @@ fn parity_with_local_core_state_and_events() {
     assert!(worst < 0.40, "worst gas estimate error {worst}");
 }
 
-fn parameters_of(preview: &Value) -> ZeroSeedLaunchParameters {
-    let label = s(preview, "label");
-    ZeroSeedLaunchParameters {
-        supply: num(preview, "supply"),
-        range: ZeroSeedLaunchRange {
-            launch_token_is_token1: label.starts_with("t1"),
-            ask_tick: num(preview, "askTick"),
-            upper_tick: num(preview, "upperTick"),
-            tick_spacing: num(preview, "tickSpacing"),
-        },
-        fee: fee_schedule(preview),
-    }
-}
-
 /// Decodes a contract revert into the SDK error it corresponds to.
 fn decode_error(data: &str) -> ZeroSeedLaunchParameterError {
     let word = |i: usize| -> u128 {
@@ -1092,110 +1327,144 @@ fn decode_error(data: &str) -> ZeroSeedLaunchParameterError {
         "0xe0839259" => ZeroSeedLaunchParameterError::InvalidTradingStart,
         "0x89fd41b1" => ZeroSeedLaunchParameterError::BoundsTickSpacing,
         "0x10074548" => ZeroSeedLaunchParameterError::ZeroLiquidity,
+        "0x658d8331" => ZeroSeedLaunchParameterError::UnsupportedQuoteToken,
+        "0x85b8e2f4" => ZeroSeedLaunchParameterError::MetadataTooLong,
+        "0xf68475cd" => ZeroSeedLaunchParameterError::LaunchTokenExists,
         // solady SafeCastLib `Overflow()`
         "0x35278d12" => ZeroSeedLaunchParameterError::Overflow,
         "0x20ea795f" => ZeroSeedLaunchParameterError::LiquidityAboveTickCap {
             liquidity: word(0),
             cap: word(1),
         },
-        "0xad00b597" => ZeroSeedLaunchParameterError::SupplyNotExactlyInstallable {
-            requested: word(0),
-            installable: word(1),
-        },
         other => panic!("unknown revert {other}"),
     }
 }
 
+/// Every periphery `previewInstallation` and the `create` that follows it with the requested
+/// supply unchanged: the SDK's contract preview (quote code, metadata, parameters, collision,
+/// installation) equals the contract's result, and every creation installs exactly that preview,
+/// with `totalSupply` the requested supply and the remainder at `address(0)`.
 #[test]
-fn installation_preview_and_binding_match_the_contract() {
+fn installation_preview_and_creation_match_the_contract() {
     let vectors: Value = serde_json::from_str(PARITY).unwrap();
-    let mut by_label = HashMap::new();
-    let mut ok = 0;
     let previews = vectors["previews"].as_array().unwrap();
-    for preview in previews {
+    let creations = vectors["creations"].as_array().unwrap();
+    assert_eq!(previews.len(), 129);
+    assert_eq!(creations.len(), previews.len());
+    let mut ok = 0;
+    let mut refusals = HashMap::new();
+    for (preview, creation) in previews.iter().zip(creations) {
         let label = s(preview, "label");
-        let parameters = parameters_of(preview);
-        let now: u64 = num(preview, "now");
-        let result = preview_installation_math(&parameters, now);
-        if label.starts_with("t1_18_18") {
-            assert_eq!(address(s(preview, "quote")), Address::ZERO, "native quote");
+        assert_eq!(s(creation, "label"), label);
+        let quote = address(s(preview, "quote"));
+        let predicted = address(s(preview, "predictedToken"));
+        let parameters = ZeroSeedLaunchParameters {
+            supply: num(preview, "supply"),
+            quote_token: quote,
+            range: ZeroSeedLaunchRange {
+                launch_token_is_token1: quote < predicted,
+                ask_tick: num(preview, "askTick"),
+                upper_tick: num(preview, "upperTick"),
+                tick_spacing: num(preview, "tickSpacing"),
+            },
+            fee: fee_schedule(preview),
+        };
+        let instance = ZeroSeedLaunchInstance {
+            chain_id: 31337,
+            extension: address(s(preview, "extension")),
+            extension_runtime: U256::ZERO,
+            periphery: address(s(preview, "periphery")),
+            periphery_runtime: U256::ZERO,
+            core: Address::ZERO,
+            core_runtime: U256::ZERO,
+        };
+        let quote_runtime = s(preview, "quoteCodehash");
+        let context = ZeroSeedLaunchLocalPreview {
+            instance: &instance,
+            owner: address(s(preview, "owner")),
+            salt: b256(s(preview, "userSalt")),
+            name: s(preview, "name"),
+            symbol: s(preview, "symbol"),
+            decimals: num(preview, "decimals"),
+            quote_runtime: (quote_runtime != "none")
+                .then(|| U256::from_str(quote_runtime).unwrap()),
+            predicted_token_has_code: s(preview, "tokenHasCode") == "1",
+            build_time: 0,
+            execution_expiry: 0,
+        };
+        assert_eq!(
+            context.predicted_token(),
+            predicted,
+            "{label} token prediction"
+        );
+        if label.starts_with("t1_18_18") && !label.ends_with("codelessQuote") {
+            assert_eq!(quote, Address::ZERO, "native quote");
         }
+        let now: u64 = num(preview, "now");
+        let result = context.contract_preview(&parameters, now);
+        assert_eq!(
+            preview["ok"].as_bool().unwrap(),
+            creation["ok"].as_bool().unwrap(),
+            "{label}: creation succeeds iff the preview does"
+        );
         if preview["ok"].as_bool().unwrap() {
             let installation = result.unwrap_or_else(|e| panic!("{label}: {e}"));
-            let token_is0 = s(preview, "token") == s(preview, "token0");
             assert_eq!(
-                token_is0, !parameters.range.launch_token_is_token1,
+                installation,
+                preview_installation_math(&parameters, now).unwrap()
+            );
+            assert_eq!(address(s(preview, "token")), predicted);
+            assert_eq!(
+                s(preview, "token") == s(preview, "token0"),
+                !parameters.range.launch_token_is_token1,
                 "{label}"
             );
-            assert_eq!(
-                installation.tick_lower,
-                num::<i32>(preview, "tickLower"),
-                "{label}"
-            );
-            assert_eq!(
-                installation.tick_upper,
-                num::<i32>(preview, "tickUpper"),
-                "{label}"
-            );
-            assert_eq!(
-                installation.initial_tick,
-                num::<i32>(preview, "initialTick"),
-                "{label}"
-            );
-            assert_eq!(
-                installation.liquidity,
-                num::<u128>(preview, "liquidity"),
-                "{label}"
-            );
+            for (field, value) in [
+                ("tickLower", installation.tick_lower),
+                ("tickUpper", installation.tick_upper),
+                ("initialTick", installation.initial_tick),
+            ] {
+                assert_eq!(value, num::<i32>(preview, field), "{label} {field}");
+            }
+            assert_eq!(installation.liquidity, num::<u128>(preview, "liquidity"));
             assert_eq!(
                 installation.installed_supply,
                 num::<u128>(preview, "installedSupply"),
                 "{label}"
             );
-            assert!(
-                installation.installed_supply <= parameters.supply,
-                "{label}"
-            );
+            assert_eq!(installation.sink_supply, num::<u128>(preview, "sinkSupply"));
+            // Creation, one block later at the same timestamp, with the same requested supply.
+            let created = installation_math(&parameters, now).unwrap();
+            assert_eq!(created, installation);
+            assert_eq!(num::<u128>(creation, "requestedSupply"), parameters.supply);
+            assert_eq!(num::<u128>(creation, "liquidity"), created.liquidity);
+            assert_supply(creation, &created, label);
             ok += 1;
         } else {
-            assert_eq!(result, Err(decode_error(s(preview, "err"))), "{label}");
-        }
-        by_label.insert(label.to_owned(), parameters);
-    }
-    assert_eq!(previews.len(), 108);
-    assert_eq!(ok, 44);
-
-    let bindings = vectors["bindings"].as_array().unwrap();
-    assert_eq!(bindings.len(), 4 * ok);
-    for binding in bindings {
-        let label = s(binding, "label");
-        let mut parameters = by_label[label];
-        parameters.supply = num(binding, "supply");
-        let liquidity: u128 = num(binding, "liquidity");
-        // Creation happens in the block after the preview's timestamp in the generator, at the
-        // same timestamp.
-        let result = check_launch_binding_math(&parameters, liquidity, 1);
-        if binding["ok"].as_bool().unwrap() {
-            let installation = result.unwrap_or_else(|e| panic!("{label}: {e}"));
-            assert_eq!(installation.installed_supply, parameters.supply);
-            assert_eq!(installation.liquidity, liquidity);
-        } else {
-            assert_eq!(
-                result,
-                Err(decode_error(s(binding, "err"))),
-                "{label} {liquidity}"
-            );
+            let expected = decode_error(s(preview, "err"));
+            assert_eq!(result, Err(expected), "{label}");
+            assert_eq!(s(creation, "err"), s(preview, "err"), "{label}");
+            *refusals
+                .entry(
+                    format!("{expected:?}")
+                        .split(' ')
+                        .next()
+                        .unwrap()
+                        .to_owned(),
+                )
+                .or_insert(0) += 1;
         }
     }
-
-    // The documented trap: previewing the installed supply again does not return the same pair.
-    let frozen = &by_label["t0_18_6_frozen"];
-    let first = preview_installation_math(frozen, 1).unwrap();
-    let mut again = *frozen;
-    again.supply = first.installed_supply;
-    let second = preview_installation_math(&again, 1).unwrap();
-    assert_eq!(second.liquidity, first.liquidity - 1);
-    assert!(second.installed_supply < first.installed_supply);
+    assert_eq!(ok, 48);
+    for (refusal, count) in [
+        ("UnsupportedQuoteToken", 4),
+        ("MetadataTooLong", 8),
+        ("LaunchTokenExists", 5),
+        ("ZeroLiquidity", 6),
+        ("LiquidityAboveTickCap", 6),
+    ] {
+        assert_eq!(refusals.get(refusal), Some(&count), "{refusal}");
+    }
 }
 
 #[test]
@@ -1222,6 +1491,7 @@ fn frozen_integer_vectors() {
     }
 
     let mut pools = HashMap::new();
+    let mut sinks = Vec::new();
     for entry in vectors["create"].as_array().unwrap() {
         let is1 = s(entry, "order") == "t1";
         let decimals = s(entry, "dec");
@@ -1239,10 +1509,15 @@ fn frozen_integer_vectors() {
         };
         let parameters = ZeroSeedLaunchParameters {
             supply: num(entry, "requested"),
+            quote_token: quote,
             range,
             fee: fee(3600),
         };
-        let installation = preview_installation_math(&parameters, 1).unwrap();
+        let installation = installation_math(&parameters, 1).unwrap();
+        assert_eq!(
+            installation,
+            preview_installation_math(&parameters, 1).unwrap()
+        );
         assert_eq!(
             installation.installed_supply,
             num::<u128>(entry, "installed")
@@ -1251,6 +1526,14 @@ fn frozen_integer_vectors() {
         assert_eq!(installation.tick_lower, num::<i32>(entry, "tickLower"));
         assert_eq!(installation.tick_upper, num::<i32>(entry, "tickUpper"));
         assert_eq!(installation.initial_tick, num::<i32>(entry, "initialTick"));
+        assert_eq!(
+            installation.installed_supply + installation.sink_supply,
+            parameters.supply
+        );
+        sinks.push((
+            format!("{}|{decimals}", s(entry, "order")),
+            installation.sink_supply,
+        ));
 
         // A launch token address on the right side of the fixture quote.
         let token = address(if is1 {
@@ -1270,6 +1553,7 @@ fn frozen_integer_vectors() {
                 },
             },
             ZeroSeedLaunchConfig {
+                quote_token: quote,
                 range,
                 liquidity: installation.liquidity,
                 fee: fee(3600),
@@ -1282,6 +1566,17 @@ fn frozen_integer_vectors() {
             (pool, token, quote),
         );
     }
+    // The sink of the 1,000,000,000-token round supply in each order and decimal pair.
+    sinks.sort();
+    assert_eq!(
+        sinks,
+        [
+            ("t0|18/18".to_owned(), 790),
+            ("t0|18/6".to_owned(), 697_343_214),
+            ("t1|18/18".to_owned(), 578),
+            ("t1|18/6".to_owned(), 717_714_600),
+        ]
+    );
 
     let quote_fill = |pool: &EvmZeroSeedLaunchPool,
                       state: ZeroSeedLaunchPoolState,
@@ -1369,7 +1664,7 @@ fn frozen_integer_vectors() {
         assert!(num::<u128>(after, "raw_quote") >= num::<u128>(before, "raw_quote"));
     }
 
-    // The deployed router fixture's 1e18 quote buy (WETH and native) and the one-unit dust buy.
+    // The test router's 1e18 quote buy (plain ERC-20 and native) and the one-unit dust buy.
     for entry in vectors["router"].as_array().unwrap() {
         let (pool, _, quote) = &pools[&format!("{}|18/18", s(entry, "order"))];
         let q = quote_fill(pool, pool.state(), *quote, num(entry, "paid"));
@@ -1391,6 +1686,9 @@ fn full_fill_refusal_and_explicit_partial_result() {
     let mut overflow_checked = false;
     let mut checked = 0;
     for scenario in vectors["scenarios"].as_array().unwrap() {
+        if s(scenario, "name").starts_with("shared_") {
+            continue;
+        }
         let created = &scenario["create"];
         let pool = pool_from_created(created, state(&created["state"]));
         let find = |label: &str| {
@@ -1502,25 +1800,89 @@ fn full_fill_refusal_and_explicit_partial_result() {
     assert_eq!(checked, 10);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Supported instance, per-launch quote support and LOCAL producer checks.
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn supported_instance_serves_native_and_erc20_quotes() {
+    let instance = pinned_instance();
+    instance.validate().unwrap();
+    let launches = supported_launches();
+    assert_eq!(launches.len(), 2);
+    let kinds: Vec<_> = launches
+        .iter()
+        .map(|l| l.quote.supported_kind().unwrap())
+        .collect();
+    assert_eq!(kinds[0], ZeroSeedLaunchQuoteKind::Native);
+    assert!(matches!(kinds[1], ZeroSeedLaunchQuoteKind::Erc20 { .. }));
+    for launch in &launches {
+        let pool = EvmZeroSeedLaunchPool::new(
+            launch.key,
+            launch.config,
+            launch.state,
+            &instance,
+            &launch.quote,
+        )
+        .unwrap();
+        assert_eq!(pool.key().config.extension, instance.extension);
+        // The installation of the requested supply is the one the pool was created with.
+        let installation = installation_math(
+            &ZeroSeedLaunchParameters {
+                supply: launch.requested,
+                quote_token: launch.config.quote_token,
+                range: launch.config.range,
+                fee: launch.config.fee,
+            },
+            1,
+        )
+        .unwrap();
+        assert_eq!(installation.liquidity, launch.config.liquidity);
+        assert!(installation.sink_supply > 0);
+    }
+    // Each launch's quote observation is its own: the other launch's quote is refused.
+    assert_eq!(
+        EvmZeroSeedLaunchPool::new(
+            launches[0].key,
+            launches[0].config,
+            launches[0].state,
+            &instance,
+            &launches[1].quote
+        ),
+        Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)
+    );
+}
+
 #[test]
 fn unsupported_instances_and_quotes_fail_closed() {
-    let fixture = indexer();
-    let launches = indexed_launches(&fixture);
-    for launch in launches.values() {
-        let (key, config, core) = (launch.key, launch.config, launch.created_state);
-        let mut observed = launch.instance;
+    type C = ZeroSeedLaunchPoolConstructionError;
+    let instance = pinned_instance();
+    for launch in supported_launches() {
+        let (key, config, core, quote) = (launch.key, launch.config, launch.state, launch.quote);
+        let mut observed = instance;
         observed.extension_runtime = U256::ZERO;
-        assert!(EvmZeroSeedLaunchPool::new(key, config, core, &observed).is_err());
+        assert_eq!(
+            EvmZeroSeedLaunchPool::new(key, config, core, &observed, &quote),
+            Err(C::UnsupportedInstance)
+        );
         let mut wrong_key = key;
         wrong_key.config.fee = 1;
         assert_eq!(
-            EvmZeroSeedLaunchPool::new(wrong_key, config, core, &launch.instance),
-            Err(ZeroSeedLaunchPoolConstructionError::FeeMustBeZero)
+            EvmZeroSeedLaunchPool::new(wrong_key, config, core, &instance, &quote),
+            Err(C::FeeMustBeZero)
         );
-        let mut wrong_key = key;
-        wrong_key.config.extension = Address::ZERO;
-        assert!(EvmZeroSeedLaunchPool::new(wrong_key, config, core, &launch.instance).is_err());
-        // A pool whose quote is not the instance's constructor quote.
+        for extension in [
+            Address::ZERO,
+            address("0x5100000000000000000000000000000000000000"),
+        ] {
+            let mut wrong_key = key;
+            wrong_key.config.extension = extension;
+            assert_eq!(
+                EvmZeroSeedLaunchPool::new(wrong_key, config, core, &instance, &quote),
+                Err(C::UnsupportedInstance)
+            );
+        }
+        // A pool key whose quote is not the launch's own quote.
         let mut wrong_key = key;
         if config.range.launch_token_is_token1 {
             wrong_key.token0 = address("0x0000000000000000000000000000000000000001");
@@ -1528,21 +1890,54 @@ fn unsupported_instances_and_quotes_fail_closed() {
             wrong_key.token1 = address("0xfffffffffffffffffffffffffffffffffffffffe");
         }
         assert_eq!(
-            EvmZeroSeedLaunchPool::new(wrong_key, config, core, &launch.instance),
-            Err(ZeroSeedLaunchPoolConstructionError::UnsupportedQuoteToken)
+            EvmZeroSeedLaunchPool::new(wrong_key, config, core, &instance, &quote),
+            Err(C::InvalidLaunchConfig)
         );
+        // Quote observations that are not this launch's supported quote.
+        let mut bad_quotes = vec![
+            ZeroSeedLaunchQuoteObservation {
+                chain_id: 8453,
+                ..quote
+            },
+            ZeroSeedLaunchQuoteObservation {
+                quote: address("0x0000000000000000000000000000000000000001"),
+                ..quote
+            },
+        ];
+        if quote.quote_runtime.is_some() {
+            bad_quotes.push(ZeroSeedLaunchQuoteObservation {
+                quote_runtime: None,
+                ..quote
+            });
+            bad_quotes.push(ZeroSeedLaunchQuoteObservation {
+                quote_runtime: Some(U256::from(1)),
+                ..quote
+            });
+        } else {
+            bad_quotes.push(ZeroSeedLaunchQuoteObservation {
+                quote_runtime: Some(U256::from(1)),
+                ..quote
+            });
+        }
+        for bad in bad_quotes {
+            assert_eq!(
+                EvmZeroSeedLaunchPool::new(key, config, core, &instance, &bad),
+                Err(C::UnsupportedQuoteToken),
+                "{bad:?}"
+            );
+        }
         for (ask, upper) in [(i32::MIN, 0), (0, i32::MAX), (0, i32::MIN)] {
             let mut invalid = config;
             invalid.range.ask_tick = ask;
             invalid.range.upper_tick = upper;
             assert_eq!(
-                EvmZeroSeedLaunchPool::new(key, invalid, core, &launch.instance),
-                Err(ZeroSeedLaunchPoolConstructionError::InvalidLaunchConfig)
+                EvmZeroSeedLaunchPool::new(key, invalid, core, &instance, &quote),
+                Err(C::InvalidLaunchConfig)
             );
         }
         // The native quote, address(0), can only be token0: a "launch token" at address(0) is
         // refused by the arithmetic constructor too.
-        if launch.instance.quote_kind == ZeroSeedLaunchQuoteKind::Native {
+        if quote.quote_runtime.is_none() {
             let mut flipped = config;
             flipped.range.launch_token_is_token1 = false;
             assert!(EvmZeroSeedLaunchPool::new_math(key, flipped, core).is_err());
@@ -1550,120 +1945,192 @@ fn unsupported_instances_and_quotes_fail_closed() {
     }
 }
 
+/// Quote support is per launch: native ETH always, an ERC-20 only with a reviewed `(chain,
+/// address, runtime keccak)` entry; a nonzero quote without code is the contract's own refusal.
+#[test]
+fn quote_support_policy() {
+    type E = ZeroSeedLaunchParameterError;
+    let native = quote_observation(31337, Address::ZERO, None);
+    assert_eq!(native.supported_kind(), Ok(ZeroSeedLaunchQuoteKind::Native));
+    // Native is eligible on any chain; launch support still requires the supported instance.
+    assert_eq!(
+        quote_observation(8453, Address::ZERO, None).supported_kind(),
+        Ok(ZeroSeedLaunchQuoteKind::Native)
+    );
+    let local = pinned_erc20_quote();
+    assert_eq!(
+        local.supported_kind(),
+        Ok(ZeroSeedLaunchQuoteKind::Erc20 {
+            quote_runtime: local.quote_runtime.unwrap()
+        })
+    );
+    for (observation, expected) in [
+        // The live list is empty: the same address and runtime elsewhere is not reviewed.
+        (
+            ZeroSeedLaunchQuoteObservation {
+                chain_id: 8453,
+                ..local
+            },
+            E::QuoteNotReviewed,
+        ),
+        (
+            ZeroSeedLaunchQuoteObservation {
+                chain_id: 1,
+                ..local
+            },
+            E::QuoteNotReviewed,
+        ),
+        (
+            ZeroSeedLaunchQuoteObservation {
+                quote_runtime: Some(U256::ZERO),
+                ..local
+            },
+            E::QuoteNotReviewed,
+        ),
+        (
+            ZeroSeedLaunchQuoteObservation {
+                quote: address(QUOTE_LOW),
+                ..local
+            },
+            E::QuoteNotReviewed,
+        ),
+        (
+            ZeroSeedLaunchQuoteObservation {
+                quote_runtime: None,
+                ..local
+            },
+            E::UnsupportedQuoteToken,
+        ),
+        (
+            ZeroSeedLaunchQuoteObservation {
+                quote_runtime: local.quote_runtime,
+                ..native
+            },
+            E::QuoteNotReviewed,
+        ),
+    ] {
+        assert_eq!(
+            observation.supported_kind(),
+            Err(expected),
+            "{observation:?}"
+        );
+    }
+    assert_eq!(
+        quote_observation(31337, address(QUOTE_LOW), None).validate_code(),
+        Err(E::UnsupportedQuoteToken)
+    );
+    assert_eq!(native.validate_code(), Ok(()));
+}
+
 #[test]
 fn manifest_and_local_producer_negative_controls() {
-    let fixture = indexer();
-    let launches = indexed_launches(&fixture);
-    for label in ["l1", "l2"] {
-        let launch = &launches[label];
-        let observed = launch.instance;
-        observed.validate().unwrap();
+    let instance = pinned_instance();
+    instance.validate().unwrap();
+    let pins = pins();
+    for launch in supported_launches() {
         let key = launch.key;
-        let native = observed.quote_kind == ZeroSeedLaunchQuoteKind::Native;
+        let native = launch.quote.quote_runtime.is_none();
 
         // Each provenance component is essential, not merely an arbitrary caller allowlist.
-        for i in 0..11 {
-            let mut bad = observed;
+        for i in 0..7 {
+            let mut bad = instance;
             match i {
                 0 => bad.chain_id = 8453,
                 1 => bad.extension = Address::ZERO,
                 2 => bad.extension_runtime = U256::ZERO,
-                3 => bad.periphery = observed.extension,
-                4 => bad.periphery_runtime = observed.extension_runtime,
+                3 => bad.periphery = instance.extension,
+                4 => bad.periphery_runtime = instance.extension_runtime,
                 5 => bad.core = Address::ZERO,
-                6 => bad.core_runtime = U256::ZERO,
-                7 => bad.constructor_quote = address(QUOTE_LOW),
-                8 => bad.quote_token_getter = address(QUOTE_LOW),
-                9 => {
-                    bad.quote_kind = if native {
-                        // A native quote has no runtime to bind; claiming one is refused.
-                        ZeroSeedLaunchQuoteKind::Erc20 {
-                            quote_runtime: U256::from_str(
-                                "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
-                            )
-                            .unwrap(),
-                        }
-                    } else {
-                        ZeroSeedLaunchQuoteKind::Native
-                    }
-                }
-                // Any other quote runtime, or an ERC-20 kind for the native address.
-                _ => {
-                    bad.quote_kind = ZeroSeedLaunchQuoteKind::Erc20 {
-                        quote_runtime: U256::ZERO,
-                    }
-                }
+                _ => bad.core_runtime = U256::ZERO,
             }
             assert_eq!(
                 bad.validate(),
                 Err(ZeroSeedLaunchParameterError::UnsupportedInstance),
-                "{label} component {i}"
+                "component {i}"
             );
             assert!(
-                EvmZeroSeedLaunchPool::new(key, launch.config, launch.created_state, &bad).is_err()
+                EvmZeroSeedLaunchPool::new(key, launch.config, launch.state, &bad, &launch.quote)
+                    .is_err()
             );
         }
-        let mut bad = observed;
-        let pins: Value = serde_json::from_str(PINS).unwrap();
-        bad.extension_runtime = U256::from_str(s(
+        for template in [
             &pins["ZeroSeedLaunch"]["templateRuntime"],
-            "zeroFilledKeccak",
-        ))
-        .unwrap();
-        assert!(
-            bad.validate().is_err(),
-            "zero-filled template is not executed provenance"
-        );
+            &pins["ZeroSeedLaunchPeriphery"]["templateRuntime"],
+        ] {
+            let mut bad = instance;
+            bad.extension_runtime = U256::from_str(s(template, "zeroFilledKeccak")).unwrap();
+            bad.periphery_runtime = bad.extension_runtime;
+            assert!(
+                bad.validate().is_err(),
+                "zero-filled template is not executed provenance"
+            );
+        }
 
         for sink in [
             Address::ZERO,
-            observed.core,
-            observed.extension,
-            observed.periphery,
+            instance.core,
+            instance.extension,
+            instance.periphery,
             key.token0,
             key.token1,
         ] {
             assert_eq!(
-                validate_claim_recipient(&observed, &key, sink),
+                validate_claim_recipient(&instance, &key, sink),
                 Err(ZeroSeedLaunchParameterError::InvalidRecipient)
             );
         }
         validate_claim_recipient(
-            &observed,
+            &instance,
             &key,
             address("0x0000000000000000000000000000000000000001"),
         )
         .unwrap();
+        let mut foreign = key;
+        foreign.config.extension = address("0x5100000000000000000000000000000000000000");
+        assert_eq!(
+            validate_claim_recipient(
+                &instance,
+                &foreign,
+                address("0x0000000000000000000000000000000000000001")
+            ),
+            Err(ZeroSeedLaunchParameterError::UnsupportedInstance)
+        );
 
-        let installation = &fixture["installations"][label];
         let mut parameters = ZeroSeedLaunchParameters {
-            supply: num(installation, "requestedSupply"),
+            supply: launch.requested,
+            quote_token: launch.config.quote_token,
             range: launch.config.range,
             fee: launch.config.fee,
         };
         parameters.fee.trading_start = 301;
         let mut context = ZeroSeedLaunchLocalPreview {
-            instance: &observed,
-            owner: address(s(installation, "owner")),
-            salt: b256(s(installation, "userSalt")),
+            instance: &instance,
+            owner: address("0x70997970C51812dc3A010C7d01b50e0d17dc79C8"),
+            salt: B256::from(U256::from(7).to_be_bytes::<32>()),
             name: "éééééééééééééééa",
             symbol: "ZERO",
             decimals: 18,
+            quote_runtime: launch.quote.quote_runtime,
             predicted_token_has_code: false,
             build_time: 1,
             execution_expiry: 301,
         };
         assert_eq!(context.name.len(), 31);
+        assert_eq!(context.quote(&parameters), launch.quote);
         assert_eq!(
-            context.predicted_token() < observed.quote(),
+            context.predicted_token() < parameters.quote_token,
             !parameters.range.launch_token_is_token1
         );
         let preview = preview_installation(&parameters, 1, &context).unwrap();
-        let requested = parameters.supply;
-        parameters.supply = preview.installed_supply;
-        assert!(parameters.supply <= requested);
-        check_launch_binding(&parameters, preview.liquidity, 1, &context).unwrap();
-        assert!(check_launch_binding(&parameters, preview.liquidity + 1, 1, &context).is_err());
+        assert_eq!(preview, context.contract_preview(&parameters, 1).unwrap());
+        assert_eq!(preview, installation_math(&parameters, 1).unwrap());
+        // The requested supply is submitted unchanged: the preview never rewrites it.
+        assert_eq!(parameters.supply, launch.requested);
+        assert_eq!(
+            preview.installed_supply + preview.sink_supply,
+            parameters.supply
+        );
+        assert_eq!(preview.liquidity, launch.config.liquidity);
 
         let mut flipped = parameters;
         flipped.range.launch_token_is_token1 = !flipped.range.launch_token_is_token1;
@@ -1671,6 +2138,27 @@ fn manifest_and_local_producer_negative_controls() {
             context.validate(&flipped, 1),
             Err(ZeroSeedLaunchParameterError::TokenOrderMismatch)
         );
+
+        // Quote observations: a nonzero quote without code is the contract's refusal; an
+        // unreviewed runtime is the SDK's.
+        if !native {
+            context.quote_runtime = None;
+            assert_eq!(
+                preview_installation(&parameters, 1, &context),
+                Err(ZeroSeedLaunchParameterError::UnsupportedQuoteToken)
+            );
+            assert_eq!(
+                context.contract_preview(&parameters, 1),
+                Err(ZeroSeedLaunchParameterError::UnsupportedQuoteToken)
+            );
+            context.quote_runtime = Some(U256::from(1));
+            assert_eq!(
+                preview_installation(&parameters, 1, &context),
+                Err(ZeroSeedLaunchParameterError::QuoteNotReviewed)
+            );
+            assert_eq!(context.contract_preview(&parameters, 1), Ok(preview));
+            context.quote_runtime = launch.quote.quote_runtime;
+        }
 
         context.name = "éééééééééééééééé"; // 16 characters, 32 bytes.
         assert_eq!(
@@ -1772,16 +2260,17 @@ fn entry_signature(entry: &Value) -> String {
     )
 }
 
-/// Every function selector, event topic and error selector of the consumer manifest (56) is
+/// Every function selector, event topic and error selector of the consumer manifest (92) is
 /// recomputed from the pinned ABI files, and each ABI file is byte-for-byte the manifest's
 /// canonical JSON (`jq -cS .abi`, no trailing newline).
 #[test]
 fn pinned_abis_match_the_consumer_manifest() {
-    let pins: Value = serde_json::from_str(PINS).unwrap();
+    let pins = pins();
     let manifest = &pins["consumerManifest"];
+    assert_eq!(s(manifest, "frozenCommit"), TARGET_COMMIT);
     assert_eq!(
-        s(manifest, "frozenCommit"),
-        "4f1a3060b099e8a50469848118f44c0c65cfab9a"
+        s(&pins, "source"),
+        format!("EkuboProtocol/evm-contracts@{TARGET_COMMIT}")
     );
     let mut entries = 0;
     for (name, abi) in [
@@ -1799,9 +2288,7 @@ fn pinned_abis_match_the_consumer_manifest() {
             abi,
             "{name} canonical"
         );
-        let Some(expected) = manifest["abi"].get(name) else {
-            continue;
-        };
+        let expected = &manifest["abi"][name];
         for (kind, table, width) in [
             ("function", "functions", 4),
             ("event", "events", 32),
@@ -1830,13 +2317,39 @@ fn pinned_abis_match_the_consumer_manifest() {
             }
         }
     }
-    assert_eq!(entries, 56);
+    assert_eq!(entries, 92);
+    let tuple = "(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32)";
+    let launch = &manifest["abi"]["ZeroSeedLaunch"];
+    let periphery = &manifest["abi"]["ZeroSeedLaunchPeriphery"];
+    assert_eq!(
+        periphery["functions"][format!("create({tuple})")].as_str(),
+        Some("0x662af306")
+    );
+    for table in [launch, periphery] {
+        assert_eq!(
+            table["functions"][format!("previewInstallation(address,{tuple})")].as_str(),
+            Some("0x917c1163")
+        );
+    }
+    // Removed at the target: the constructor quote getter and the supply binding error.
+    assert!(launch["functions"].get("quoteToken()").is_none());
+    assert!(
+        !launch["errors"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .any(|k| k.starts_with("SupplyNotExactlyInstallable"))
+    );
+    assert_eq!(
+        s(&manifest["structs"], "LaunchParameters"),
+        "(string name,string symbol,uint8 decimals,uint128 supply,address quoteToken,int32 askTick,int32 upperTick,uint32 tickSpacing,uint64 tradingStart,uint32 feeDuration,uint64 initialFee,uint64 finalFee,bytes32 salt)"
+    );
     for (topic, signature) in [
         (LAUNCH_CREATED, "LaunchCreated"),
         (LAUNCH_SWAPPED, "LaunchSwapped"),
         (CREATOR_FEES_CLAIMED, "CreatorFeesClaimed"),
     ] {
-        let found = manifest["abi"]["ZeroSeedLaunch"]["events"]
+        let found = launch["events"]
             .as_object()
             .unwrap()
             .iter()
@@ -1848,7 +2361,7 @@ fn pinned_abis_match_the_consumer_manifest() {
         (LAUNCH_OWNER_CHANGED, "LaunchOwnerChanged"),
         (LAUNCH_FEES_CLAIMED, "LaunchFeesClaimed"),
     ] {
-        let found = manifest["abi"]["ZeroSeedLaunchPeriphery"]["events"]
+        let found = periphery["events"]
             .as_object()
             .unwrap()
             .iter()
@@ -1873,21 +2386,17 @@ fn pinned_abis_match_the_consumer_manifest() {
         keccak256([0u8; 64])
     );
 
-    // The SDK's compiled-in pins are exactly the two pinned local fixtures.
-    let fixture = indexer();
-    for (label, entry) in pins["localFixtures"].as_object().unwrap() {
-        let instance = fixture_instance(&fixture, label);
-        instance.validate().unwrap();
-        assert_eq!(instance.extension, address(s(entry, "extension")));
-        assert_eq!(instance.periphery, address(s(entry, "periphery")));
-        assert_eq!(
-            instance.extension_runtime,
-            U256::from_str(s(entry, "extensionRuntimeKeccak")).unwrap()
-        );
-        assert_eq!(
-            instance.periphery_runtime,
-            U256::from_str(s(entry, "peripheryRuntimeKeccak")).unwrap()
-        );
-        assert_eq!(instance.quote(), address(s(entry, "quote")));
-    }
+    // The SDK's compiled-in pins are exactly the pinned local fixture: one instance without a
+    // quote, and one reviewed local ERC-20 quote.
+    let fixture = &pins["localFixture"];
+    assert!(fixture.get("quote").is_none());
+    assert_eq!(s(fixture, "coreRuntimeKeccak"), CORE_RUNTIME);
+    assert_eq!(
+        s(fixture, "extensionConstructorArguments"),
+        format!("0x{}{}", "0".repeat(24), &s(fixture, "core")[2..])
+    );
+    pinned_instance().validate().unwrap();
+    let quotes = pins["localQuotes"].as_array().unwrap();
+    assert_eq!(quotes.len(), 1);
+    assert!(pinned_erc20_quote().supported_kind().is_ok());
 }

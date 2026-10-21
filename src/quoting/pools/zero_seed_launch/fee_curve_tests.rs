@@ -394,6 +394,7 @@ fn validation_cap_and_schedule() {
     assert_eq!(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE as u128, 99 * Q / 100);
     let mut p = ZeroSeedLaunchParameters {
         supply: 1_000_000_000_000_000_000_000_000_000,
+        quote_token: address(QUOTE_HIGH),
         range: ZeroSeedLaunchRange {
             launch_token_is_token1: false,
             ask_tick: -13_815_500,
@@ -438,7 +439,7 @@ struct Fixture {
 }
 
 /// The contract fixture's launch: 1e9 tokens requested over 100x from 1e-6 (18/18) or 1e-18 raw
-/// (18/6) quote per token, spacing 100. Token0 launches quote WETH at the top of the address
+/// (18/6) quote per token, spacing 100. Token0 launches quote a plain ERC-20 at the top of the address
 /// space; token1 launches quote native ETH (18/18) or a six-decimal token at 0x10000.
 fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture {
     let is1 = order == "t1";
@@ -472,6 +473,7 @@ fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture 
     };
     let parameters = ZeroSeedLaunchParameters {
         supply: 1_000_000_000_000_000_000_000_000_000,
+        quote_token: quote,
         range,
         fee,
     };
@@ -490,6 +492,7 @@ fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture 
             },
         },
         ZeroSeedLaunchConfig {
+            quote_token: quote,
             range,
             liquidity: installation.liquidity,
             fee,
@@ -548,7 +551,7 @@ fn swap(
         })
 }
 
-/// The contract's executed 50/75/90/99/max matrix, both orders (WETH and native ETH at 18/18),
+/// The contract's executed 50/75/90/99/max matrix, both orders (plain ERC-20 and native ETH at 18/18),
 /// 18/6: one raw unit, one whole unit exact-in, exact-out of that net, then selling everything
 /// held.
 #[test]
@@ -631,6 +634,7 @@ fn exact_output_helper_and_signed_bounds() {
     let supply = preview_installation_math(
         &ZeroSeedLaunchParameters {
             supply: 1_000_000_000_000_000_000_000_000_000,
+            quote_token: f.quote,
             range: f.pool.launch().range,
             fee: ZeroSeedLaunchFeeSchedule {
                 initial_fee: ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
