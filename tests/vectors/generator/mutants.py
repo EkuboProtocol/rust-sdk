@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Negative controls: applies one mutation at a time to src/quoting/pools/zero_seed_launch.rs and
-expects the zero-seed unit tests or `tests/zero_seed_launch_vectors.rs` to fail. Restores the file afterwards."""
+expects the zero-seed unit tests, `tests/zero_seed_launch_vectors.rs` or
+`tests/zero_seed_launch_installation.rs` to fail. Restores the file afterwards."""
 import subprocess
 import sys
 
@@ -41,7 +42,13 @@ MUTANTS = [
      "pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = u64::MAX - 1;"),
     ("trading start exclusive", "if timestamp < self.launch.fee.trading_start {", "if timestamp <= self.launch.fee.trading_start {"),
     ("installed supply rounded down", "amount1_delta(lower, upper, liquidity, true)", "amount1_delta(lower, upper, liquidity, false)"),
-    ("token0 max liquidity rounded up", "muldiv(U256::from(amount), numerator, upper - lower, false)", "muldiv(U256::from(amount), numerator, upper - lower, true)"),
+    ("token0 max liquidity rounded up", "U256::from(numerator / denominator)",
+     "U256::from(numerator.div_ceil(denominator))"),
+    ("token0 product floored first (shared helper)",
+     "let numerator = U512::from(amount) * U512::from(lower) * U512::from(upper);",
+     "let numerator = U512::from(amount) * ((U512::from(lower) * U512::from(upper)) >> 128 << 128);"),
+    ("liquidity saturated below u128::MAX", "liquidity.min(U256::from(u128::MAX)).to()",
+     "liquidity.min(U256::from(u128::MAX - 1)).to()"),
     ("skipAhead 1", "const SKIP_AHEAD: u32 = 0;", "const SKIP_AHEAD: u32 = 1;"),
     ("no bitmap word stop", "let word_end = (raw >> 8 << 8) + 255;", "let word_end = (raw >> 9 << 9) + 511;"),
     ("tick cap off by one", "u128::MAX / ticks", "u128::MAX / ticks + 1"),
@@ -102,6 +109,7 @@ try:
         open(PATH, "w").write(original.replace(old, new))
         r = subprocess.run(
             ["cargo", "test", "--offline", "--features", "evm,starknet,serde", "--lib", "--test", "zero_seed_launch_vectors",
+             "--test", "zero_seed_launch_installation",
              "-q"],
             capture_output=True,
         )

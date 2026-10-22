@@ -1,9 +1,9 @@
 # Zero-seed launch conformance (LOCAL evidence only)
 
-Target: `EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a`, tree
-`dbbfe6a5eb5ddefe04974338b2b57bdf675c431e` (forward-only `ZeroSeedLaunch` with a per-launch
-quote, requested supply with an `address(0)` sink, fixed-base fee table, the full `uint64`
-creator-fee range, separate `ZeroSeedLaunchPeriphery`). Q0.64 Core/raw tick spacing, zero Core fee, separate creator fee.
+Target: `EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e`, tree
+`9ab869d1a453b8df48d47c2e0e2fb2d4ca8f67bf` (forward-only `ZeroSeedLaunch` with a per-launch
+quote, requested supply with an `address(0)` sink, the exact token0 installation, fixed-base fee
+table, the full `uint64` creator-fee range, separate `ZeroSeedLaunchPeriphery`). Q0.64 Core/raw tick spacing, zero Core fee, separate creator fee.
 Not Q0.16 `next`. Nothing here is deployed, audited or approved: there are no live instances, no
 live reviewed quotes, and release is on HOLD.
 
@@ -68,6 +68,25 @@ installs, which is the same calculation on the same inputs. For 1,000,000,000 to
 decimals the sink is 790 (token0) or 578 (token1, native) base units at 18/18, and 697,343,214 or
 717,714,600 at 18/6.
 
+Installed liquidity is the largest `L` whose rounded-up debit fits the requested supply `S`:
+
+- token1 (native quote): `floor(S * 2**128 / (upper - lower))`, the exact inverse of
+  `ceil(L * (upper - lower) / 2**128)`; unchanged.
+- token0 (ERC-20 quote above the launch token): `floor(S * lower * upper / (2**128 * (upper -
+  lower)))` over the fixed sqrt ratios. Core takes `ceil(ceil(L * 2**128 * (upper - lower) / upper)
+  / lower)`, and `ceil(ceil(n / u) / l) = ceil(n / (u * l))`, so `debit(L) <= S` exactly when `L`
+  is at most that floor. The SDK computes the product directly in 512 bits (below `2**511`); the
+  contract factors the compact ratios instead; both give the same integer. Since `43d6628` this
+  replaces the shared `maxLiquidityForToken0` helper, which floored `lower * upper / 2**128`
+  first: at ticks `-88080384..-85983232` (spacing 524288) and `S = 1e30` it installed
+  106,052,588,672 instead of 115,073,586,432 and sank about 7.84% of `S` instead of
+  8,589,236,567,713,153,558 raw units (about `8.6e-12` of `S`).
+
+Both saturate at `2**128 - 1`; zero liquidity refuses `ZeroLiquidity` and liquidity above the
+per-tick cap refuses `LiquidityAboveTickCap(liquidity, cap)`, never capped. The sink is the
+remainder for the maximal integer liquidity; how much quote that remainder could have bought
+depends on the geometry and the quote's units, so no general bound in quote value is claimed.
+
 ## Fee schedule
 
 `decay_q128(t)` is 0 for `t >= 131072`; otherwise start at `2**128` and, for each set bit `i` of
@@ -91,26 +110,27 @@ is 50% -> 0.3% over 3,600 s; 99% (`18262276632972456099`) remains only a study r
 
 | file | sha256 | source |
 |---|---|---|
-| `zero-seed-launch.json` | `4689b2cdfb533bb293dc2fda4f76189da5dc5f5c8e79a33bf5b216149bdc00b9` | the contract's `test/vectors/zero-seed-launch.json` (v5: `creator_fee_range`, `max_rate`), verbatim |
+| `zero-seed-launch.json` | `8398d4189a6b1a434e17376276a7e218c9597408754a9920ce34a4872809a879` | the contract's `test/vectors/zero-seed-launch.json` (v6: adds `installation`, measured creation gas), verbatim |
+| `zero-seed-launch-installation.json` | `b06f6576e2280fa9851835655e899d3a21506bec317fa51af2d5a2efadbf330d` | the contract's `test/vectors/zero-seed-launch-installation.json`, verbatim: 41 rows from an independent integer oracle (exact tick table, Core's rounded debits, direct inverse and binary search), with the previous helper's liquidity, runtime/init-code pins and measured creation gas |
 | `zero-seed-launch-fee-curve-all-seconds.json` | `fc9be5e4d59d8163f7a5566a7076bb9628d8ff30af5efde1eb554ba9b93bddce` | protocol generator's 250-digit `Decimal` output, every second of 12 curves, 25,212 `[initial, final, duration, elapsed, fee]` rows (delivered gzipped, gz sha256 `b1f5ff563c58869fd6667977614c89c30ea0b27353ecac40752fb24736951900`; stored decompressed so tests need no extra dependency) |
 | `zero-seed-launch-fee-decay-vectors.json` | `7004b29f91540f1b29a568b525d215227565b36d1b490687ae604f5f145b835b` | `gen-fee-decay-table.py --json`: table, decay samples, 200 fee rows, digests (byte-identical at the target: its `max` is `2**64 - 1` and its `99` the same study rate as before) |
-| `zero-seed-launch-fee-curve-rows.json` | `2b716bc9278b4cccaf3382f3624a16913cddf327e4a625c241bc219edc359f60` | the executed `VEC|` rows of `ZeroSeedLaunchFeeCurve.t.sol`: 100 `highRate` (identical to the previous target's, the `max` launches now created normally), 12 `createMax`, 2 `exactOutBounds` |
-| `zero-seed-launch-parity.json` | `89db5c64817daad560c500e7c20b3e1f54477df8e8dfb47a39cb7d3e479f6b30` | `generator/ZeroSeedLaunchSdkParity.t.sol` |
-| `zero-seed-launch-indexer.json` | `09d7745740af507a02304e26c0e20d6f27b1047fd707c056ef4d936c67a74fcc` | indexer `scripts/zeroSeedLaunchFixture.ts` LOCAL anvil receipt at this target, verbatim: one instance, three native and three ERC-20 launches (two of them created at `2**64 - 1`), swaps through `LaunchTestRouter` |
-| `pins/pins.json` | `65be02a5c89195db32584e6a05cc105d63f988f5f3d16a5b8df0c516207c37f2` | `generator/pins_from_artifacts.py` |
-| `pins/*.abi.json` | `efae9388...e41e`, `df24d9f0...7305`, `fa77fe07...abba` | canonical ABIs of `ZeroSeedLaunch`, `ZeroSeedLaunchPeriphery`, `MintableERC20` (only the first changed: `FeeTooHigh` removed) |
+| `zero-seed-launch-fee-curve-rows.json` | `7a86930ae16e5f8cc6730f33bc6f71915f5d3c1375fd7788593153de03b16d81` | the executed `VEC|` rows of `ZeroSeedLaunchFeeCurve.t.sol`: 100 `highRate` (identical to the previous target's, the `max` launches now created normally), 12 `createMax`, 2 `exactOutBounds` |
+| `zero-seed-launch-parity.json` | `e799f4de8bbaf8653cc938b7d8f6b3552b5f0b3fcfdc2623b38996787a479cb0` | `generator/ZeroSeedLaunchSdkParity.t.sol` |
+| `zero-seed-launch-indexer.json` | `ec308953b8412e3ad76e7b6bf74b1e3ae56f6cbe0798032dbc6673bfedfae7d9` | indexer `scripts/zeroSeedLaunchFixture.ts` LOCAL anvil receipt at this target, verbatim: one instance, three native and five ERC-20 launches (two created at `2**64 - 1`, two at low-price token0 geometry), swaps through `LaunchTestRouter` |
+| `pins/pins.json` | `a2de05ae1bc5fc640fda4cf2930c8ba1e85c7cab5023db67dc6351408d97ec14` | `generator/pins_from_artifacts.py` |
+| `pins/*.abi.json` | `efae9388...e41e`, `df24d9f0...7305`, `fa77fe07...abba` | canonical ABIs of `ZeroSeedLaunch`, `ZeroSeedLaunchPeriphery`, `MintableERC20`, unchanged since `550afc4` |
 
-The consumer manifest is `zero-seed-interface-550afc4.json` (file sha256
-`57d8485ee7aa34049269f66bedccbfb43b66869b2e37bddf5857d070df02ca0b`, its own `manifest_sha256`
-`032f3c9bfe191f5bb074d1926f4c265af9e06e939140ca13edbd9181e0b2deed`), generated from the target's
+The consumer manifest is `zero-seed-interface-43d6628.json` (file sha256
+`7e351ef4fe1ee835f41870cbbab69a07d26b0a66ffebd5915ef4a42a18edcc6e`, its own `manifest_sha256`
+`6be8bd0a5a54f6dd51f9f7836bd4d64922672deebff7e19a6ff821e318906629`), generated from the target's
 compiled artifacts; its tables, `fee.max_creator_fee_q64`, `creator_fee_range` and
-`removed_from_abi` are copied into `pins.json` under `consumerManifest`.
+`removed_from_abi` are copied into `pins.json` under `consumerManifest`. Against `550afc4` only
+the extension's runtime and creation code (20,125 -> 20,402 runtime bytes) and the periphery's
+metadata hash changed, and with them the local instance's addresses and runtimes.
 
-`check_vector_log.py` binds every emitted row of `ZeroSeedLaunch.t.sol` to the vectors. The
-contract's v5 vectors still carry the `gas.create` values measured before the ceiling comparison
-was removed (`1367815`/`1327004`); the target executes creation 34 gas cheaper
-(`1367781`/`1326970`). The script tolerates exactly those two pairs and nothing else; the SDK
-does not use the frozen gas rows.
+`check_vector_log.py` binds every emitted row of `ZeroSeedLaunch.t.sol` to the vectors exactly,
+gas included: the v6 vectors carry the measured creation gas, so the former tolerance for two
+stale `gas.create` values is gone. The SDK does not use the gas rows.
 
 What the tests check:
 
@@ -151,13 +171,26 @@ What the tests check:
     installed and sink supply, `totalSupply == requested`, `balanceOf(address(0)) == sink`, the
     sink `Transfer` and the Core `PositionUpdated` token delta `== installed` (asserted in the
     generator and again in the tests);
-  - 129 periphery previews, each followed by `create` with the same requested supply (56
+  - `tests/zero_seed_launch_installation.rs`: all 41 protocol installation rows (bounds, fixed
+    sqrt ratios, tick cap, liquidity, installed and sink supply, refusals, Core's debit one unit
+    above, and the previous helper's value for token0); the original vector and both
+    counterexamples spelled out (1e30: 115,073,586,432 not 106,052,588,672; 17,380,183,081,064,167,375:
+    2 not 1, no sink; the int128-scale full-width budget: 9,223,595,582,101,085,260, no sink); and
+    6,000 deterministic cases over aligned ranges of both orders, every spacing class, compact-ratio
+    region transitions, both tick-range ends, and supplies from 1 to `int128.max` including exact
+    debit boundaries `debit(L)` and `debit(L) - 1`, each checked against a binary search on Core's
+    own rounded debit (`debit(L) <= S < debit(L + 1)`, or the refusal it implies). The previous
+    helper under-installs in hundreds of those cases, so the property detects the early floor;
+  - 145 periphery previews, each followed by `create` with the same requested supply (68
     succeed; the former ceiling plus one, max -> max and max -> 0.3% are accepted in all four
     groups, and nothing is refused for its rate): the SDK's
     `ZeroSeedLaunchLocalPreview::contract_preview` reproduces every result and refusal (including
     `UnsupportedQuoteToken` for a codeless quote, `MetadataTooLong`, `LaunchTokenExists` for a
     collision and for the same salt with another quote, `ZeroLiquidity`, `LiquidityAboveTickCap`),
-    the predicted token, and every creation installs exactly its preview;
+    the predicted token, and every creation installs exactly its preview. Per order and decimals
+    group they include the low-price geometry at `1e30`, at a supply worth exactly two liquidity
+    units (installs all of it), one unit short (`ZeroLiquidity`), and an int128-scale supply over
+    the full width at spacing 1;
   - the supported instance serves the native and the ERC-20 launch, and every instance, quote
     observation, pool key, claim recipient, metadata, collision, token order and timing control
     fails closed;
@@ -171,17 +204,20 @@ What the tests check:
     requested, installed and sink supply against the SDK installation of the requested supply,
     the returned `Installation`, Core's `PositionUpdated` of the creation (launch-token delta ==
     installed, quote delta 0, liquidity delta == computed liquidity), the mints to Core and to
-    `address(0)`, `totalSupply` and the sink balance; all six launches (three native, three
-    ERC-20, one extension) quote through supported `new` and refuse each other's quote; all 26
+    `address(0)`, `totalSupply` and the sink balance; all eight launches (three native, five
+    ERC-20, one extension) quote through supported `new` and refuse each other's quote; all 28
     swaps replayed against `LaunchSwapped` and the Core swap log, 10 claims against the extension
     ledger (accrued from `LaunchSwapped`, claimed from `CreatorFeesClaimed` only, payouts equal and
-    never added again), owner transfers, and all 62 snapshots (`Core` state, `creatorFees`, owner,
+    never added again), owner transfers, and all 78 snapshots (`Core` state, `creatorFees`, owner,
     controller, `feeAt(block time)`, `totalSupply`, sink balance), across the prefix and both
     reorg branches, with per-launch counts. `l5` (native, `2**64 - 1` -> 0.3% over 3,600 s) and
     `l6` (ERC-20, flat `2**64 - 1`, 1 s) are created normally at the highest rate: their four
     swaps at it (1e18 exact in -> 54,160 tokens; 1e10 tokens exact out -> `10019 * 2**64` paid)
     satisfy `net = floor(gross / 2**64)` and `paid = calc * 2**64`; `l5` also trades while
-    decaying and at its final rate, and both claim.
+    decaying and at its final rate, and both claim. `l7` (`1e30` over ticks
+    `-88080384..-85983232`, spacing 524288) and `l8` (an int128-scale supply over the full width
+    at spacing 1, no sink mint) are ERC-20 token0 launches at the exact maximum liquidity, each
+    with one exact-output buy.
 - `pins/pins.json` (`generator/pins_from_artifacts.py`): per contract ABI hash, selectors, topics,
   errors, zero-filled runtime and creation keccak, all asserted equal to the consumer manifest;
   the local fixture (`localFixture`) recomputed from the artifacts: the extension at the first
@@ -196,9 +232,9 @@ What the tests check:
 
 `ZeroSeedLaunchPool::new` requires a `ZeroSeedLaunchInstance` observation matching the one LOCAL
 fixture instance (chain 31337, Core `0x00000000000014aa86c5d3c41765bb24e11bd701`, runtime
-`0xc5f90c9d...c71a`; extension `0x511b4327c2a2b6fd803b4ae85f2f9d831e046d8b`, runtime
-`0xb8c6d15f...a858`; periphery `0x2f0be2fc5a2825cecd23dbf6ed33ed8ff823ef64`, runtime
-`0x49988478...999e`) and a `ZeroSeedLaunchQuoteObservation` of the launch's own quote that
+`0xc5f90c9d...c71a`; extension `0x519c5f793d3f6cf9ee439e4cc38d8285cf08211f`, runtime
+`0xd6b4c7ce...8ed5`; periphery `0x0df4e2a76640b52e51479b435f52d0eb0e7e8ef4`, runtime
+`0x2a9329db...974b`) and a `ZeroSeedLaunchQuoteObservation` of the launch's own quote that
 `supported_kind` accepts:
 
 | quote | supported |
@@ -231,14 +267,15 @@ base and UserOp costs are not predicted.
 ## Reproduce
 
 ```sh
-cp -a <evm-contracts at 550afc4, built> <scratch>          # never edit the source checkout
-cp <scratch>/test/vectors/zero-seed-launch.json tests/vectors/   # verbatim
+cp -a <evm-contracts at 43d6628, built> <scratch>          # never edit the source checkout
+cp <scratch>/test/vectors/zero-seed-launch.json <scratch>/test/vectors/zero-seed-launch-installation.json \
+  tests/vectors/   # verbatim
 cp tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol tests/vectors/generator/ZeroSeedLaunchLocalFixturePins.t.sol \
   <scratch>/test/extensions/
 (cd <scratch> && forge test --offline --match-contract ZeroSeedLaunchSdkParity -vv) > <parity-log>
 python3 tests/vectors/generator/parity_to_json.py < <parity-log> > tests/vectors/zero-seed-launch-parity.json
 (cd <scratch> && forge test --offline --match-path test/extensions/ZeroSeedLaunchFeeCurve.t.sol -vv) \
-  | python3 tests/vectors/generator/fee_curve_rows_to_json.py 550afc40280423128c02eb5ffd213aa959b34e2a \
+  | python3 tests/vectors/generator/fee_curve_rows_to_json.py 43d6628841b3ce91dafa048b7ceef64bed55fc8e \
   > tests/vectors/zero-seed-launch-fee-curve-rows.json
 (cd <scratch> && forge test --offline --match-path test/extensions/ZeroSeedLaunch.t.sol -vv) > <main-log>
 python3 tests/vectors/generator/check_vector_log.py tests/vectors/zero-seed-launch.json <main-log>

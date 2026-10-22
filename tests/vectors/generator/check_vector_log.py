@@ -6,12 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-# The contract's v5 vectors keep the creation gas measured before `_validate` lost its ceiling
-# comparison; the executed creation is 34 gas cheaper. Only these exact pairs are tolerated.
-STALE = {("gas", "t0", "create"): ("1367815", "1367781"), ("gas", "t1", "create"): ("1327004", "1326970")}
-
 v = json.loads(Path(sys.argv[1]).read_text())
-stale = 0
 rows = [l.strip().split("|") for l in Path(sys.argv[2]).read_text().splitlines()
         if l.strip().startswith("VEC|")]
 count = 0
@@ -41,13 +36,8 @@ for row in rows:
     else:
         continue
     for k, val in d.items():
-        if (kind, d.get("order"), k) in STALE:
-            assert (str(expected[k]), val) == STALE[kind, d["order"], k], (kind, k, val, expected[k])
-            stale += 1
-            continue
         assert str(expected[k]) == val, (kind, k, val, expected[k])
     count += 1
 assert count == 4 + sum(len(v[k]) for k in ("create", "trade", "fee", "gas", "router")), count
-assert stale == len(STALE), stale
-print(f"PASS: {count} complete emitted vector rows match delivery JSON "
-      f"({stale} stale creation gas values, exactly as pinned)")
+# Every emitted value matches exactly, gas included: the v6 vectors carry the measured creation gas.
+print(f"PASS: {count} complete emitted vector rows match delivery JSON")

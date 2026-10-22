@@ -23,7 +23,7 @@
 //! the contract's deltas, creator fee and post-swap `Core` state exactly. The installation
 //! functions mirror `previewInstallation`, which `create` runs on the same inputs.
 //!
-//! Target: `EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a` (forward-only
+//! Target: `EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e` (forward-only
 //! extension with a per-launch quote, requested supply with an `address(0)` sink, fixed-base fee
 //! table, full `uint64` creator-fee range, separate periphery), against the Q0.64-fee `Core` of that commit. Not the Q0.16 `next`
 //! Core.
@@ -31,7 +31,7 @@
 use core::str::FromStr;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
 use num_traits::Zero;
-use ruint::aliases::U256;
+use ruint::aliases::{U256, U512};
 use thiserror::Error;
 
 use crate::{
@@ -42,7 +42,6 @@ use crate::{
     },
     math::{
         delta::{AmountDeltaError, amount0_delta, amount1_delta},
-        muldiv::muldiv,
         sqrt_ratio::{next_sqrt_ratio_from_amount0, next_sqrt_ratio_from_amount1},
         swap::{amount_before_fee, compute_fee, is_price_increasing},
         tick::{sqrt_ratio_to_tick, to_sqrt_ratio},
@@ -85,12 +84,12 @@ const LOCAL_CHAIN_ID: u64 = 31337;
 const LOCAL_CORE: &str = "0x00000000000014aa86c5d3c41765bb24e11bd701";
 const LOCAL_CORE_RUNTIME: &str =
     "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
-const LOCAL_EXTENSION: &str = "0x511b4327c2a2b6fd803b4ae85f2f9d831e046d8b";
+const LOCAL_EXTENSION: &str = "0x519c5f793d3f6cf9ee439e4cc38d8285cf08211f";
 const LOCAL_EXTENSION_RUNTIME: &str =
-    "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858";
-const LOCAL_PERIPHERY: &str = "0x2f0be2fc5a2825cecd23dbf6ed33ed8ff823ef64";
+    "0xd6b4c7ce8da56e9948fdb004a035d9b52dbd3690bcb03c1269bbf2a9981d8ed5";
+const LOCAL_PERIPHERY: &str = "0x0df4e2a76640b52e51479b435f52d0eb0e7e8ef4";
 const LOCAL_PERIPHERY_RUNTIME: &str =
-    "0x49988478ba70cc8d2587eb63141b333c7ef0a67c4639c3a2ee25de4c4597999e";
+    "0x2a9329dbb064a2c031115c7c120c8b6a1f31de167f33374180e4dc73d975974b";
 
 /// A reviewed ERC-20 quote: chain, address and keccak of its executed runtime.
 struct ReviewedQuote {
@@ -842,7 +841,7 @@ fn install_requested(
     let liquidity = if parameters.range.launch_token_is_token1 {
         max_liquidity_for_token1(lower, upper, parameters.supply)
     } else {
-        max_liquidity_for_token0(lower, upper, parameters.supply)?
+        max_liquidity_for_token0(lower, upper, parameters.supply)
     };
     let installation = install(&parameters.range, liquidity.min(U256::from(u128::MAX)).to())?;
     let sink_supply = parameters
@@ -1473,16 +1472,23 @@ fn swap_step(
     })
 }
 
-/// `maxLiquidityForToken0` from `math/liquidity.sol`.
-fn max_liquidity_for_token0(
-    lower: U256,
-    upper: U256,
-    amount: u128,
-) -> Result<U256, ZeroSeedLaunchParameterError> {
-    let numerator = muldiv(lower, upper, TWO_POW_128, false)
-        .map_err(|_| ZeroSeedLaunchParameterError::Overflow)?;
-    muldiv(U256::from(amount), numerator, upper - lower, false)
-        .map_err(|_| ZeroSeedLaunchParameterError::Overflow)
+/// The extension's token0 `_maxLiquidity`: the largest liquidity whose token0 debit fits
+/// `amount`, `floor(amount * lower * upper / (2**128 * (upper - lower)))` over the fixed sqrt
+/// ratios.
+///
+/// Core takes `ceil(ceil(L * 2**128 * (upper - lower) / upper) / lower)` for liquidity `L`, and
+/// `ceil(ceil(n / u) / l) = ceil(n / (u * l))` for positive integers, so `debit(L) <= amount`
+/// exactly when `L` is at most this floor. The product is below `2**127 * 2**192 * 2**192`, so it is
+/// computed directly in 512 bits (the contract factors the compact ratios instead; both are the
+/// same integer). The quotient is below `2**213`; the caller saturates it at `u128::MAX` like the
+/// contract, which then refuses it at the per-tick cap. Unlike the shared `maxLiquidityForToken0`
+/// helper, `lower * upper / 2**128` is never floored first.
+fn max_liquidity_for_token0(lower: U256, upper: U256, amount: u128) -> U256 {
+    let numerator = U512::from(amount) * U512::from(lower) * U512::from(upper);
+    let denominator = U512::from(upper - lower) << 128;
+    // Below `2**213` for every pair of valid ticks (adjacent ticks at the top of the range maximize
+    // `lower * upper / (upper - lower)`), so it always fits.
+    U256::from(numerator / denominator)
 }
 
 /// `maxLiquidityForToken1` from `math/liquidity.sol`.

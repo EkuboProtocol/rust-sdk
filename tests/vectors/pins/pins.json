@@ -1,5 +1,5 @@
 {
- "source": "EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a",
+ "source": "EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e",
  "ZeroSeedLaunch": {
   "abiSha256": "efae9388aa6b1342479204ddf436fd2a310df16bf06c80c990b2d22c90d1e41e",
   "functions": {
@@ -48,12 +48,12 @@
    "ZeroLiquidity()": "0x10074548"
   },
   "templateRuntime": {
-   "bytes": 20125,
-   "zeroFilledKeccak": "0xf10adeca29e131bfb07f22d350641a17df000fb9945b40ac65061fb3c6ddf8c1"
+   "bytes": 20402,
+   "zeroFilledKeccak": "0x19d7461a57e0058bd09c848684152a234b4b3909404c1c85dbf6e69b9d59c925"
   },
   "creation": {
-   "bytes": 20615,
-   "keccak": "0x985a18f42a75f5378e49bf136e027eaeaca4a4315f5a1036a99cc93576b98ced"
+   "bytes": 20892,
+   "keccak": "0x10f4088a9ae5dff5f2caa7d005c4da80e8ece5c515b6f3e4e5ab452606f2b2ff"
   },
   "immutableReferences": {
    "73285": {
@@ -71,15 +71,15 @@
       "length": 32
      },
      {
-      "start": 6199,
+      "start": 6169,
       "length": 32
      },
      {
-      "start": 7340,
+      "start": 7310,
       "length": 32
      },
      {
-      "start": 9035,
+      "start": 9005,
       "length": 32
      }
     ]
@@ -110,11 +110,11 @@
   },
   "templateRuntime": {
    "bytes": 5552,
-   "zeroFilledKeccak": "0x73cbf73c2fb778fd4a2541d59da08c4346a2217e5a73d7282583fe3ab69376d9"
+   "zeroFilledKeccak": "0x76db610aa6d183253d966ff21d2c59f750028b9ad83c0e4cc0d362324740e2e7"
   },
   "creation": {
    "bytes": 5772,
-   "keccak": "0x355b93fd4ef88a9e5be84795c19aa552ee6de280d31244d944aacb40c2219391"
+   "keccak": "0x7ec2d7eb35806d3ec7edab5809a6b5441977afc32ad3b5276cd9437d0d276f88"
   },
   "immutableReferences": {
    "72634": {
@@ -261,20 +261,20 @@
   "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
   "coreRuntimeKeccak": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
   "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
-  "extension": "0x511b4327c2a2b6fd803b4ae85f2f9d831e046d8b",
-  "extensionSalt": "0x0000000000000000000000000000000000000000000000000000000000000169",
+  "extension": "0x519c5f793d3f6cf9ee439e4cc38d8285cf08211f",
+  "extensionSalt": "0x000000000000000000000000000000000000000000000000000000000000001d",
   "extensionConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701",
-  "extensionInitCodeKeccak": "0xe7e9c3842ad3f0853036e0308546db56a23d7c5444e456d01cae45cd5ae0d1bd",
-  "extensionRuntimeKeccak": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+  "extensionInitCodeKeccak": "0x4d1760eaaf6b62af28a60bbc00a8f52f6423e282cc5d5aca2fbcc99a8e87c95e",
+  "extensionRuntimeKeccak": "0xd6b4c7ce8da56e9948fdb004a035d9b52dbd3690bcb03c1269bbf2a9981d8ed5",
   "extensionImmutables": {
    "73285": "core",
    "77162": "core"
   },
-  "periphery": "0x2f0be2fc5a2825cecd23dbf6ed33ed8ff823ef64",
+  "periphery": "0x0df4e2a76640b52e51479b435f52d0eb0e7e8ef4",
   "peripherySalt": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000511b4327c2a2b6fd803b4ae85f2f9d831e046d8b",
-  "peripheryInitCodeKeccak": "0x8cf2ee014da27fda89967bb662c035bf761ddc1dc20de2e2d51099c8453eed6e",
-  "peripheryRuntimeKeccak": "0x49988478ba70cc8d2587eb63141b333c7ef0a67c4639c3a2ee25de4c4597999e",
+  "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000519c5f793d3f6cf9ee439e4cc38d8285cf08211f",
+  "peripheryInitCodeKeccak": "0x1464241f9b06226c9fd293b30d7ca138d1a2cd58092fa0a18e42eb2e61cacbb3",
+  "peripheryRuntimeKeccak": "0x2a9329dbb064a2c031115c7c120c8b6a1f31de167f33374180e4dc73d975974b",
   "peripheryImmutables": {
    "72634": "core",
    "72637": "extension",
@@ -292,9 +292,9 @@
   }
  ],
  "consumerManifest": {
-  "frozenCommit": "550afc40280423128c02eb5ffd213aa959b34e2a",
-  "frozenTree": "dbbfe6a5eb5ddefe04974338b2b57bdf675c431e",
-  "manifestSha256": "57d8485ee7aa34049269f66bedccbfb43b66869b2e37bddf5857d070df02ca0b",
+  "frozenCommit": "43d6628841b3ce91dafa048b7ceef64bed55fc8e",
+  "frozenTree": "9ab869d1a453b8df48d47c2e0e2fb2d4ca8f67bf",
+  "manifestSha256": "7e351ef4fe1ee835f41870cbbab69a07d26b0a66ffebd5915ef4a42a18edcc6e",
   "abiSha256Convention": "sha256 of `jq -cS .abi` of the Foundry artifact, no trailing newline",
   "abiSha256": {
    "ZeroSeedLaunch": "efae9388aa6b1342479204ddf436fd2a310df16bf06c80c990b2d22c90d1e41e",

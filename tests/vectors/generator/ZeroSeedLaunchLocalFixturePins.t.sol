@@ -2,7 +2,7 @@
 pragma solidity =0.8.33;
 
 // Local fixture pin generator. Not part of evm-contracts: copied into a scratch copy of
-// EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a as test/extensions/ and run with
+// EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e as test/extensions/ and run with
 // `forge test --offline --match-contract ZeroSeedLaunchLocalFixturePins -vv`. It executes the deployment of the local
 // anvil fixture (chain 31337, no fork): Core at its canonical address, ONE ZeroSeedLaunch `(core)` through the
 // deterministic CREATE2 deployer at the first salt (counting up from 0) whose address carries the call-point byte, its

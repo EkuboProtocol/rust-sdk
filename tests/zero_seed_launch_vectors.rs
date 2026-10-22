@@ -40,7 +40,7 @@ const ABI_LAUNCH: &str = include_str!("vectors/pins/ZeroSeedLaunch.abi.json");
 const ABI_PERIPHERY: &str = include_str!("vectors/pins/ZeroSeedLaunchPeriphery.abi.json");
 const ABI_TOKEN: &str = include_str!("vectors/pins/MintableERC20.abi.json");
 
-const TARGET_COMMIT: &str = "550afc40280423128c02eb5ffd213aa959b34e2a";
+const TARGET_COMMIT: &str = "43d6628841b3ce91dafa048b7ceef64bed55fc8e";
 const CORE_RUNTIME: &str = "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
 
 /// Fixture quote tokens of the contract tests: the high one makes the launch token token0.
@@ -1013,15 +1013,17 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
     assert_eq!(claims_checked, claim_actions);
     assert_eq!(
         (swaps_checked, claims_checked, snapshots_checked),
-        (26, 10, 62)
+        (28, 10, 78)
     );
     for (label, counts) in [
-        ("l1", [10, 5, 17, 0]),
-        ("l2", [4, 2, 16, 0]),
+        ("l1", [10, 5, 19, 0]),
+        ("l2", [4, 2, 18, 0]),
         ("l3", [1, 0, 2, 0]),
-        ("l4", [4, 1, 9, 0]),
-        ("l5", [5, 1, 9, 2]),
-        ("l6", [2, 1, 9, 2]),
+        ("l4", [4, 1, 11, 0]),
+        ("l5", [5, 1, 11, 2]),
+        ("l6", [2, 1, 11, 2]),
+        ("l7", [1, 0, 3, 0]),
+        ("l8", [1, 0, 3, 0]),
     ] {
         assert_eq!(per_launch[label], counts, "{label}");
     }
@@ -1124,7 +1126,9 @@ fn local_fixture_pins_match_the_indexer_receipt() {
     kinds.sort_unstable();
     assert_eq!(
         kinds,
-        ["erc20", "erc20", "erc20", "native", "native", "native"]
+        [
+            "erc20", "erc20", "erc20", "erc20", "erc20", "native", "native", "native"
+        ]
     );
 }
 
@@ -1613,7 +1617,7 @@ fn installation_preview_and_creation_match_the_contract() {
     let vectors: Value = serde_json::from_str(PARITY).unwrap();
     let previews = vectors["previews"].as_array().unwrap();
     let creations = vectors["creations"].as_array().unwrap();
-    assert_eq!(previews.len(), 129);
+    assert_eq!(previews.len(), 145);
     assert_eq!(creations.len(), previews.len());
     let mut ok = 0;
     let mut refusals = HashMap::new();
@@ -1719,7 +1723,33 @@ fn installation_preview_and_creation_match_the_contract() {
                 .or_insert(0) += 1;
         }
     }
-    assert_eq!(ok, 56);
+    assert_eq!(ok, 68);
+    // Low-price token0 geometry: the exact maximum, created through the periphery (the shared
+    // helper installed 106052588672, 1 and 9223595582101085259 liquidity units).
+    for (label, liquidity, sink) in [
+        (
+            "t0_18_18_lowPrice",
+            115_073_586_432,
+            8_589_236_567_713_153_558,
+        ),
+        ("t0_18_18_lowPriceTwoUnits", 2, 0),
+        (
+            "t0_18_18_fullWidthInt128Budget",
+            9_223_595_582_101_085_260,
+            0,
+        ),
+    ] {
+        let creation = creations.iter().find(|c| s(c, "label") == label).unwrap();
+        assert_eq!(
+            (
+                num::<u128>(creation, "liquidity"),
+                num::<u128>(creation, "sinkSupply"),
+                num::<u128>(creation, "balanceOfZero"),
+            ),
+            (liquidity, sink, sink),
+            "{label}"
+        );
+    }
     // The former 99% ceiling plus one and the highest rate, flat or decaying, are accepted in every
     // group and created normally.
     for suffix in ["_feeAboveFormerCap", "_feeAtCap", "_feeMaxEncodable"] {
@@ -1742,7 +1772,7 @@ fn installation_preview_and_creation_match_the_contract() {
         ("UnsupportedQuoteToken", 4),
         ("MetadataTooLong", 8),
         ("LaunchTokenExists", 5),
-        ("ZeroLiquidity", 6),
+        ("ZeroLiquidity", 10),
         ("LiquidityAboveTickCap", 6),
     ] {
         assert_eq!(refusals.get(refusal), Some(&count), "{refusal}");

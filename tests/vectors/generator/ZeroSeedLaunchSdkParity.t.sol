@@ -2,7 +2,7 @@
 pragma solidity =0.8.33;
 
 // SDK parity generator. Not part of evm-contracts: it is copied into a scratch copy of
-// EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a as test/extensions/, run with
+// EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e as test/extensions/, run with
 // `forge test --offline --match-contract ZeroSeedLaunchSdkParity -vv`, and its `PARITY|` log lines are converted to
 // JSON by `parity_to_json.py`. One extension (constructor `(core)`) and one periphery serve every launch of a test:
 // each launch selects its own quote in `LaunchParameters.quoteToken`, native ETH or a plain ERC-20. Launches are
@@ -931,6 +931,25 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 r.askTick = 88722800 - WIDTH;
                 r.upperTick = 88722800;
                 _logPreview(string.concat(g, "_nearMaxTick"), r);
+                // Low-price token0 geometry where the exact installation exceeds the shared helper's: 1e30, a
+                // supply worth exactly two liquidity units, one unit short of the first, and an int128-scale
+                // supply over the full width at spacing 1 that installs exactly.
+                r = _clone(p);
+                r.askTick = -88080384;
+                r.upperTick = -85983232;
+                r.tickSpacing = 524288;
+                r.supply = 1e30;
+                _logPreview(string.concat(g, "_lowPrice"), r);
+                r.supply = 17380183081064167375;
+                _logPreview(string.concat(g, "_lowPriceTwoUnits"), r);
+                r.supply = 8690091540532083687;
+                _logPreview(string.concat(g, "_lowPriceBelowOneUnit"), r);
+                r = _clone(p);
+                r.askTick = -88722835;
+                r.upperTick = 88722835;
+                r.tickSpacing = 1;
+                r.supply = 170141183460469231694794709727778658247;
+                _logPreview(string.concat(g, "_fullWidthInt128Budget"), r);
                 // Refusals.
                 r = _clone(p);
                 r.supply = 0;

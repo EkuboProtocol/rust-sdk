@@ -4,16 +4,17 @@ import hashlib
 import json
 from pathlib import Path
 
-TARGET = "550afc40280423128c02eb5ffd213aa959b34e2a"
+TARGET = "43d6628841b3ce91dafa048b7ceef64bed55fc8e"
 root = Path("tests/vectors")
 expected = {
-    "zero-seed-launch.json": "4689b2cdfb533bb293dc2fda4f76189da5dc5f5c8e79a33bf5b216149bdc00b9",
+    "zero-seed-launch.json": "8398d4189a6b1a434e17376276a7e218c9597408754a9920ce34a4872809a879",
     "zero-seed-launch-fee-decay-vectors.json": "7004b29f91540f1b29a568b525d215227565b36d1b490687ae604f5f145b835b",
     "zero-seed-launch-fee-curve-all-seconds.json": "fc9be5e4d59d8163f7a5566a7076bb9628d8ff30af5efde1eb554ba9b93bddce",
-    "zero-seed-launch-fee-curve-rows.json": "2b716bc9278b4cccaf3382f3624a16913cddf327e4a625c241bc219edc359f60",
-    "zero-seed-launch-parity.json": "89db5c64817daad560c500e7c20b3e1f54477df8e8dfb47a39cb7d3e479f6b30",
-    "zero-seed-launch-indexer.json": "09d7745740af507a02304e26c0e20d6f27b1047fd707c056ef4d936c67a74fcc",
-    "pins/pins.json": "65be02a5c89195db32584e6a05cc105d63f988f5f3d16a5b8df0c516207c37f2",
+    "zero-seed-launch-fee-curve-rows.json": "7a86930ae16e5f8cc6730f33bc6f71915f5d3c1375fd7788593153de03b16d81",
+    "zero-seed-launch-parity.json": "e799f4de8bbaf8653cc938b7d8f6b3552b5f0b3fcfdc2623b38996787a479cb0",
+    "zero-seed-launch-indexer.json": "ec308953b8412e3ad76e7b6bf74b1e3ae56f6cbe0798032dbc6673bfedfae7d9",
+    "pins/pins.json": "a2de05ae1bc5fc640fda4cf2930c8ba1e85c7cab5023db67dc6351408d97ec14",
+    "zero-seed-launch-installation.json": "b06f6576e2280fa9851835655e899d3a21506bec317fa51af2d5a2efadbf330d",
     "pins/ZeroSeedLaunch.abi.json": "efae9388aa6b1342479204ddf436fd2a310df16bf06c80c990b2d22c90d1e41e",
     "pins/ZeroSeedLaunchPeriphery.abi.json": "df24d9f07d45323da7e46c0f6e64ce24f8f522442d60cb07880ddf742ebe7305",
     "pins/MintableERC20.abi.json": "fa77fe077e7630e8d08191428bbdf6529fb32d0bbe49b8a7245887fbd1f1abba",
@@ -38,7 +39,7 @@ assert manifest["removedFromAbi"] == {"FeeTooHigh()": "0xcd4e6167"}
 assert all("0xcd4e6167" not in pins[n]["errors"].values() for n in ("ZeroSeedLaunch", "ZeroSeedLaunchPeriphery", "MintableERC20"))
 assert manifest["maxCreatorFeeQ64"] == str(2**64 - 1)
 vectors = json.loads((root / "zero-seed-launch.json").read_text())
-assert vectors["version"] == 5 and vectors["fixture"]["max_creator_fee_q64"] == str(2**64 - 1)
+assert vectors["version"] == 6 and vectors["fixture"]["max_creator_fee_q64"] == str(2**64 - 1)
 assert vectors["creator_fee_range"] == manifest["creatorFeeRange"]
 assert len(vectors["creator_fee_range"]["vectors"]) == 12 and len(vectors["max_rate"]["trades"]) == 16
 assert "pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = u64::MAX;" in Path("src/quoting/pools/zero_seed_launch.rs").read_text()
@@ -61,7 +62,7 @@ parity = json.loads((root / "zero-seed-launch-parity.json").read_text())
 assert parity["source"]["contracts"].startswith(f"EkuboProtocol/evm-contracts@{TARGET}")
 assert len(parity["scenarios"]) == 13
 assert sum(len(s["steps"]) for s in parity["scenarios"]) == 522
-assert len(parity["previews"]) == len(parity["creations"]) == 129
+assert len(parity["previews"]) == len(parity["creations"]) == 145
 extensions = set()
 for scenario in parity["scenarios"]:
     c = scenario["create"]
@@ -110,7 +111,13 @@ for label, launch in indexer["launches"].items():
     assert installation["totalSupply"] == installation["requestedSupply"]
     assert installation["sinkBalance"] == installation["sinkSupply"]
     assert installation["coreInstalledDelta"] == installation["installedSupply"]
-assert sorted(kinds) == ["erc20", "erc20", "erc20", "native", "native", "native"]
+assert sorted(kinds) == ["erc20"] * 5 + ["native"] * 3
+installation_vectors = json.loads((root / "zero-seed-launch-installation.json").read_text())
+assert installation_vectors["pins"]["runtime"]["ZeroSeedLaunch"]["keccak256"] == fixture["extensionRuntimeKeccak"]
+for label in ("l7", "l8"):
+    installation = indexer["installations"][label]
+    assert installation["liquidity"] != "0" and not indexer["launches"][label]["tokenIsToken1"]
+assert indexer["installations"]["l8"]["sinkSupply"] == "0"
 for label in ("l5", "l6"):
     (log,) = [l for b in indexer["branches"].values() for l in b["logs"]
               if l["topics"][:1] == ["0x3a4e811187f4a8c0b72396e9d7ca13aeed62eb97a599a24af1ed99066041098f"]
@@ -119,6 +126,6 @@ for label in ("l5", "l6"):
     p = int.from_bytes(data[160:192], "big") // 32
     assert int.from_bytes(data[32 * (p + 10):32 * (p + 11)], "big") == 2**64 - 1, label
 print(f"PASS: {len(expected)} exact SHA256 receipts, 91 manifest ABI entries (FeeTooHigh removed), 13 parity scenarios, 522 step slots, "
-      f"129 previews and creations, 1 supported LOCAL instance serving native and ERC-20 quotes, "
+      f"145 previews and creations, 1 supported LOCAL instance serving native and ERC-20 quotes, "
       f"1 reviewed LOCAL ERC-20 quote; live lists EMPTY; indexer receipt of the target: 1 instance, "
       f"{len(kinds)} launches (native and ERC-20)")
