@@ -7,10 +7,9 @@
 //! against this implementation, and the SHA-256 chains over each curve are checked against the
 //! contract's vectors (`tests/vectors/zero-seed-launch.json`).
 //!
-//! These are unit tests so that the highest encodable rate, `2**64 - 1`, which `create` and
-//! `new_math` refuse, can be exercised by overwriting the stored initial fee of a valid pool,
-//! the counterpart of the contract test's storage injection. That configuration is research-only
-//! and unreachable through any public constructor.
+//! The highest rate, `2**64 - 1` (just under 100%), is an ordinary valid configuration: the
+//! launches here are constructed at it through `new_math`, as the contract's study creates them
+//! through the periphery. 99% is only a study rate.
 
 use std::{
     collections::HashMap,
@@ -40,6 +39,8 @@ const FEE_5: u64 = 922_337_203_685_477_580;
 const FEE_03: u64 = 55_340_232_221_128_654;
 const RATE_50: u64 = 9_223_372_036_854_775_808;
 const RATE_MAX: u64 = u64::MAX;
+/// `floor(2**64 * 99 / 100)`: a study rate, not a bound.
+const FEE_99: u64 = 18_262_276_632_972_456_099;
 /// `floor(2**64 * 2**(-1/600))`: the per-second factor of the previous variable-base schedule.
 const LEGACY_FACTOR: u64 = 18_425_445_863_997_925_462;
 const QUOTE_HIGH: &str = "0xffffffffffffffffffffffffffffffffffffffff";
@@ -99,7 +100,7 @@ fn rate_of(label: &str) -> u64 {
         "50" => RATE_50,
         "75" => 13_835_058_055_282_163_712,
         "90" => 16_602_069_666_338_596_454,
-        "99" => ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
+        "99" => FEE_99,
         "max" => RATE_MAX,
         _ => panic!("rate {label}"),
     }
@@ -386,13 +387,15 @@ fn seeded_domain_sweep_bounded_monotone_endpoints() {
     }
 }
 
-/// Validation: the 99% cap accepted, one above and the highest encodable rate refused with
-/// `FeeTooHigh`; zero duration and a rising schedule refused with `InvalidFeeSchedule`.
+/// Validation over the whole `u64` range: 0, 1, `2**64 - 2` and `2**64 - 1` accepted as initial
+/// and final fee, flat or decaying, over the shortest and longest windows; only a rising schedule
+/// and a zero duration are refused, with `InvalidFeeSchedule`. `new_math` agrees.
 #[test]
-fn validation_cap_and_schedule() {
+fn validation_accepts_the_full_range_and_checks_the_schedule() {
     type E = ZeroSeedLaunchParameterError;
-    assert_eq!(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE as u128, 99 * Q / 100);
-    let mut p = ZeroSeedLaunchParameters {
+    assert_eq!(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE, RATE_MAX);
+    assert_eq!(u128::from(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE), Q - 1);
+    let base = ZeroSeedLaunchParameters {
         supply: 1_000_000_000_000_000_000_000_000_000,
         quote_token: address(QUOTE_HIGH),
         range: ZeroSeedLaunchRange {
@@ -404,31 +407,107 @@ fn validation_cap_and_schedule() {
         fee: ZeroSeedLaunchFeeSchedule {
             trading_start: START,
             fee_duration: 3600,
-            initial_fee: ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
+            initial_fee: RATE_MAX,
             final_fee: FEE_03,
         },
     };
-    assert!(validate_launch_parameters_math(&p, START).is_ok());
-    p.fee.fee_duration = u32::MAX;
-    assert!(validate_launch_parameters_math(&p, START).is_ok());
-    p.fee.fee_duration = 0;
-    assert_eq!(
-        validate_launch_parameters_math(&p, START),
-        Err(E::InvalidFeeSchedule)
-    );
-    p.fee.fee_duration = 3600;
-    p.fee.final_fee = p.fee.initial_fee + 1;
-    assert_eq!(
-        validate_launch_parameters_math(&p, START),
-        Err(E::InvalidFeeSchedule)
-    );
-    p.fee.final_fee = FEE_03;
-    for rate in [ZERO_SEED_LAUNCH_MAX_CREATOR_FEE + 1, RATE_MAX] {
-        p.fee.initial_fee = rate;
-        assert_eq!(
-            validate_launch_parameters_math(&p, START),
-            Err(E::FeeTooHigh)
-        );
+    let installation = installation_math(&base, START).unwrap();
+    let tick = base.range.initial_tick();
+    let (lower, upper) = base.range.pool_bounds();
+    let construct = |fee: ZeroSeedLaunchFeeSchedule| {
+        ZeroSeedLaunchPool::new_math(
+            PoolKey {
+                token0: address("0x00000000000000000000000000000000000a0000"),
+                token1: base.quote_token,
+                config: PoolConfig {
+                    extension: address("0x5100000000000000000000000000000000000000"),
+                    fee: 0,
+                    pool_type_config: TickSpacing(100),
+                },
+            },
+            ZeroSeedLaunchConfig {
+                quote_token: base.quote_token,
+                range: base.range,
+                liquidity: installation.liquidity,
+                fee,
+            },
+            ZeroSeedLaunchPoolState {
+                sqrt_ratio: to_sqrt_ratio::<Evm>(tick).unwrap(),
+                tick,
+                liquidity: if tick >= lower && tick < upper {
+                    installation.liquidity
+                } else {
+                    0
+                },
+            },
+        )
+        .map(|pool| pool.fee_at(START))
+    };
+    let rates = [0, 1, RATE_MAX - 1, RATE_MAX];
+    let mut accepted = 0;
+    for initial in rates {
+        for final_fee in rates {
+            for duration in [1, 3600, u32::MAX] {
+                let fee = ZeroSeedLaunchFeeSchedule {
+                    trading_start: START,
+                    fee_duration: duration,
+                    initial_fee: initial,
+                    final_fee,
+                };
+                let p = ZeroSeedLaunchParameters { fee, ..base };
+                let expected = if final_fee > initial {
+                    Err(E::InvalidFeeSchedule)
+                } else {
+                    Ok(())
+                };
+                assert_eq!(
+                    validate_launch_parameters_math(&p, START),
+                    expected,
+                    "{fee:?}"
+                );
+                assert_eq!(
+                    preview_installation_math(&p, START).map(|_| ()),
+                    expected,
+                    "{fee:?}"
+                );
+                if expected.is_ok() {
+                    assert_eq!(construct(fee), Ok(initial));
+                    accepted += 1;
+                } else {
+                    assert_eq!(
+                        construct(fee),
+                        Err(ZeroSeedLaunchPoolConstructionError::InvalidLaunchConfig)
+                    );
+                }
+                let zero = ZeroSeedLaunchFeeSchedule {
+                    fee_duration: 0,
+                    ..fee
+                };
+                assert_eq!(
+                    validate_launch_parameters_math(
+                        &ZeroSeedLaunchParameters { fee: zero, ..base },
+                        START
+                    ),
+                    Err(E::InvalidFeeSchedule)
+                );
+                assert_eq!(
+                    construct(zero),
+                    Err(ZeroSeedLaunchPoolConstructionError::InvalidLaunchConfig)
+                );
+            }
+        }
+    }
+    assert_eq!(accepted, 30);
+    // The former ceiling and one above it are ordinary rates.
+    for initial in [FEE_99, FEE_99 + 1] {
+        let p = ZeroSeedLaunchParameters {
+            fee: ZeroSeedLaunchFeeSchedule {
+                initial_fee: initial,
+                ..base.fee
+            },
+            ..base
+        };
+        assert_eq!(validate_launch_parameters_math(&p, START), Ok(()));
     }
 }
 
@@ -442,6 +521,16 @@ struct Fixture {
 /// (18/6) quote per token, spacing 100. Token0 launches quote a plain ERC-20 at the top of the address
 /// space; token1 launches quote native ETH (18/18) or a six-decimal token at 0x10000.
 fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture {
+    fixture_with(order, decimals, duration, initial, FEE_03)
+}
+
+fn fixture_with(
+    order: &str,
+    decimals: &str,
+    duration: u32,
+    initial: u64,
+    final_fee: u64,
+) -> Fixture {
     let is1 = order == "t1";
     let ask = if decimals == "18/6" {
         -41_446_500
@@ -464,12 +553,11 @@ fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture 
         upper_tick: ask + 4_605_200,
         tick_spacing: 100,
     };
-    // Valid configuration at the cap; the research-only maximum is injected below.
     let fee = ZeroSeedLaunchFeeSchedule {
         trading_start: START,
         fee_duration: duration,
-        initial_fee: initial.min(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE),
-        final_fee: FEE_03,
+        initial_fee: initial,
+        final_fee,
     };
     let parameters = ZeroSeedLaunchParameters {
         supply: 1_000_000_000_000_000_000_000_000_000,
@@ -481,7 +569,7 @@ fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture 
     let (token0, token1) = if is1 { (quote, token) } else { (token, quote) };
     let tick = range.initial_tick();
     let (lower, upper) = range.pool_bounds();
-    let mut pool = ZeroSeedLaunchPool::new_math(
+    let pool = ZeroSeedLaunchPool::new_math(
         PoolKey {
             token0,
             token1,
@@ -508,17 +596,6 @@ fn fixture(order: &str, decimals: &str, duration: u32, initial: u64) -> Fixture 
         },
     )
     .unwrap();
-    if initial > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {
-        // Research-only injection, as `_injectInitialFee` in the contract study: unreachable via
-        // `new`/`new_math`, which refuse it.
-        let mut refused = *pool.launch();
-        refused.fee.initial_fee = initial;
-        assert_eq!(
-            ZeroSeedLaunchPool::new_math(pool.key(), refused, pool.state()),
-            Err(ZeroSeedLaunchPoolConstructionError::InvalidLaunchConfig)
-        );
-        pool.launch.fee.initial_fee = initial;
-    }
     Fixture { pool, token, quote }
 }
 
@@ -620,63 +697,227 @@ fn high_rate_matrix_matches_executed_rows() {
     assert_eq!(checked, 80);
 }
 
-/// Exact-output representation limits at the injected maximum rate, as the contract's executed
-/// bounds test: one unit grosses up to 2**64; along increasing outputs the swap executes with
-/// `paid = calc * 2**64`, then fails the signed int128 conversion, then the uint128 helper.
+/// The contract's `max_rate` trades (launches created at `2**64 - 1`, both orders, 18/18 with
+/// native ETH as the token1 quote, and 18/6): one raw unit nets nothing, a whole unit nets
+/// `floor(gross / 2**64)`, the exact output of what is held pays `calc * 2**64`, and selling
+/// everything held grosses and charges nothing. The same rows as the study's `max` chunks.
 #[test]
-fn exact_output_helper_and_signed_bounds() {
-    assert_eq!(amount_before_fee::<Evm>(1, RATE_MAX), Some(Q));
-    assert_eq!(amount_before_fee::<Evm>(Q, RATE_MAX), None);
-
-    let f = fixture("t0", "18/18", 3600, RATE_MAX);
-    let state = f.pool.state();
-    let probe = |out: u128| swap(&f, state, f.token, -(out as i128), START);
-    let supply = preview_installation_math(
-        &ZeroSeedLaunchParameters {
-            supply: 1_000_000_000_000_000_000_000_000_000,
-            quote_token: f.quote,
-            range: f.pool.launch().range,
-            fee: ZeroSeedLaunchFeeSchedule {
-                initial_fee: ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
-                ..f.pool.launch().fee
-            },
-        },
-        START,
-    )
-    .unwrap()
-    .installed_supply;
-    let (mut lo, mut hi) = (1u128, supply);
-    while lo < hi {
-        let mid = lo + (hi - lo).div_ceil(2);
-        if probe(mid).is_ok() {
-            lo = mid;
-        } else {
-            hi = mid - 1;
+fn max_rate_trades_match_the_contract_vectors() {
+    let v: Value = serde_json::from_str(VECTORS).unwrap();
+    assert_eq!(
+        big(&v["fixture"]["max_creator_fee_q64"]),
+        u128::from(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE)
+    );
+    let trades = v["max_rate"]["trades"].as_array().unwrap();
+    assert_eq!(trades.len(), 16);
+    let study: Vec<_> = rows("highRate")
+        .into_iter()
+        .filter(|r| r["rate"] == "max" && !r.contains_key("dust"))
+        .collect();
+    assert_eq!(study.len(), trades.len());
+    let field = |r: &Value, k: &str| big(&r[k]);
+    let mut checked = 0;
+    for (chunk, study) in trades.chunks(4).zip(study.chunks(4)) {
+        let (order, dec) = (
+            chunk[0]["order"].as_str().unwrap(),
+            chunk[0]["decimals"].as_str().unwrap(),
+        );
+        let f = fixture(order, dec, 3600, RATE_MAX);
+        assert_eq!(f.pool.launch().fee.initial_fee, RATE_MAX);
+        assert_eq!(f.quote.is_zero(), order == "t1" && dec == "18/18");
+        let mut state = f.pool.state();
+        let mut held = 0;
+        for (row, study) in chunk.iter().zip(study) {
+            assert_eq!(
+                (row["order"].as_str(), row["decimals"].as_str()),
+                (Some(order), Some(dec))
+            );
+            assert_eq!(
+                (study["order"].as_str(), study["dec"].as_str()),
+                (order, dec)
+            );
+            let step = row["step"].as_str().unwrap();
+            assert!(study.contains_key(step), "{step} {study:?}");
+            match step {
+                "oneUnit" | "buyExactIn" => {
+                    let input = field(row, "quoteIn") as i128;
+                    let q = swap(&f, state, f.quote, input, START).unwrap();
+                    assert_eq!(q.consumed, input);
+                    assert_eq!(q.calculated, field(row, "net"), "{row}");
+                    assert_eq!(q.fee, field(row, "fee"));
+                    assert_eq!(q.calculated + q.fee, field(row, "gross"));
+                    assert_eq!(q.calculated, (q.calculated + q.fee) >> 64);
+                    assert_eq!(q.calculated == 0, step == "oneUnit");
+                    held += q.calculated;
+                    state = q.state;
+                }
+                "buyExactOut" => {
+                    let out = field(row, "tokenOut");
+                    assert_eq!(out, held);
+                    let q = swap(&f, state, f.token, -(out as i128), START).unwrap();
+                    assert_eq!(q.consumed, -(out as i128));
+                    assert_eq!(q.calculated, field(row, "paid"), "{row}");
+                    assert_eq!(q.fee, field(row, "fee"));
+                    assert_eq!(q.calculated - q.fee, field(row, "calcQuote"));
+                    assert_eq!(q.calculated, (q.calculated - q.fee) << 64);
+                    held += out;
+                    state = q.state;
+                }
+                "sellAll" => {
+                    assert_eq!(field(row, "tokenIn"), held);
+                    let q = swap(&f, state, f.token, held as i128, START).unwrap();
+                    assert_eq!(q.calculated, field(row, "quoteOut"), "{row}");
+                    assert_eq!(q.fee, field(row, "fee"));
+                    assert_eq!(q.calculated + q.fee, field(row, "grossQuote"));
+                }
+                other => panic!("step {other}"),
+            }
+            for (key, value) in study {
+                if let Some(expected) = row.get(key.as_str()) {
+                    assert_eq!(expected.as_str().unwrap(), value, "{key}");
+                }
+            }
+            checked += 1;
         }
     }
-    let last = probe(lo).unwrap();
-    assert_eq!(last.calculated, (last.calculated - last.fee) << 64);
-    assert!(last.calculated - last.fee <= (i128::MAX as u128) >> 64);
-    assert_eq!(
-        probe(lo + 1).err(),
-        Some(ZeroSeedLaunchPoolQuoteError::Overflow)
-    );
-    let (mut lo, mut hi) = (lo + 1, supply);
-    while lo < hi {
-        let mid = lo + (hi - lo).div_ceil(2);
-        if probe(mid).err() == Some(ZeroSeedLaunchPoolQuoteError::Overflow) {
-            lo = mid;
-        } else {
-            hi = mid - 1;
-        }
-    }
-    assert_eq!(
-        probe(lo + 1).err(),
-        Some(ZeroSeedLaunchPoolQuoteError::AmountBeforeFeeOverflow)
-    );
+    assert_eq!(checked, 16);
 }
 
-/// At the injected maximum rate one wei quotes and fills zero, which full-fill quoting refuses;
+/// The study's launches created at `2**64 - 1` with the three schedules of the contract vectors
+/// (to 0.3% over 3,600 s, flat over 1 s, to 0 over `u32::MAX` s): the first whole-unit buy at
+/// trading start is the same for all three, `net = floor(gross / 2**64)`.
+#[test]
+fn launches_created_at_the_maximum_rate() {
+    let rows = rows("createMax");
+    assert_eq!(rows.len(), 12);
+    for row in &rows {
+        let order = row["order"].trim_end_matches("(native)");
+        let dec = row["dec"].as_str();
+        assert_eq!(
+            row["order"].ends_with("(native)"),
+            order == "t1" && dec == "18/18"
+        );
+        let duration: u32 = n(row, "duration");
+        let final_fee = match row["final"].as_str() {
+            "0.3" => FEE_03,
+            "max" => RATE_MAX,
+            "0" => 0,
+            other => panic!("final {other}"),
+        };
+        let f = fixture_with(order, dec, duration, RATE_MAX, final_fee);
+        assert_eq!(f.pool.fee_at(START), RATE_MAX);
+        assert_eq!(f.pool.fee_at(START + u64::from(duration)), final_fee);
+        let unit: i128 = if dec == "18/6" {
+            1_000_000
+        } else {
+            1_000_000_000_000_000_000
+        };
+        let q = swap(&f, f.pool.state(), f.quote, unit, START).unwrap();
+        assert_eq!(q.calculated, n::<u128>(row, "net"), "{row:?}");
+        assert_eq!(q.fee, n::<u128>(row, "fee"));
+        assert_eq!(q.calculated + q.fee, n::<u128>(row, "gross"));
+        assert_eq!(q.calculated, n::<u128>(row, "gross") >> 64);
+    }
+}
+
+/// Exact-output representation limits at `2**64 - 1`, from the contract's `exact_output_bounds`
+/// (equal to the study's `exactOutBounds` rows), both orders: the last executable output has
+/// `calc = 2**63 - 1` and pays `calc * 2**64`; from the next output up to `calc = 2**64 - 1` the
+/// fee-inclusive input does not fit `int128` (`SafeCastLib.Overflow`, the SDK's `Overflow`); from
+/// `calc = 2**64` the gross-up does not fit `uint128` (`AmountBeforeFeeOverflow`).
+#[test]
+fn exact_output_helper_and_signed_bounds() {
+    type E = ZeroSeedLaunchPoolQuoteError;
+    assert_eq!(amount_before_fee::<Evm>(1, RATE_MAX), Some(Q));
+    assert_eq!(
+        amount_before_fee::<Evm>((1 << 63) - 1, RATE_MAX),
+        Some(((1 << 63) - 1) << 64)
+    );
+    assert_eq!(
+        amount_before_fee::<Evm>(u128::from(RATE_MAX), RATE_MAX),
+        Some(u128::from(RATE_MAX) << 64)
+    );
+    assert_eq!(amount_before_fee::<Evm>(Q, RATE_MAX), None);
+
+    let v: Value = serde_json::from_str(VECTORS).unwrap();
+    let bounds = &v["max_rate"]["exact_output_bounds"];
+    assert_eq!(big(&bounds["signed_bound_calc"]), (1 << 63) - 1);
+    assert_eq!(big(&bounds["helper_bound_calc"]), u128::from(RATE_MAX));
+    assert_eq!(
+        bounds["errors"]["signed"],
+        "SafeCastLib.Overflow() 0x35278d12"
+    );
+    assert_eq!(
+        bounds["errors"]["helper"],
+        "AmountBeforeFeeOverflow() 0x0d88f526"
+    );
+    let study = rows("exactOutBounds");
+    let vectors = bounds["vectors"].as_array().unwrap();
+    assert_eq!((vectors.len(), study.len()), (2, 2));
+    for (r, study) in vectors.iter().zip(&study) {
+        let order = r["order"].as_str().unwrap();
+        assert_eq!(r["decimals"], "18/18");
+        assert_eq!(study["order"].trim_end_matches("(native)"), order);
+        assert_eq!(
+            study["order"].ends_with("(native)"),
+            r.get("quote").is_some()
+        );
+        let mut compared = 0;
+        for (key, value) in study {
+            if let Some(expected) = r.get(key.as_str()).filter(|_| key != "order") {
+                assert_eq!(expected.as_str().unwrap(), value, "{key}");
+                compared += 1;
+            }
+        }
+        assert_eq!(compared, 6);
+        let f = fixture(order, "18/18", 3600, RATE_MAX);
+        assert_eq!(f.quote.is_zero(), order == "t1");
+        let state = f.pool.state();
+        let probe = |out: u128| swap(&f, state, f.token, -(out as i128), START);
+
+        let last = probe(big(&r["lastValidTokenOut"])).unwrap();
+        let calc = last.calculated - last.fee;
+        assert_eq!(calc, big(&r["calc"]));
+        assert_eq!(calc, (1 << 63) - 1);
+        assert_eq!(last.calculated, big(&r["paid"]));
+        assert_eq!(last.calculated, calc << 64);
+        assert_eq!(last.consumed, -(big(&r["lastValidTokenOut"]) as i128));
+        assert_eq!(
+            big(&r["firstSignedOverflowTokenOut"]),
+            big(&r["lastValidTokenOut"]) + 1
+        );
+        assert_eq!(
+            big(&r["firstHelperOverflowTokenOut"]),
+            big(&r["lastSignedOverflowTokenOut"]) + 1
+        );
+        for out in [
+            big(&r["firstSignedOverflowTokenOut"]),
+            big(&r["lastSignedOverflowTokenOut"]),
+        ] {
+            assert_eq!(probe(out).err(), Some(E::Overflow), "{order} {out}");
+        }
+        assert_eq!(
+            probe(big(&r["firstHelperOverflowTokenOut"])).err(),
+            Some(E::AmountBeforeFeeOverflow)
+        );
+        // Beyond the helper bound the gross-up keeps failing, up to the whole position.
+        let installed = preview_installation_math(
+            &ZeroSeedLaunchParameters {
+                supply: 1_000_000_000_000_000_000_000_000_000,
+                quote_token: f.quote,
+                range: f.pool.launch().range,
+                fee: f.pool.launch().fee,
+            },
+            START,
+        )
+        .unwrap()
+        .installed_supply;
+        assert!(big(&r["firstHelperOverflowTokenOut"]) < installed);
+        assert_eq!(probe(installed - 1).err(), Some(E::AmountBeforeFeeOverflow));
+    }
+}
+
+/// At the maximum rate, created normally, one wei quotes and fills zero, which full-fill quoting refuses;
 /// a whole unit fills positively; a buy far beyond inventory fills partially to the bound.
 #[test]
 fn max_rate_zero_and_partial_fills() {

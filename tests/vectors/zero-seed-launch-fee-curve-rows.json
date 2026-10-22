@@ -1,5 +1,151 @@
 {
- "source": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08 test/extensions/ZeroSeedLaunchFeeCurve.t.sol",
+ "source": "EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a test/extensions/ZeroSeedLaunchFeeCurve.t.sol",
+ "createMax": [
+  {
+   "raw": "VEC|createMax|order=t0|dec=18/18|final=0.3|duration=3600|gross=999083373736809197508878|fee=999083373736809197454718|net=54160",
+   "order": "t0",
+   "dec": "18/18",
+   "final": "0.3",
+   "duration": "3600",
+   "gross": "999083373736809197508878",
+   "fee": "999083373736809197454718",
+   "net": "54160"
+  },
+  {
+   "raw": "VEC|createMax|order=t0|dec=18/18|final=max|duration=1|gross=999083373736809197508878|fee=999083373736809197454718|net=54160",
+   "order": "t0",
+   "dec": "18/18",
+   "final": "max",
+   "duration": "1",
+   "gross": "999083373736809197508878",
+   "fee": "999083373736809197454718",
+   "net": "54160"
+  },
+  {
+   "raw": "VEC|createMax|order=t0|dec=18/18|final=0|duration=4294967295|gross=999083373736809197508878|fee=999083373736809197454718|net=54160",
+   "order": "t0",
+   "dec": "18/18",
+   "final": "0",
+   "duration": "4294967295",
+   "gross": "999083373736809197508878",
+   "fee": "999083373736809197454718",
+   "net": "54160"
+  },
+  {
+   "raw": "VEC|createMax|order=t1(native)|dec=18/18|final=0.3|duration=3600|gross=999083373736809197249895|fee=999083373736809197195735|net=54160",
+   "order": "t1(native)",
+   "dec": "18/18",
+   "final": "0.3",
+   "duration": "3600",
+   "gross": "999083373736809197249895",
+   "fee": "999083373736809197195735",
+   "net": "54160"
+  },
+  {
+   "raw": "VEC|createMax|order=t1(native)|dec=18/18|final=max|duration=1|gross=999083373736809197249895|fee=999083373736809197195735|net=54160",
+   "order": "t1(native)",
+   "dec": "18/18",
+   "final": "max",
+   "duration": "1",
+   "gross": "999083373736809197249895",
+   "fee": "999083373736809197195735",
+   "net": "54160"
+  },
+  {
+   "raw": "VEC|createMax|order=t1(native)|dec=18/18|final=0|duration=4294967295|gross=999083373736809197249895|fee=999083373736809197195735|net=54160",
+   "order": "t1(native)",
+   "dec": "18/18",
+   "final": "0",
+   "duration": "4294967295",
+   "gross": "999083373736809197249895",
+   "fee": "999083373736809197195735",
+   "net": "54160"
+  },
+  {
+   "raw": "VEC|createMax|order=t0|dec=18/6|final=0.3|duration=3600|gross=999048506325137632526244|fee=999048506325137632472086|net=54158",
+   "order": "t0",
+   "dec": "18/6",
+   "final": "0.3",
+   "duration": "3600",
+   "gross": "999048506325137632526244",
+   "fee": "999048506325137632472086",
+   "net": "54158"
+  },
+  {
+   "raw": "VEC|createMax|order=t0|dec=18/6|final=max|duration=1|gross=999048506325137632526244|fee=999048506325137632472086|net=54158",
+   "order": "t0",
+   "dec": "18/6",
+   "final": "max",
+   "duration": "1",
+   "gross": "999048506325137632526244",
+   "fee": "999048506325137632472086",
+   "net": "54158"
+  },
+  {
+   "raw": "VEC|createMax|order=t0|dec=18/6|final=0|duration=4294967295|gross=999048506325137632526244|fee=999048506325137632472086|net=54158",
+   "order": "t0",
+   "dec": "18/6",
+   "final": "0",
+   "duration": "4294967295",
+   "gross": "999048506325137632526244",
+   "fee": "999048506325137632472086",
+   "net": "54158"
+  },
+  {
+   "raw": "VEC|createMax|order=t1|dec=18/6|final=0.3|duration=3600|gross=999048148471968146393535|fee=999048148471968146339377|net=54158",
+   "order": "t1",
+   "dec": "18/6",
+   "final": "0.3",
+   "duration": "3600",
+   "gross": "999048148471968146393535",
+   "fee": "999048148471968146339377",
+   "net": "54158"
+  },
+  {
+   "raw": "VEC|createMax|order=t1|dec=18/6|final=max|duration=1|gross=999048148471968146393535|fee=999048148471968146339377|net=54158",
+   "order": "t1",
+   "dec": "18/6",
+   "final": "max",
+   "duration": "1",
+   "gross": "999048148471968146393535",
+   "fee": "999048148471968146339377",
+   "net": "54158"
+  },
+  {
+   "raw": "VEC|createMax|order=t1|dec=18/6|final=0|duration=4294967295|gross=999048148471968146393535|fee=999048148471968146339377|net=54158",
+   "order": "t1",
+   "dec": "18/6",
+   "final": "0",
+   "duration": "4294967295",
+   "gross": "999048148471968146393535",
+   "fee": "999048148471968146339377",
+   "net": "54158"
+  }
+ ],
+ "exactOutBounds": [
+  {
+   "raw": "VEC|exactOutBounds|rate=max|order=t0|lastValidTokenOut=9147280263567190862134907|calc=9223372036854775807|paid=170141183460469231713240559642174554112|firstSignedOverflowTokenOut=9147280263567190862134908|lastSignedOverflowTokenOut=18145179163502972233172123|firstHelperOverflowTokenOut=18145179163502972233172124",
+   "rate": "max",
+   "order": "t0",
+   "lastValidTokenOut": "9147280263567190862134907",
+   "calc": "9223372036854775807",
+   "paid": "170141183460469231713240559642174554112",
+   "firstSignedOverflowTokenOut": "9147280263567190862134908",
+   "lastSignedOverflowTokenOut": "18145179163502972233172123",
+   "firstHelperOverflowTokenOut": "18145179163502972233172124"
+  },
+  {
+   "raw": "VEC|exactOutBounds|rate=max|order=t1(native)|lastValidTokenOut=9147280263567190861982364|calc=9223372036854775807|paid=170141183460469231713240559642174554112|firstSignedOverflowTokenOut=9147280263567190861982365|lastSignedOverflowTokenOut=18145179163502972233028470|firstHelperOverflowTokenOut=18145179163502972233028471",
+   "rate": "max",
+   "order": "t1(native)",
+   "lastValidTokenOut": "9147280263567190861982364",
+   "calc": "9223372036854775807",
+   "paid": "170141183460469231713240559642174554112",
+   "firstSignedOverflowTokenOut": "9147280263567190861982365",
+   "lastSignedOverflowTokenOut": "18145179163502972233028470",
+   "firstHelperOverflowTokenOut": "18145179163502972233028471"
+  }
+ ],
  "highRate": [
   {
    "raw": "VEC|highRate|rate=50|order=t0|dec=18/18|oneUnit|gross=999970|fee=499985|net=499985",

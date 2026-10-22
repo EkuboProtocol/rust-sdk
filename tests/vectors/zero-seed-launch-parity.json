@@ -2,7 +2,7 @@
  "version": 3,
  "label": "LOCAL FIXTURE PARITY VECTORS - not live evidence",
  "source": {
-  "contracts": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08 (tree f9925da3e2047b5ab5e45729056a3595043aa804)",
+  "contracts": "EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a (tree dbbfe6a5eb5ddefe04974338b2b57bdf675c431e)",
   "core": "local Core built at that commit, runtime keccak 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a (asserted in every scenario)",
   "flow": "one extension (constructor (core)) and one periphery per test serve native and ERC-20 quotes; launches created through ZeroSeedLaunchPeriphery with the requested supply unchanged; swaps are Core.forward(extension, abi.encode(PoolKey, SwapParameters)) from the test locker or test/LaunchTestRouter.sol; native ETH settled by value",
   "generator": "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol"
@@ -49,10 +49,10 @@
     "balanceOfZero": "0",
     "positionTokenDelta": "1000000",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+    "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
     "createTs": "1"
    },
    "steps": [
@@ -395,8 +395,8 @@
     "balanceOfZero": "578",
     "positionTokenDelta": "999999999999999999999999422",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "native",
     "quoteCodehash": "none",
     "createTs": "1"
@@ -826,10 +826,10 @@
     "balanceOfZero": "790",
     "positionTokenDelta": "999999999999999999999999210",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+    "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
     "createTs": "1"
    },
    "steps": [
@@ -1220,10 +1220,10 @@
     "balanceOfZero": "790",
     "positionTokenDelta": "999999999999999999999999210",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+    "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
     "createTs": "1"
    },
    "steps": [
@@ -3661,10 +3661,10 @@
     "balanceOfZero": "790",
     "positionTokenDelta": "999999999999999999999999210",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+    "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
     "createTs": "1"
    },
    "steps": [
@@ -6114,10 +6114,10 @@
     "balanceOfZero": "790",
     "positionTokenDelta": "999999999999999999999999210",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+    "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
     "createTs": "1"
    },
    "steps": [
@@ -8567,10 +8567,10 @@
     "balanceOfZero": "697343214",
     "positionTokenDelta": "999999999999999999302656786",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+    "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
     "createTs": "1"
    },
    "steps": [
@@ -11008,8 +11008,8 @@
     "balanceOfZero": "578",
     "positionTokenDelta": "999999999999999999999999422",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "native",
     "quoteCodehash": "none",
     "createTs": "1"
@@ -13473,8 +13473,8 @@
     "balanceOfZero": "578",
     "positionTokenDelta": "999999999999999999999999422",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "native",
     "quoteCodehash": "none",
     "createTs": "1"
@@ -15914,8 +15914,8 @@
     "balanceOfZero": "578",
     "positionTokenDelta": "999999999999999999999999422",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "native",
     "quoteCodehash": "none",
     "createTs": "1"
@@ -18379,10 +18379,10 @@
     "balanceOfZero": "717714600",
     "positionTokenDelta": "999999999999999999282285400",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+    "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
     "createTs": "1"
    },
    "steps": [
@@ -20844,10 +20844,10 @@
     "balanceOfZero": "717714600",
     "positionTokenDelta": "999999999999999999282285400",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+    "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
     "createTs": "1"
    },
    "steps": [
@@ -23273,10 +23273,10 @@
     "balanceOfZero": "717714600",
     "positionTokenDelta": "999999999999999999282285400",
     "coreCodehash": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
-    "extensionCodehash": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
-    "peripheryCodehash": "0x3a8802c7b45af7e24b63fbca4c03f982314c8c839a4e4ebc63b1c90dc822a04f",
+    "extensionCodehash": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
+    "peripheryCodehash": "0x226b57909a2961065476718fe209d725461200dcacf1008868e4ff50105f0025",
     "quoteKind": "erc20",
-    "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+    "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
     "createTs": "1"
    },
    "steps": [
@@ -25690,7 +25690,7 @@
   {
    "label": "t0_18_18_frozen",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25722,7 +25722,7 @@
   {
    "label": "t0_18_18_supply0",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25747,7 +25747,7 @@
   {
    "label": "t0_18_18_supply1",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25779,7 +25779,7 @@
   {
    "label": "t0_18_18_supply2",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25811,7 +25811,7 @@
   {
    "label": "t0_18_18_supply3",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "123456789012345678901234567",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25843,7 +25843,7 @@
   {
    "label": "t0_18_18_supply4",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "999999999999999999999999999",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25875,7 +25875,7 @@
   {
    "label": "t0_18_18_supply5",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "170141183460469231731687303715884105727",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -25900,7 +25900,7 @@
   {
    "label": "t0_18_18_narrow1",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-13814900",
@@ -25932,7 +25932,7 @@
   {
    "label": "t0_18_18_maxSpacing",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-41916300",
    "upperTick": "-34930250",
@@ -25964,7 +25964,7 @@
   {
    "label": "t0_18_18_nearMinTick",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-88722800",
    "upperTick": "-84117600",
@@ -25996,7 +25996,7 @@
   {
    "label": "t0_18_18_nearMaxTick",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "84117600",
    "upperTick": "88722800",
@@ -26021,7 +26021,7 @@
   {
    "label": "t0_18_18_zeroSupply",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "0",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26046,7 +26046,7 @@
   {
    "label": "t0_18_18_supplyAboveInt128",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "170141183460469231731687303715884105728",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26071,7 +26071,7 @@
   {
    "label": "t0_18_18_spacing0",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26096,7 +26096,7 @@
   {
    "label": "t0_18_18_spacingTooHigh",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26121,7 +26121,7 @@
   {
    "label": "t0_18_18_emptyRange",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-13815500",
@@ -26146,7 +26146,7 @@
   {
    "label": "t0_18_18_askBelowMin",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-88722836",
    "upperTick": "-9210300",
@@ -26171,7 +26171,7 @@
   {
    "label": "t0_18_18_upperAboveMax",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "88722836",
@@ -26196,7 +26196,7 @@
   {
    "label": "t0_18_18_misaligned",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815499",
    "upperTick": "-9210300",
@@ -26219,9 +26219,9 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t0_18_18_feeTooHigh",
+   "label": "t0_18_18_feeAboveFormerCap",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26240,21 +26240,28 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "tickLower": "-13815500",
+   "tickUpper": "-9210300",
+   "initialTick": "-13815500",
+   "liquidity": "1111119116089565312897934",
+   "installedSupply": "999999999999999999999999210",
+   "sinkSupply": "790"
   },
   {
    "label": "t0_18_18_feeAtCap",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
    "tickSpacing": "100",
    "tradingStart": "1000",
    "feeDuration": "3600",
-   "initialFee": "18262276632972456099",
-   "finalFee": "18262276632972456099",
+   "initialFee": "18446744073709551615",
+   "finalFee": "18446744073709551615",
    "now": "1",
    "owner": "0x2190d584E30F4a2396C1487Aa784428f2068CBE8",
    "extension": "0x5100000000000000000000000000000000000000",
@@ -26278,7 +26285,7 @@
   {
    "label": "t0_18_18_finalAboveInitial",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26303,7 +26310,7 @@
   {
    "label": "t0_18_18_duration0",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26328,7 +26335,7 @@
   {
    "label": "t0_18_18_durationMax",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26360,7 +26367,7 @@
   {
    "label": "t0_18_18_feeMaxEncodable",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26379,13 +26386,20 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "tickLower": "-13815500",
+   "tickUpper": "-9210300",
+   "initialTick": "-13815500",
+   "liquidity": "1111119116089565312897934",
+   "installedSupply": "999999999999999999999999210",
+   "sinkSupply": "790"
   },
   {
    "label": "t0_18_18_startInPast",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26410,7 +26424,7 @@
   {
    "label": "t0_18_18_startNow",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26467,7 +26481,7 @@
   {
    "label": "t0_18_18_nameTooLong",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26492,7 +26506,7 @@
   {
    "label": "t0_18_18_symbolTooLong",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26517,7 +26531,7 @@
   {
    "label": "t0_18_18_name31",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26549,7 +26563,7 @@
   {
    "label": "t0_18_18_collision",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -26574,7 +26588,7 @@
   {
    "label": "t0_18_6_frozen",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26606,7 +26620,7 @@
   {
    "label": "t0_18_6_supply0",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26631,7 +26645,7 @@
   {
    "label": "t0_18_6_supply1",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26656,7 +26670,7 @@
   {
    "label": "t0_18_6_supply2",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26688,7 +26702,7 @@
   {
    "label": "t0_18_6_supply3",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "123456789012345678901234567",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26720,7 +26734,7 @@
   {
    "label": "t0_18_6_supply4",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "999999999999999999999999999",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26752,7 +26766,7 @@
   {
    "label": "t0_18_6_supply5",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "170141183460469231731687303715884105727",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26784,7 +26798,7 @@
   {
    "label": "t0_18_6_narrow1",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-41445900",
@@ -26816,7 +26830,7 @@
   {
    "label": "t0_18_6_maxSpacing",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41916300",
    "upperTick": "-34930250",
@@ -26848,7 +26862,7 @@
   {
    "label": "t0_18_6_nearMinTick",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-88722800",
    "upperTick": "-84117600",
@@ -26880,7 +26894,7 @@
   {
    "label": "t0_18_6_nearMaxTick",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "84117600",
    "upperTick": "88722800",
@@ -26905,7 +26919,7 @@
   {
    "label": "t0_18_6_zeroSupply",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "0",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26930,7 +26944,7 @@
   {
    "label": "t0_18_6_supplyAboveInt128",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "170141183460469231731687303715884105728",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26955,7 +26969,7 @@
   {
    "label": "t0_18_6_spacing0",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -26980,7 +26994,7 @@
   {
    "label": "t0_18_6_spacingTooHigh",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27005,7 +27019,7 @@
   {
    "label": "t0_18_6_emptyRange",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-41446500",
@@ -27030,7 +27044,7 @@
   {
    "label": "t0_18_6_askBelowMin",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-88722836",
    "upperTick": "-36841300",
@@ -27055,7 +27069,7 @@
   {
    "label": "t0_18_6_upperAboveMax",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "88722836",
@@ -27080,7 +27094,7 @@
   {
    "label": "t0_18_6_misaligned",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446499",
    "upperTick": "-36841300",
@@ -27103,9 +27117,9 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t0_18_6_feeTooHigh",
+   "label": "t0_18_6_feeAboveFormerCap",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27124,21 +27138,28 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "tickLower": "-41446500",
+   "tickUpper": "-36841300",
+   "initialTick": "-41446500",
+   "liquidity": "1111138522742929536",
+   "installedSupply": "999999999999999999302656786",
+   "sinkSupply": "697343214"
   },
   {
    "label": "t0_18_6_feeAtCap",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
    "tickSpacing": "100",
    "tradingStart": "1000",
    "feeDuration": "3600",
-   "initialFee": "18262276632972456099",
-   "finalFee": "18262276632972456099",
+   "initialFee": "18446744073709551615",
+   "finalFee": "18446744073709551615",
    "now": "1",
    "owner": "0x2190d584E30F4a2396C1487Aa784428f2068CBE8",
    "extension": "0x5100000000000000000000000000000000000000",
@@ -27162,7 +27183,7 @@
   {
    "label": "t0_18_6_finalAboveInitial",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27187,7 +27208,7 @@
   {
    "label": "t0_18_6_duration0",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27212,7 +27233,7 @@
   {
    "label": "t0_18_6_durationMax",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27244,7 +27265,7 @@
   {
    "label": "t0_18_6_feeMaxEncodable",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27263,13 +27284,20 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "tickLower": "-41446500",
+   "tickUpper": "-36841300",
+   "initialTick": "-41446500",
+   "liquidity": "1111138522742929536",
+   "installedSupply": "999999999999999999302656786",
+   "sinkSupply": "697343214"
   },
   {
    "label": "t0_18_6_startInPast",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27294,7 +27322,7 @@
   {
    "label": "t0_18_6_startNow",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27351,7 +27379,7 @@
   {
    "label": "t0_18_6_nameTooLong",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27376,7 +27404,7 @@
   {
    "label": "t0_18_6_symbolTooLong",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27401,7 +27429,7 @@
   {
    "label": "t0_18_6_name31",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27433,7 +27461,7 @@
   {
    "label": "t0_18_6_collision",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -27987,7 +28015,7 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t1_18_18_feeTooHigh",
+   "label": "t1_18_18_feeAboveFormerCap",
    "quote": "0x0000000000000000000000000000000000000000",
    "quoteCodehash": "none",
    "supply": "1000000000000000000000000000",
@@ -28008,8 +28036,15 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0x0000000000000000000000000000000000000000",
+   "tickLower": "9210300",
+   "tickUpper": "13815500",
+   "initialTick": "13815500",
+   "liquidity": "1111119116089565312898036",
+   "installedSupply": "999999999999999999999999422",
+   "sinkSupply": "578"
   },
   {
    "label": "t1_18_18_feeAtCap",
@@ -28021,8 +28056,8 @@
    "tickSpacing": "100",
    "tradingStart": "1000",
    "feeDuration": "3600",
-   "initialFee": "18262276632972456099",
-   "finalFee": "18262276632972456099",
+   "initialFee": "18446744073709551615",
+   "finalFee": "18446744073709551615",
    "now": "1",
    "owner": "0x2190d584E30F4a2396C1487Aa784428f2068CBE8",
    "extension": "0x5100000000000000000000000000000000000000",
@@ -28147,8 +28182,15 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0x0000000000000000000000000000000000000000",
+   "tickLower": "9210300",
+   "tickUpper": "13815500",
+   "initialTick": "13815500",
+   "liquidity": "1111119116089565312898036",
+   "installedSupply": "999999999999999999999999422",
+   "sinkSupply": "578"
   },
   {
    "label": "t1_18_18_startInPast",
@@ -28342,7 +28384,7 @@
   {
    "label": "t1_18_6_frozen",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28374,7 +28416,7 @@
   {
    "label": "t1_18_6_supply0",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28399,7 +28441,7 @@
   {
    "label": "t1_18_6_supply1",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28424,7 +28466,7 @@
   {
    "label": "t1_18_6_supply2",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28456,7 +28498,7 @@
   {
    "label": "t1_18_6_supply3",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "123456789012345678901234567",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28488,7 +28530,7 @@
   {
    "label": "t1_18_6_supply4",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "999999999999999999999999999",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28520,7 +28562,7 @@
   {
    "label": "t1_18_6_supply5",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "170141183460469231731687303715884105727",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28552,7 +28594,7 @@
   {
    "label": "t1_18_6_narrow1",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-41445900",
@@ -28584,7 +28626,7 @@
   {
    "label": "t1_18_6_maxSpacing",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41916300",
    "upperTick": "-34930250",
@@ -28616,7 +28658,7 @@
   {
    "label": "t1_18_6_nearMinTick",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-88722800",
    "upperTick": "-84117600",
@@ -28648,7 +28690,7 @@
   {
    "label": "t1_18_6_nearMaxTick",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "84117600",
    "upperTick": "88722800",
@@ -28673,7 +28715,7 @@
   {
    "label": "t1_18_6_zeroSupply",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "0",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28698,7 +28740,7 @@
   {
    "label": "t1_18_6_supplyAboveInt128",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "170141183460469231731687303715884105728",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28723,7 +28765,7 @@
   {
    "label": "t1_18_6_spacing0",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28748,7 +28790,7 @@
   {
    "label": "t1_18_6_spacingTooHigh",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28773,7 +28815,7 @@
   {
    "label": "t1_18_6_emptyRange",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-41446500",
@@ -28798,7 +28840,7 @@
   {
    "label": "t1_18_6_askBelowMin",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-88722836",
    "upperTick": "-36841300",
@@ -28823,7 +28865,7 @@
   {
    "label": "t1_18_6_upperAboveMax",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "88722836",
@@ -28848,7 +28890,7 @@
   {
    "label": "t1_18_6_misaligned",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446499",
    "upperTick": "-36841300",
@@ -28871,9 +28913,9 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t1_18_6_feeTooHigh",
+   "label": "t1_18_6_feeAboveFormerCap",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28892,21 +28934,28 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0x0000000000000000000000000000000000010000",
+   "tickLower": "36841300",
+   "tickUpper": "41446500",
+   "initialTick": "41446500",
+   "liquidity": "1111138522742929536",
+   "installedSupply": "999999999999999999282285400",
+   "sinkSupply": "717714600"
   },
   {
    "label": "t1_18_6_feeAtCap",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
    "tickSpacing": "100",
    "tradingStart": "1000",
    "feeDuration": "3600",
-   "initialFee": "18262276632972456099",
-   "finalFee": "18262276632972456099",
+   "initialFee": "18446744073709551615",
+   "finalFee": "18446744073709551615",
    "now": "1",
    "owner": "0x2190d584E30F4a2396C1487Aa784428f2068CBE8",
    "extension": "0x5100000000000000000000000000000000000000",
@@ -28930,7 +28979,7 @@
   {
    "label": "t1_18_6_finalAboveInitial",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28955,7 +29004,7 @@
   {
    "label": "t1_18_6_duration0",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -28980,7 +29029,7 @@
   {
    "label": "t1_18_6_durationMax",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29012,7 +29061,7 @@
   {
    "label": "t1_18_6_feeMaxEncodable",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29031,13 +29080,20 @@
    "userSalt": "0x0000000000000000000000000000000000000000000000000000000000000001",
    "predictedToken": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
    "tokenHasCode": "0",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "token": "0xCbDaf29e4baf3780EAF91691B1BcA1a965Aa3aA8",
+   "token0": "0x0000000000000000000000000000000000010000",
+   "tickLower": "36841300",
+   "tickUpper": "41446500",
+   "initialTick": "41446500",
+   "liquidity": "1111138522742929536",
+   "installedSupply": "999999999999999999282285400",
+   "sinkSupply": "717714600"
   },
   {
    "label": "t1_18_6_startInPast",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29062,7 +29118,7 @@
   {
    "label": "t1_18_6_startNow",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29119,7 +29175,7 @@
   {
    "label": "t1_18_6_nameTooLong",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29144,7 +29200,7 @@
   {
    "label": "t1_18_6_symbolTooLong",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29169,7 +29225,7 @@
   {
    "label": "t1_18_6_name31",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29201,7 +29257,7 @@
   {
    "label": "t1_18_6_collision",
    "quote": "0x0000000000000000000000000000000000010000",
-   "quoteCodehash": "0x7ab5c7f0777ec01dadf10d45cdc793fa419a50974106204fe786dc64ad7f9531",
+   "quoteCodehash": "0x2ffe5dfb96302b962fd5dcce3b500b89944924f6bc8dfc28d826783350bcf2ae",
    "supply": "1000000000000000000000000000",
    "askTick": "-41446500",
    "upperTick": "-36841300",
@@ -29226,7 +29282,7 @@
   {
    "label": "shared_sameSaltOtherQuote",
    "quote": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
-   "quoteCodehash": "0xb58caefe0653c5d79a9eb76704018ce980091627c432ef6414d05796bb0fec7a",
+   "quoteCodehash": "0xd3e5817ee5a1bd043d089a2ed0bbeda1ae011fb5ca78c56528a8ed4197a27741",
    "supply": "1000000000000000000000000000",
    "askTick": "-13815500",
    "upperTick": "-9210300",
@@ -29394,9 +29450,15 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t0_18_18_feeTooHigh",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "label": "t0_18_18_feeAboveFormerCap",
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999999999210",
+   "sinkSupply": "790",
+   "liquidity": "1111119116089565312897934",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "790",
+   "positionTokenDelta": "999999999999999999999999210"
   },
   {
    "label": "t0_18_18_feeAtCap",
@@ -29432,8 +29494,14 @@
   },
   {
    "label": "t0_18_18_feeMaxEncodable",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999999999210",
+   "sinkSupply": "790",
+   "liquidity": "1111119116089565312897934",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "790",
+   "positionTokenDelta": "999999999999999999999999210"
   },
   {
    "label": "t0_18_18_startInPast",
@@ -29626,9 +29694,15 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t0_18_6_feeTooHigh",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "label": "t0_18_6_feeAboveFormerCap",
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999302656786",
+   "sinkSupply": "697343214",
+   "liquidity": "1111138522742929536",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "697343214",
+   "positionTokenDelta": "999999999999999999302656786"
   },
   {
    "label": "t0_18_6_feeAtCap",
@@ -29664,8 +29738,14 @@
   },
   {
    "label": "t0_18_6_feeMaxEncodable",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999302656786",
+   "sinkSupply": "697343214",
+   "liquidity": "1111138522742929536",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "697343214",
+   "positionTokenDelta": "999999999999999999302656786"
   },
   {
    "label": "t0_18_6_startInPast",
@@ -29858,9 +29938,15 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t1_18_18_feeTooHigh",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "label": "t1_18_18_feeAboveFormerCap",
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999999999422",
+   "sinkSupply": "578",
+   "liquidity": "1111119116089565312898036",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "578",
+   "positionTokenDelta": "999999999999999999999999422"
   },
   {
    "label": "t1_18_18_feeAtCap",
@@ -29896,8 +29982,14 @@
   },
   {
    "label": "t1_18_18_feeMaxEncodable",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999999999422",
+   "sinkSupply": "578",
+   "liquidity": "1111119116089565312898036",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "578",
+   "positionTokenDelta": "999999999999999999999999422"
   },
   {
    "label": "t1_18_18_startInPast",
@@ -30090,9 +30182,15 @@
    "err": "0x89fd41b1"
   },
   {
-   "label": "t1_18_6_feeTooHigh",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "label": "t1_18_6_feeAboveFormerCap",
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999282285400",
+   "sinkSupply": "717714600",
+   "liquidity": "1111138522742929536",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "717714600",
+   "positionTokenDelta": "999999999999999999282285400"
   },
   {
    "label": "t1_18_6_feeAtCap",
@@ -30128,8 +30226,14 @@
   },
   {
    "label": "t1_18_6_feeMaxEncodable",
-   "ok": false,
-   "err": "0xcd4e6167"
+   "ok": true,
+   "requestedSupply": "1000000000000000000000000000",
+   "installedSupply": "999999999999999999282285400",
+   "sinkSupply": "717714600",
+   "liquidity": "1111138522742929536",
+   "totalSupply": "1000000000000000000000000000",
+   "balanceOfZero": "717714600",
+   "positionTokenDelta": "999999999999999999282285400"
   },
   {
    "label": "t1_18_6_startInPast",

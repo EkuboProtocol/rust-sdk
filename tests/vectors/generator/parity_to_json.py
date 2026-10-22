@@ -82,7 +82,7 @@ json.dump(
         "version": 3,
         "label": "LOCAL FIXTURE PARITY VECTORS - not live evidence",
         "source": {
-            "contracts": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08 (tree f9925da3e2047b5ab5e45729056a3595043aa804)",
+            "contracts": "EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a (tree dbbfe6a5eb5ddefe04974338b2b57bdf675c431e)",
             "core": "local Core built at that commit, runtime keccak 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a (asserted in every scenario)",
             "flow": "one extension (constructor (core)) and one periphery per test serve native and ERC-20 quotes; launches created through ZeroSeedLaunchPeriphery with the requested supply unchanged; swaps are Core.forward(extension, abi.encode(PoolKey, SwapParameters)) from the test locker or test/LaunchTestRouter.sol; native ETH settled by value",
             "generator": "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol",

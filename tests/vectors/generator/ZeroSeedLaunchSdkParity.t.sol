@@ -2,7 +2,7 @@
 pragma solidity =0.8.33;
 
 // SDK parity generator. Not part of evm-contracts: it is copied into a scratch copy of
-// EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08 as test/extensions/, run with
+// EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a as test/extensions/, run with
 // `forge test --offline --match-contract ZeroSeedLaunchSdkParity -vv`, and its `PARITY|` log lines are converted to
 // JSON by `parity_to_json.py`. One extension (constructor `(core)`) and one periphery serve every launch of a test:
 // each launch selects its own quote in `LaunchParameters.quoteToken`, native ETH or a plain ERC-20. Launches are
@@ -35,6 +35,8 @@ import {LaunchTestRouter} from "../LaunchTestRouter.sol";
 contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
     using CoreLib for ICore;
 
+    /// floor(2**64 * 99 / 100): a study rate. Every uint64 is a valid creator fee; MAX_CREATOR_FEE is 2**64 - 1.
+    uint64 constant FEE_99 = 18262276632972456099;
     bytes32 constant CORE_CODEHASH = 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a;
     bytes32 constant LAUNCH_CREATED = keccak256(
         "LaunchCreated(bytes32,address,address,(address,address,bytes32),bytes32,uint128,(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32))"
@@ -650,7 +652,7 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
     }
 
     function test_parity_t1_18_6_600_rate99() public {
-        _highRateScenario(false, 6, DURATION_SHORT, MAX_CREATOR_FEE, "rate99");
+        _highRateScenario(false, 6, DURATION_SHORT, FEE_99, "rate99");
     }
 
     /// @dev A launch near the top of the price range, where one raw token costs about int128.max raw quote.
@@ -955,9 +957,9 @@ contract ZeroSeedLaunchSdkParityTest is ZeroSeedLaunchBase {
                 r.askTick += 1;
                 _logPreview(string.concat(g, "_misaligned"), r);
                 r = _clone(p);
-                r.initialFee = MAX_CREATOR_FEE + 1;
+                r.initialFee = FEE_99 + 1;
                 r.finalFee = 0;
-                _logPreview(string.concat(g, "_feeTooHigh"), r);
+                _logPreview(string.concat(g, "_feeAboveFormerCap"), r);
                 r = _clone(p);
                 r.initialFee = MAX_CREATOR_FEE;
                 r.finalFee = MAX_CREATOR_FEE;

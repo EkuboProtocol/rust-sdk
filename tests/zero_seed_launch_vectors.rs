@@ -16,9 +16,9 @@ use ekubo_sdk::{
             concentrated::TickSpacing,
             zero_seed_launch::{
                 MINTABLE_ERC20_CREATION_CODE, MINTABLE_ERC20_CREATION_CODE_KECCAK,
-                ZeroSeedLaunchConfig, ZeroSeedLaunchFeeSchedule, ZeroSeedLaunchFullFillError,
-                ZeroSeedLaunchInstallation, ZeroSeedLaunchInstance, ZeroSeedLaunchLocalPreview,
-                ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters,
+                ZERO_SEED_LAUNCH_MAX_CREATOR_FEE, ZeroSeedLaunchConfig, ZeroSeedLaunchFeeSchedule,
+                ZeroSeedLaunchFullFillError, ZeroSeedLaunchInstallation, ZeroSeedLaunchInstance,
+                ZeroSeedLaunchLocalPreview, ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters,
                 ZeroSeedLaunchPoolConstructionError, ZeroSeedLaunchPoolQuoteError,
                 ZeroSeedLaunchPoolState, ZeroSeedLaunchQuoteKind, ZeroSeedLaunchQuoteObservation,
                 ZeroSeedLaunchRange, extension_token_salt, installation_math, launch_token_address,
@@ -40,7 +40,7 @@ const ABI_LAUNCH: &str = include_str!("vectors/pins/ZeroSeedLaunch.abi.json");
 const ABI_PERIPHERY: &str = include_str!("vectors/pins/ZeroSeedLaunchPeriphery.abi.json");
 const ABI_TOKEN: &str = include_str!("vectors/pins/MintableERC20.abi.json");
 
-const TARGET_COMMIT: &str = "40af6cb359b0de2f61f15e47b6622a00c48b5b08";
+const TARGET_COMMIT: &str = "550afc40280423128c02eb5ffd213aa959b34e2a";
 const CORE_RUNTIME: &str = "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
 
 /// Fixture quote tokens of the contract tests: the high one makes the launch token token0.
@@ -778,7 +778,9 @@ struct Ledger {
 /// logs, the fee ledger (accrued from `LaunchSwapped`, claimed from the extension's
 /// `CreatorFeesClaimed` only, with the periphery payout as a separate record of the same claim),
 /// owners from `LaunchOwnerChanged`, and every recorded snapshot: `Core` state, `creatorFees`,
-/// `feeAt(block time)`, owner and controller.
+/// `feeAt(block time)`, owner and controller. `l5` and `l6` are created at the highest rate,
+/// `2**64 - 1`: their swaps at that rate net `floor(gross / 2**64)` (exact input) and pay
+/// `calc * 2**64` (exact output).
 #[test]
 fn indexer_trades_ledgers_owners_and_fees_replay() {
     let fixture = indexer();
@@ -786,6 +788,9 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
     let mut prefix = HashMap::new();
     let (mut swaps_checked, mut claims_checked, mut snapshots_checked) = (0, 0, 0);
     let (mut swap_actions, mut claim_actions) = (0, 0);
+    // Per launch: swaps, claims, snapshots, and swaps at the highest rate.
+    let mut per_launch: HashMap<&str, [usize; 4]> = HashMap::new();
+    let mut max_rate_fills = Vec::new();
     for branch_name in ["prefix", "alternate", "canonical"] {
         let branch = &fixture["branches"][branch_name];
         let mut ledgers: HashMap<String, Ledger> = prefix.clone();
@@ -865,6 +870,7 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                             ledger.paid[side] += amount;
                         }
                         claims_checked += 1;
+                        per_launch.entry(action[1]).or_default()[1] += 1;
                     }
                     "buy" | "sell" => {
                         swap_actions += 1;
@@ -925,6 +931,28 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                         ledger.accrued[usize::from(!specified_is1)] += q.fees_paid;
                         ledger.state = Some(q.state_after);
                         swaps_checked += 1;
+                        let counts = per_launch.entry(action[1]).or_default();
+                        counts[0] += 1;
+                        if pool.fee_at(timestamp) == ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {
+                            counts[3] += 1;
+                            if amount < 0 {
+                                assert_eq!(
+                                    q.calculated_amount,
+                                    (q.calculated_amount - q.fees_paid) << 64
+                                );
+                            } else {
+                                assert_eq!(
+                                    q.calculated_amount,
+                                    (q.calculated_amount + q.fees_paid) >> 64
+                                );
+                            }
+                            max_rate_fills.push((
+                                action[1],
+                                amount,
+                                q.calculated_amount,
+                                q.fees_paid,
+                            ));
+                        }
                     }
                     _ => {}
                 }
@@ -973,6 +1001,7 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
                     "{branch_name} {number} {label} feeAt"
                 );
                 snapshots_checked += 1;
+                per_launch.entry(label).or_default()[2] += 1;
             }
             assert_eq!(snapshot["pools"].as_array().unwrap().len(), ledgers.len());
         }
@@ -984,7 +1013,47 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
     assert_eq!(claims_checked, claim_actions);
     assert_eq!(
         (swaps_checked, claims_checked, snapshots_checked),
-        (19, 8, 41)
+        (26, 10, 62)
+    );
+    for (label, counts) in [
+        ("l1", [10, 5, 17, 0]),
+        ("l2", [4, 2, 16, 0]),
+        ("l3", [1, 0, 2, 0]),
+        ("l4", [4, 1, 9, 0]),
+        ("l5", [5, 1, 9, 2]),
+        ("l6", [2, 1, 9, 2]),
+    ] {
+        assert_eq!(per_launch[label], counts, "{label}");
+    }
+    // Both maximum-rate launches are created normally at `2**64 - 1`.
+    let l5 = &launches["l5"].config.fee;
+    assert_eq!(
+        (l5.initial_fee, l5.final_fee, l5.fee_duration),
+        (u64::MAX, 55_340_232_221_128_654, 3600)
+    );
+    let l6 = &launches["l6"].config.fee;
+    assert_eq!(
+        (l6.initial_fee, l6.final_fee, l6.fee_duration),
+        (u64::MAX, u64::MAX, 1)
+    );
+    let paid = 184_817_928_874_495_997_640_704;
+    assert_eq!(paid, 10_019 << 64);
+    for label in ["l5", "l6"] {
+        let fills: Vec<_> = max_rate_fills
+            .iter()
+            .filter(|f| f.0 == label)
+            .map(|f| (f.1, f.2, f.3))
+            .collect();
+        assert_eq!(fills.len(), 2, "{label}");
+        assert_eq!(
+            (fills[0].0, fills[0].1),
+            (1_000_000_000_000_000_000, 54_160)
+        );
+        assert_eq!(fills[1], (-10_000_000_000, paid, paid - 10_019));
+    }
+    assert_eq!(
+        max_rate_fills[0].3, 999_083_373_736_809_197_195_735,
+        "l5 exact-in fee"
     );
 }
 
@@ -1053,7 +1122,10 @@ fn local_fixture_pins_match_the_indexer_receipt() {
         }
     }
     kinds.sort_unstable();
-    assert_eq!(kinds, ["erc20", "erc20", "native", "native"]);
+    assert_eq!(
+        kinds,
+        ["erc20", "erc20", "erc20", "native", "native", "native"]
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1515,7 +1587,6 @@ fn decode_error(data: &str) -> ZeroSeedLaunchParameterError {
     };
     match &data[..10] {
         "0xe5239090" => ZeroSeedLaunchParameterError::InvalidParameters,
-        "0xcd4e6167" => ZeroSeedLaunchParameterError::FeeTooHigh,
         "0xf75a271a" => ZeroSeedLaunchParameterError::InvalidFeeSchedule,
         "0xe0839259" => ZeroSeedLaunchParameterError::InvalidTradingStart,
         "0x89fd41b1" => ZeroSeedLaunchParameterError::BoundsTickSpacing,
@@ -1648,8 +1719,26 @@ fn installation_preview_and_creation_match_the_contract() {
                 .or_insert(0) += 1;
         }
     }
-    assert_eq!(ok, 48);
+    assert_eq!(ok, 56);
+    // The former 99% ceiling plus one and the highest rate, flat or decaying, are accepted in every
+    // group and created normally.
+    for suffix in ["_feeAboveFormerCap", "_feeAtCap", "_feeMaxEncodable"] {
+        let accepted: Vec<_> = previews
+            .iter()
+            .filter(|p| s(p, "label").ends_with(suffix))
+            .collect();
+        assert_eq!(accepted.len(), 4, "{suffix}");
+        for preview in accepted {
+            assert!(preview["ok"].as_bool().unwrap(), "{}", s(preview, "label"));
+            assert!(
+                fee_schedule(preview).initial_fee > 18_262_276_632_972_456_099,
+                "{suffix}"
+            );
+        }
+    }
+    assert!(!refusals.contains_key("FeeTooHigh"));
     for (refusal, count) in [
+        ("InvalidFeeSchedule", 8),
         ("UnsupportedQuoteToken", 4),
         ("MetadataTooLong", 8),
         ("LaunchTokenExists", 5),
@@ -1658,6 +1747,146 @@ fn installation_preview_and_creation_match_the_contract() {
     ] {
         assert_eq!(refusals.get(refusal), Some(&count), "{refusal}");
     }
+}
+
+/// The contract's `creator_fee_range` verdicts: every `uint64` rate is valid, `final <= initial`
+/// and `duration > 0` are the only checks (`InvalidFeeSchedule`), and `2**64` is not a `uint64`
+/// at all (the contract fails ABI decoding with empty revert data). The SDK's fee fields are
+/// `u64`, so such a value is refused when it is parsed from its decimal string, never truncated
+/// or wrapped; there is no `FeeTooHigh` refusal.
+#[test]
+fn creator_fee_range_verdicts() {
+    let vectors: Value = serde_json::from_str(FROZEN).unwrap();
+    let range = &vectors["creator_fee_range"];
+    assert_eq!(s(range, "min_q64"), "0");
+    assert_eq!(
+        s(range, "max_q64"),
+        ZERO_SEED_LAUNCH_MAX_CREATOR_FEE.to_string()
+    );
+    assert_eq!(ZERO_SEED_LAUNCH_MAX_CREATOR_FEE, u64::MAX);
+    assert_eq!(
+        s(&vectors["fixture"], "max_creator_fee_q64"),
+        u64::MAX.to_string()
+    );
+    assert_eq!(s(range, "error"), "InvalidFeeSchedule() 0xf75a271a");
+    assert_eq!(s(&range["removed"], "selector"), "0xcd4e6167");
+    for unencodable in [
+        s(&range["unencodable"], "value"),
+        s(&range["unencodable"]["dirty_high_bits"], "value"),
+    ] {
+        assert!(U256::from_str(unencodable).unwrap() > U256::from(u64::MAX));
+        assert!(u64::from_str(unencodable).is_err(), "{unencodable}");
+    }
+
+    let base = ZeroSeedLaunchParameters {
+        supply: 1_000_000_000_000_000_000_000_000_000,
+        quote_token: Address::ZERO,
+        range: ZeroSeedLaunchRange {
+            launch_token_is_token1: true,
+            ask_tick: -13_815_500,
+            upper_tick: -13_815_500 + 4_605_200,
+            tick_spacing: 100,
+        },
+        fee: ZeroSeedLaunchFeeSchedule {
+            trading_start: 1_000,
+            fee_duration: 3_600,
+            initial_fee: 0,
+            final_fee: 0,
+        },
+    };
+    let mut verdicts = HashMap::new();
+    for vector in range["vectors"].as_array().unwrap() {
+        let verdict = s(vector, "verdict");
+        *verdicts.entry(verdict).or_insert(0) += 1;
+        let (initial, final_fee) = (
+            u64::from_str(s(vector, "initialFee")),
+            u64::from_str(s(vector, "finalFee")),
+        );
+        let duration = vector["feeDuration"].as_u64().unwrap();
+        if verdict == "abi_decoding_failure" {
+            assert!(initial.is_err() || final_fee.is_err(), "{vector}");
+            #[cfg(feature = "serde")]
+            {
+                let json = format!(
+                    r#"{{"trading_start":1000,"fee_duration":{duration},"initial_fee":{},"final_fee":{}}}"#,
+                    s(vector, "initialFee"),
+                    s(vector, "finalFee"),
+                );
+                assert!(serde_json::from_str::<ZeroSeedLaunchFeeSchedule>(&json).is_err());
+            }
+            continue;
+        }
+        let fee = ZeroSeedLaunchFeeSchedule {
+            trading_start: 1_000,
+            fee_duration: u32::try_from(duration).unwrap(),
+            initial_fee: initial.unwrap(),
+            final_fee: final_fee.unwrap(),
+        };
+        #[cfg(feature = "serde")]
+        assert_eq!(
+            serde_json::from_str::<ZeroSeedLaunchFeeSchedule>(&format!(
+                r#"{{"trading_start":1000,"fee_duration":{duration},"initial_fee":{},"final_fee":{}}}"#,
+                fee.initial_fee, fee.final_fee
+            ))
+            .unwrap(),
+            fee
+        );
+        let parameters = ZeroSeedLaunchParameters { fee, ..base };
+        let result = preview_installation_math(&parameters, 1_000).map(|_| ());
+        match verdict {
+            "accept" => {
+                assert_eq!(result, Ok(()), "{vector}");
+                assert_eq!(fee.fee_at(1_000), fee.initial_fee);
+                assert_eq!(
+                    fee.fee_at(1_000 + u64::from(fee.fee_duration)),
+                    fee.final_fee
+                );
+                let mut previous = fee.initial_fee;
+                for t in [1, 2, 599, 600, 1800, 3599, 3600, 76_799, 76_800, 131_072] {
+                    let rate = fee.fee_at(1_000 + t);
+                    assert!(fee.final_fee <= rate && rate <= previous, "{vector} {t}");
+                    previous = rate;
+                }
+                if fee.fee_duration == u32::MAX {
+                    assert_eq!(fee.fee_at(1_000 + 76_800), fee.final_fee);
+                }
+            }
+            "InvalidFeeSchedule" => assert_eq!(
+                result,
+                Err(ZeroSeedLaunchParameterError::InvalidFeeSchedule),
+                "{vector}"
+            ),
+            other => panic!("verdict {other}"),
+        }
+    }
+    assert_eq!(
+        verdicts,
+        HashMap::from([
+            ("accept", 6),
+            ("InvalidFeeSchedule", 4),
+            ("abi_decoding_failure", 2)
+        ])
+    );
+    for label in ["fixture", "consumer_default"] {
+        let schedule = &range["reference_schedules"][label];
+        let fee = ZeroSeedLaunchFeeSchedule {
+            trading_start: 1_000,
+            fee_duration: num(schedule, "feeDuration"),
+            initial_fee: num(schedule, "initialFee"),
+            final_fee: num(schedule, "finalFee"),
+        };
+        assert_eq!(
+            preview_installation_math(&ZeroSeedLaunchParameters { fee, ..base }, 1_000).map(|_| ()),
+            Ok(())
+        );
+    }
+    assert_eq!(
+        num::<u64>(
+            &range["reference_schedules"]["consumer_default"],
+            "initialFee"
+        ),
+        1 << 63
+    );
 }
 
 #[test]
@@ -2453,7 +2682,7 @@ fn entry_signature(entry: &Value) -> String {
     )
 }
 
-/// Every function selector, event topic and error selector of the consumer manifest (92) is
+/// Every function selector, event topic and error selector of the consumer manifest (91) is
 /// recomputed from the pinned ABI files, and each ABI file is byte-for-byte the manifest's
 /// canonical JSON (`jq -cS .abi`, no trailing newline).
 #[test]
@@ -2510,7 +2739,7 @@ fn pinned_abis_match_the_consumer_manifest() {
             }
         }
     }
-    assert_eq!(entries, 92);
+    assert_eq!(entries, 91);
     let tuple = "(string,string,uint8,uint128,address,int32,int32,uint32,uint64,uint32,uint64,uint64,bytes32)";
     let launch = &manifest["abi"]["ZeroSeedLaunch"];
     let periphery = &manifest["abi"]["ZeroSeedLaunchPeriphery"];
@@ -2524,8 +2753,28 @@ fn pinned_abis_match_the_consumer_manifest() {
             Some("0x917c1163")
         );
     }
-    // Removed at the target: the constructor quote getter and the supply binding error.
+    // Removed at the target: the constructor quote getter, the supply binding error and the
+    // creator-fee ceiling error `FeeTooHigh()` (0xcd4e6167), which no ABI file still declares.
     assert!(launch["functions"].get("quoteToken()").is_none());
+    assert_eq!(
+        manifest["removedFromAbi"],
+        serde_json::json!({ "FeeTooHigh()": "0xcd4e6167" })
+    );
+    assert_eq!(
+        format!("0x{}", hex::encode(&keccak256("FeeTooHigh()")[..4])),
+        "0xcd4e6167"
+    );
+    for abi in [ABI_LAUNCH, ABI_PERIPHERY, ABI_TOKEN] {
+        assert!(!abi.contains("FeeTooHigh"));
+    }
+    assert_eq!(
+        s(manifest, "maxCreatorFeeQ64"),
+        ZERO_SEED_LAUNCH_MAX_CREATOR_FEE.to_string()
+    );
+    assert_eq!(
+        launch["errors"]["InvalidFeeSchedule()"].as_str(),
+        Some("0xf75a271a")
+    );
     assert!(
         !launch["errors"]
             .as_object()

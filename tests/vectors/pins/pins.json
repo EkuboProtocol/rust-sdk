@@ -1,7 +1,7 @@
 {
- "source": "EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08",
+ "source": "EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a",
  "ZeroSeedLaunch": {
-  "abiSha256": "999068f8e41867e972f4485c0105f584a2c10d7537615e6b4517807548fcd4bf",
+  "abiSha256": "efae9388aa6b1342479204ddf436fd2a310df16bf06c80c990b2d22c90d1e41e",
   "functions": {
    "afterCollectFees(bytes32,(address,address,bytes32),bytes32,uint128,uint128)": "0x751fd5df",
    "afterInitializePool(address,(address,address,bytes32),int32,uint96)": "0x948374ff",
@@ -29,7 +29,6 @@
    "CallPointNotImplemented()": "0xc6f26286",
    "ControllerOnly()": "0xac8ff76a",
    "CoreOnly()": "0x62279cff",
-   "FeeTooHigh()": "0xcd4e6167",
    "InitializeThroughCreateOnly()": "0x028eb443",
    "InvalidFeeSchedule()": "0xf75a271a",
    "InvalidParameters()": "0xe5239090",
@@ -49,12 +48,12 @@
    "ZeroLiquidity()": "0x10074548"
   },
   "templateRuntime": {
-   "bytes": 20184,
-   "zeroFilledKeccak": "0x39a99e30dfff34873b7a820416ae4bc33a337612c644c45e68c51ac6564a9f4d"
+   "bytes": 20125,
+   "zeroFilledKeccak": "0xf10adeca29e131bfb07f22d350641a17df000fb9945b40ac65061fb3c6ddf8c1"
   },
   "creation": {
-   "bytes": 20674,
-   "keccak": "0x78906a80dd0e4aeb1b7c94698a1e7917c20dc7b031a4513759ea12495f374384"
+   "bytes": 20615,
+   "keccak": "0x985a18f42a75f5378e49bf136e027eaeaca4a4315f5a1036a99cc93576b98ced"
   },
   "immutableReferences": {
    "73285": {
@@ -72,15 +71,15 @@
       "length": 32
      },
      {
-      "start": 6258,
+      "start": 6199,
       "length": 32
      },
      {
-      "start": 7399,
+      "start": 7340,
       "length": 32
      },
      {
-      "start": 9094,
+      "start": 9035,
       "length": 32
      }
     ]
@@ -111,11 +110,11 @@
   },
   "templateRuntime": {
    "bytes": 5552,
-   "zeroFilledKeccak": "0x08216f696368b4398afb8c43ca3eff0cccdcea00e71397178b78b2b94f957dbb"
+   "zeroFilledKeccak": "0x73cbf73c2fb778fd4a2541d59da08c4346a2217e5a73d7282583fe3ab69376d9"
   },
   "creation": {
    "bytes": 5772,
-   "keccak": "0xb36a0535c61c790f3600a0c45dd92763a1934652de322ddd1c175f3cda2dc046"
+   "keccak": "0x355b93fd4ef88a9e5be84795c19aa552ee6de280d31244d944aacb40c2219391"
   },
   "immutableReferences": {
    "72634": {
@@ -262,20 +261,20 @@
   "core": "0x00000000000014aa86c5d3c41765bb24e11bd701",
   "coreRuntimeKeccak": "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a",
   "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
-  "extension": "0x519ddb6580e97e08e639d601dc6e378285c3ef34",
-  "extensionSalt": "0x00000000000000000000000000000000000000000000000000000000000000db",
+  "extension": "0x511b4327c2a2b6fd803b4ae85f2f9d831e046d8b",
+  "extensionSalt": "0x0000000000000000000000000000000000000000000000000000000000000169",
   "extensionConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701",
-  "extensionInitCodeKeccak": "0x2dfacfc189bf3a11e77f51a159d33825aa05617980c23a824191d3e56179565e",
-  "extensionRuntimeKeccak": "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be",
+  "extensionInitCodeKeccak": "0xe7e9c3842ad3f0853036e0308546db56a23d7c5444e456d01cae45cd5ae0d1bd",
+  "extensionRuntimeKeccak": "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858",
   "extensionImmutables": {
    "73285": "core",
    "77162": "core"
   },
-  "periphery": "0x094511cf93e73feca154da35a2404e8bde1111b4",
+  "periphery": "0x2f0be2fc5a2825cecd23dbf6ed33ed8ff823ef64",
   "peripherySalt": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000519ddb6580e97e08e639d601dc6e378285c3ef34",
-  "peripheryInitCodeKeccak": "0x0c55bd2c1e83bf3c5a9fab803eaacd11080fca00c87f6e57b5cee9b4a8b0d650",
-  "peripheryRuntimeKeccak": "0x91a98d2669389244ad8553d84f5c7e3c2947d5d4b5abb519be93d68142cce7c1",
+  "peripheryConstructorArguments": "0x00000000000000000000000000000000000014aa86c5d3c41765bb24e11bd701000000000000000000000000511b4327c2a2b6fd803b4ae85f2f9d831e046d8b",
+  "peripheryInitCodeKeccak": "0x8cf2ee014da27fda89967bb662c035bf761ddc1dc20de2e2d51099c8453eed6e",
+  "peripheryRuntimeKeccak": "0x49988478ba70cc8d2587eb63141b333c7ef0a67c4639c3a2ee25de4c4597999e",
   "peripheryImmutables": {
    "72634": "core",
    "72637": "extension",
@@ -293,12 +292,12 @@
   }
  ],
  "consumerManifest": {
-  "frozenCommit": "40af6cb359b0de2f61f15e47b6622a00c48b5b08",
-  "frozenTree": "f9925da3e2047b5ab5e45729056a3595043aa804",
-  "manifestSha256": "6dce9c6bcb0dd1be2a542109b546a4199db55b01f5a0bdcfead13e721eadea6b",
+  "frozenCommit": "550afc40280423128c02eb5ffd213aa959b34e2a",
+  "frozenTree": "dbbfe6a5eb5ddefe04974338b2b57bdf675c431e",
+  "manifestSha256": "57d8485ee7aa34049269f66bedccbfb43b66869b2e37bddf5857d070df02ca0b",
   "abiSha256Convention": "sha256 of `jq -cS .abi` of the Foundry artifact, no trailing newline",
   "abiSha256": {
-   "ZeroSeedLaunch": "999068f8e41867e972f4485c0105f584a2c10d7537615e6b4517807548fcd4bf",
+   "ZeroSeedLaunch": "efae9388aa6b1342479204ddf436fd2a310df16bf06c80c990b2d22c90d1e41e",
    "ZeroSeedLaunchPeriphery": "df24d9f07d45323da7e46c0f6e64ce24f8f522442d60cb07880ddf742ebe7305",
    "MintableERC20": "fa77fe077e7630e8d08191428bbdf6529fb32d0bbe49b8a7245887fbd1f1abba"
   },
@@ -331,7 +330,6 @@
      "CallPointNotImplemented()": "0xc6f26286",
      "ControllerOnly()": "0xac8ff76a",
      "CoreOnly()": "0x62279cff",
-     "FeeTooHigh()": "0xcd4e6167",
      "InitializeThroughCreateOnly()": "0x028eb443",
      "InvalidFeeSchedule()": "0xf75a271a",
      "InvalidParameters()": "0xe5239090",
@@ -449,6 +447,139 @@
     "lock_debt_after": "credit of (amount0, amount1) for the locker to withdraw"
    },
    "unknown": "any first word >= 2**160 that is not a tag, or fewer than 32 bytes, reverts UnknownForwardAction(); a first word < 2**160 is decoded as a swap"
+  },
+  "maxCreatorFeeQ64": "18446744073709551615",
+  "creatorFeeRange": {
+   "type": "uint64, Q0.64 (2**64 = 100%)",
+   "min_q64": "0",
+   "max_q64": "18446744073709551615",
+   "max_fraction": "1 - 2**-64: just under 100%, not 100%",
+   "constant": "MAX_CREATOR_FEE = type(uint64).max (src/extensions/ZeroSeedLaunch.sol); no ceiling comparison in _validate",
+   "schedule_rules": [
+    "finalFee <= initialFee",
+    "feeDuration > 0"
+   ],
+   "error": "InvalidFeeSchedule() 0xf75a271a",
+   "checked_in": [
+    "create",
+    "previewInstallation",
+    "forwarded create payload"
+   ],
+   "unencodable": {
+    "value": "18446744073709551616",
+    "meaning": "exactly 100% = 2**64",
+    "verdict": "ABI decoding failure with empty revert data in create(LaunchParameters), previewInstallation(address,LaunchParameters) and the forwarded create payload (abi.encode(ZERO_SEED_LAUNCH_CREATE, LaunchParameters)), for either fee word; nothing is truncated or wrapped to zero",
+    "dirty_high_bits": {
+     "value": "36893488147419103231",
+     "note": "2**64 + (2**64 - 1)",
+     "verdict": "same ABI decoding failure"
+    }
+   },
+   "removed": {
+    "error": "FeeTooHigh()",
+    "selector": "0xcd4e6167",
+    "note": "removed from IZeroSeedLaunch and the derived ABI; the previous ceiling floor(2**64 * 99 / 100) = 18262276632972456099 no longer exists"
+   },
+   "vectors": [
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "55340232221128654",
+     "feeDuration": 3600,
+     "verdict": "accept",
+     "note": "max -> 0.3% over the canonical window"
+    },
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "18446744073709551615",
+     "feeDuration": 1,
+     "verdict": "accept",
+     "note": "flat at the maximum, shortest window"
+    },
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "18446744073709551615",
+     "feeDuration": 4294967295,
+     "verdict": "accept",
+     "note": "flat at the maximum, longest window"
+    },
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "0",
+     "feeDuration": 4294967295,
+     "verdict": "accept",
+     "note": "max -> 0 over the longest window; the decay chain is zero from 76,800 s so the rate is 0 from there"
+    },
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "0",
+     "feeDuration": 1,
+     "verdict": "accept"
+    },
+    {
+     "initialFee": "0",
+     "finalFee": "0",
+     "feeDuration": 3600,
+     "verdict": "accept",
+     "note": "zero schedule"
+    },
+    {
+     "initialFee": "18446744073709551614",
+     "finalFee": "18446744073709551615",
+     "feeDuration": 3600,
+     "verdict": "InvalidFeeSchedule",
+     "note": "final above initial at the top of the range"
+    },
+    {
+     "initialFee": "0",
+     "finalFee": "1",
+     "feeDuration": 3600,
+     "verdict": "InvalidFeeSchedule"
+    },
+    {
+     "initialFee": "922337203685477580",
+     "finalFee": "922337203685477581",
+     "feeDuration": 3600,
+     "verdict": "InvalidFeeSchedule"
+    },
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "18446744073709551615",
+     "feeDuration": 0,
+     "verdict": "InvalidFeeSchedule",
+     "note": "zero duration"
+    },
+    {
+     "initialFee": "18446744073709551616",
+     "finalFee": "18446744073709551615",
+     "feeDuration": 3600,
+     "verdict": "abi_decoding_failure",
+     "note": "2**64 in initialFee"
+    },
+    {
+     "initialFee": "18446744073709551615",
+     "finalFee": "18446744073709551616",
+     "feeDuration": 3600,
+     "verdict": "abi_decoding_failure",
+     "note": "2**64 in finalFee"
+    }
+   ],
+   "reference_schedules": {
+    "fixture": {
+     "initialFee": "922337203685477580",
+     "finalFee": "55340232221128654",
+     "feeDuration": 3600,
+     "note": "5% -> 0.3%: this fixture's local reference parameters"
+    },
+    "consumer_default": {
+     "initialFee": "9223372036854775808",
+     "finalFee": "55340232221128654",
+     "feeDuration": 3600,
+     "note": "50% -> 0.3% over 3,600 s: the unchanged consumer-side default schedule; a contract parameter choice, not a contract constant. The ceiling is a caller-selectable bound, not a suggested default."
+    }
+   }
+  },
+  "removedFromAbi": {
+   "FeeTooHigh()": "0xcd4e6167"
   }
  }
 }

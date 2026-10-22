@@ -23,9 +23,9 @@
 //! the contract's deltas, creator fee and post-swap `Core` state exactly. The installation
 //! functions mirror `previewInstallation`, which `create` runs on the same inputs.
 //!
-//! Target: `EkuboProtocol/evm-contracts@40af6cb359b0de2f61f15e47b6622a00c48b5b08` (forward-only
+//! Target: `EkuboProtocol/evm-contracts@550afc40280423128c02eb5ffd213aa959b34e2a` (forward-only
 //! extension with a per-launch quote, requested supply with an `address(0)` sink, fixed-base fee
-//! table, separate periphery), against the Q0.64-fee `Core` of that commit. Not the Q0.16 `next`
+//! table, full `uint64` creator-fee range, separate periphery), against the Q0.64-fee `Core` of that commit. Not the Q0.16 `next`
 //! Core.
 
 use core::str::FromStr;
@@ -85,12 +85,12 @@ const LOCAL_CHAIN_ID: u64 = 31337;
 const LOCAL_CORE: &str = "0x00000000000014aa86c5d3c41765bb24e11bd701";
 const LOCAL_CORE_RUNTIME: &str =
     "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
-const LOCAL_EXTENSION: &str = "0x519ddb6580e97e08e639d601dc6e378285c3ef34";
+const LOCAL_EXTENSION: &str = "0x511b4327c2a2b6fd803b4ae85f2f9d831e046d8b";
 const LOCAL_EXTENSION_RUNTIME: &str =
-    "0x32160cd19576b73812a6c557ca8f9697ac1c3cd821576afc70e9a9b00bf888be";
-const LOCAL_PERIPHERY: &str = "0x094511cf93e73feca154da35a2404e8bde1111b4";
+    "0xb8c6d15f45c41e9dc43ac0e6ab8ea941dc833514cdb0b82f381c65f42f73a858";
+const LOCAL_PERIPHERY: &str = "0x2f0be2fc5a2825cecd23dbf6ed33ed8ff823ef64";
 const LOCAL_PERIPHERY_RUNTIME: &str =
-    "0x91a98d2669389244ad8553d84f5c7e3c2947d5d4b5abb519be93d68142cce7c1";
+    "0x49988478ba70cc8d2587eb63141b333c7ef0a67c4639c3a2ee25de4c4597999e";
 
 /// A reviewed ERC-20 quote: chain, address and keccak of its executed runtime.
 struct ReviewedQuote {
@@ -480,9 +480,11 @@ pub fn periphery_launch_token_address(
     )
 }
 
-/// Highest creator fee rate the contract accepts, Q0.64: `floor(2**64 * 99 / 100)`, 99%.
-/// A draft cap, not a live parameter. Exactly 100% is not encodable.
-pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = 18_262_276_632_972_456_099;
+/// Highest creator fee rate, Q0.64: `type(uint64).max = 2**64 - 1`, just under 100%, never
+/// exactly 100%. The contract accepts every `uint64` initial and final fee and checks only the
+/// schedule shape; exactly 100% (`2**64`) is not encodable. A bound of the type, not a suggested
+/// rate.
+pub const ZERO_SEED_LAUNCH_MAX_CREATOR_FEE: u64 = u64::MAX;
 
 /// `skipAhead` of the forwarded swaps this model quotes, as the contract tests' lockers and
 /// `LaunchTestRouter` send them.
@@ -738,9 +740,6 @@ pub enum ZeroSeedLaunchParameterError {
     /// `InvalidParameters`: supply, tick spacing or range out of bounds.
     #[error("invalid launch parameters")]
     InvalidParameters,
-    /// `FeeTooHigh`: initial fee above the 99% cap.
-    #[error("creator fee above the cap")]
-    FeeTooHigh,
     /// `InvalidFeeSchedule`: final fee above the initial fee or zero duration.
     #[error("invalid fee schedule")]
     InvalidFeeSchedule,
@@ -791,10 +790,8 @@ fn validate_scalar_parameters(
     {
         return Err(E::InvalidParameters);
     }
+    // Every `u64` rate is valid; only the schedule shape is checked.
     let fee = &parameters.fee;
-    if fee.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE {
-        return Err(E::FeeTooHigh);
-    }
     if fee.final_fee > fee.initial_fee || fee.fee_duration == 0 {
         return Err(E::InvalidFeeSchedule);
     }
@@ -1138,7 +1135,6 @@ impl ZeroSeedLaunchPool {
             || upper % tick_spacing as i32 != 0
             || launch.liquidity == 0
             || launch.liquidity > max_liquidity_per_tick(tick_spacing)
-            || fee_schedule.initial_fee > ZERO_SEED_LAUNCH_MAX_CREATOR_FEE
             || fee_schedule.final_fee > fee_schedule.initial_fee
             || fee_schedule.fee_duration == 0
         {

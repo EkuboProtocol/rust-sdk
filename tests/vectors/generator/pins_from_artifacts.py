@@ -175,7 +175,12 @@ pins["consumerManifest"] = {
     "abi": manifest["abi"],
     "structs": manifest["structs"],
     "forwardSchema": manifest["forward_schema"],
+    "maxCreatorFeeQ64": manifest["fee"]["max_creator_fee_q64"],
+    "creatorFeeRange": manifest["creator_fee_range"],
+    "removedFromAbi": manifest["removed_from_abi"],
 }
+for removed in manifest["removed_from_abi"].values():
+    assert all(removed not in pins[n]["errors"].values() for n in CONTRACTS), removed
 (pins_dir / "pins.json").write_text(json.dumps(pins, indent=1) + "\n")
 
 receipt = json.loads(Path("tests/vectors/zero-seed-launch-indexer.json").read_text())
