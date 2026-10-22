@@ -59,3 +59,4 @@ evm-alloy-1 = ["dep:alloy-primitives-1"]
 
 [dev-dependencies]
 serde_json = "1"
+sha2 = "0.10"

@@ -17,6 +17,8 @@ pub mod stableswap;
 pub mod twamm;
 #[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
 pub mod ve33;
+#[cfg(any(feature = "evm", feature = "evm-alloy-0_6", feature = "evm-alloy-1"))]
+pub mod zero_seed_launch;
 
 use crate::quoting::types::PoolKey;
 use thiserror::Error;
