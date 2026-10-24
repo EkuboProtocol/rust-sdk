@@ -7,10 +7,19 @@
 //! requested supply. The pool fee is 0. The pool, the position and its liquidity never change
 //! after creation: only swaps forwarded through the extension (`Core.forward` with
 //! `abi.encode(PoolKey, SwapParameters)`) move the price, and every swap's price limit is clamped
-//! to the position bounds. Time only lowers the creator fee, from `initial_fee` at
-//! `trading_start` along the fixed 600 second half-life exponential of [`decay_q128`], rescaled to
-//! reach `final_fee` exactly after `fee_duration`. The creator fee is charged on the calculated
-//! side of the actual fill and saved separately from the position.
+//! to the position bounds. Time only lowers the creator fee from `initial_fee` at `trading_start`,
+//! by the fee model of the deployment ([`ZeroSeedLaunchFeeModel`]):
+//!
+//! - [`ZeroSeedLaunchFeeModel::FixedBaseDurationV1`] (`evm-contracts@43d6628`, `uint32
+//!   feeDuration`): the fixed 600 second half-life exponential of [`decay_q128`], rescaled to reach
+//!   `final_fee` exactly after `fee_duration`.
+//! - [`ZeroSeedLaunchFeeModel::TickRateV2`] (`evm-contracts@3d6378f`, `uint64 decayRateX32`): the
+//!   excess over the long-run floor `final_fee` shrinks by `tickToSqrtRatio(-m)` with
+//!   `m = floor(decayRateX32 * elapsed / 2**32)`; see [`tick_rate_decayed_fee`]. `final_fee` is
+//!   approached, not scheduled.
+//!
+//! The creator fee is charged on the calculated side of the actual fill and saved separately from
+//! the position.
 //!
 //! One extension deployment serves every quote: each launch selects its own quote token in
 //! `LaunchParameters.quoteToken`, native ETH (`address(0)`, always token0, so the launch token is
@@ -23,10 +32,12 @@
 //! the contract's deltas, creator fee and post-swap `Core` state exactly. The installation
 //! functions mirror `previewInstallation`, which `create` runs on the same inputs.
 //!
-//! Target: `EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e` (forward-only
+//! Targets: `EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e` (forward-only
 //! extension with a per-launch quote, requested supply with an `address(0)` sink, fixed-base fee
-//! table, full `uint64` creator-fee range, separate periphery), against the Q0.64-fee `Core` of that commit. Not the Q0.16 `next`
-//! Core.
+//! table, full `uint64` creator-fee range, separate periphery) and
+//! `EkuboProtocol/evm-contracts@3d6378f585591dc7eabeea6976932c30524bb8ea` (the same with the
+//! per-launch tick-rate fee decay), against the Q0.64-fee `Core` of those commits. Not the Q0.16
+//! `next` Core.
 
 use core::str::FromStr;
 use derive_more::{Add, AddAssign, Sub, SubAssign};
@@ -76,20 +87,43 @@ pub struct ZeroSeedLaunchInstance {
     pub periphery_runtime: U256,
     pub core: Address,
     pub core_runtime: U256,
+    /// The fee math and `LaunchParameters`/`LaunchCreated` shape of the deployment's contract
+    /// revision. Bound to the deployment, never inferred from an event.
+    pub fee_model: ZeroSeedLaunchFeeModel,
 }
 
-/// The one supported LOCAL instance: the constructor-executed fixture of the indexer's anvil chain
-/// (chain 31337, no fork) at the target commit, `pins.localFixture`.
+/// A supported LOCAL instance: a constructor-executed fixture of the indexer's anvil chain (chain
+/// 31337, no fork) at one target commit.
+struct LocalInstancePin {
+    fee_model: ZeroSeedLaunchFeeModel,
+    extension: &'static str,
+    extension_runtime: &'static str,
+    periphery: &'static str,
+    periphery_runtime: &'static str,
+}
+
 const LOCAL_CHAIN_ID: u64 = 31337;
 const LOCAL_CORE: &str = "0x00000000000014aa86c5d3c41765bb24e11bd701";
 const LOCAL_CORE_RUNTIME: &str =
     "0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a";
-const LOCAL_EXTENSION: &str = "0x519c5f793d3f6cf9ee439e4cc38d8285cf08211f";
-const LOCAL_EXTENSION_RUNTIME: &str =
-    "0xd6b4c7ce8da56e9948fdb004a035d9b52dbd3690bcb03c1269bbf2a9981d8ed5";
-const LOCAL_PERIPHERY: &str = "0x0df4e2a76640b52e51479b435f52d0eb0e7e8ef4";
-const LOCAL_PERIPHERY_RUNTIME: &str =
-    "0x2a9329dbb064a2c031115c7c120c8b6a1f31de167f33374180e4dc73d975974b";
+
+/// `pins.localFixture` of `evm-contracts@43d6628` and of `evm-contracts@3d6378f`.
+const LOCAL_INSTANCES: [LocalInstancePin; 2] = [
+    LocalInstancePin {
+        fee_model: ZeroSeedLaunchFeeModel::FixedBaseDurationV1,
+        extension: "0x519c5f793d3f6cf9ee439e4cc38d8285cf08211f",
+        extension_runtime: "0xd6b4c7ce8da56e9948fdb004a035d9b52dbd3690bcb03c1269bbf2a9981d8ed5",
+        periphery: "0x0df4e2a76640b52e51479b435f52d0eb0e7e8ef4",
+        periphery_runtime: "0x2a9329dbb064a2c031115c7c120c8b6a1f31de167f33374180e4dc73d975974b",
+    },
+    LocalInstancePin {
+        fee_model: ZeroSeedLaunchFeeModel::TickRateV2,
+        extension: "0x5135fd3e9a6056937eaf6b99454bbc2198c2263d",
+        extension_runtime: "0xe08ad382497fc9825956c2b4e9ccf463014c4ed65baf50c0a59db8d7b7aedfc3",
+        periphery: "0xfb2e7927d3e4984dca3e390526d43c6f5a3461e9",
+        periphery_runtime: "0xf72d3cd6b99e1b64f0b08c0f6933b4f8adb92464ded48c51bfb7d2805c09d667",
+    },
+];
 
 /// A reviewed ERC-20 quote: chain, address and keccak of its executed runtime.
 struct ReviewedQuote {
@@ -118,17 +152,20 @@ fn static_hash(s: &str) -> U256 {
 }
 
 impl ZeroSeedLaunchInstance {
-    /// Fail closed against the one constructor-executed LOCAL fixture instance. There are NO
-    /// approved live entries.
+    /// Fail closed against the constructor-executed LOCAL fixture instances, including their fee
+    /// model. There are NO approved live entries.
     pub fn validate(&self) -> Result<(), ZeroSeedLaunchParameterError> {
-        if self.chain_id != LOCAL_CHAIN_ID
-            || self.extension != static_address(LOCAL_EXTENSION)
-            || self.extension_runtime != static_hash(LOCAL_EXTENSION_RUNTIME)
-            || self.periphery != static_address(LOCAL_PERIPHERY)
-            || self.periphery_runtime != static_hash(LOCAL_PERIPHERY_RUNTIME)
-            || self.core != static_address(LOCAL_CORE)
-            || self.core_runtime != static_hash(LOCAL_CORE_RUNTIME)
-        {
+        let pinned = LOCAL_INSTANCES.iter().any(|pin| {
+            self.chain_id == LOCAL_CHAIN_ID
+                && self.fee_model == pin.fee_model
+                && self.extension == static_address(pin.extension)
+                && self.extension_runtime == static_hash(pin.extension_runtime)
+                && self.periphery == static_address(pin.periphery)
+                && self.periphery_runtime == static_hash(pin.periphery_runtime)
+                && self.core == static_address(LOCAL_CORE)
+                && self.core_runtime == static_hash(LOCAL_CORE_RUNTIME)
+        });
+        if !pinned {
             return Err(ZeroSeedLaunchParameterError::UnsupportedInstance);
         }
         Ok(())
@@ -248,12 +285,25 @@ impl ZeroSeedLaunchLocalPreview<'_> {
         parameters: &ZeroSeedLaunchParameters,
         now: u64,
     ) -> Result<ZeroSeedLaunchInstallation, ZeroSeedLaunchParameterError> {
+        self.validate_fee_model(parameters)?;
         self.quote(parameters).validate_code()?;
         self.validate_metadata()?;
         validate_scalar_parameters(parameters, now)?;
         self.validate_token(parameters)?;
         validate_bounds_alignment(&parameters.range)?;
         install_requested(parameters)
+    }
+
+    /// The parameters must have the `LaunchParameters` shape of the instance's contract revision:
+    /// a `feeDuration` for v1, a `decayRateX32` for v2.
+    fn validate_fee_model(
+        &self,
+        parameters: &ZeroSeedLaunchParameters,
+    ) -> Result<(), ZeroSeedLaunchParameterError> {
+        if parameters.fee.decay.model() != self.instance.fee_model {
+            return Err(ZeroSeedLaunchParameterError::FeeModelMismatch);
+        }
+        Ok(())
     }
 
     fn validate_metadata(&self) -> Result<(), ZeroSeedLaunchParameterError> {
@@ -290,6 +340,7 @@ impl ZeroSeedLaunchLocalPreview<'_> {
     ) -> Result<(), ZeroSeedLaunchParameterError> {
         type E = ZeroSeedLaunchParameterError;
         self.instance.validate()?;
+        self.validate_fee_model(parameters)?;
         let quote = self.quote(parameters);
         quote.validate_code()?;
         self.validate_metadata()?;
@@ -614,38 +665,208 @@ pub fn decay_q128(elapsed: u64) -> U256 {
     result
 }
 
+/// The fee math and ABI shape of a `ZeroSeedLaunch` contract revision. A property of the
+/// deployment ([`ZeroSeedLaunchInstance::fee_model`]): a deployment keeps its model forever.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum ZeroSeedLaunchFeeModel {
+    /// `evm-contracts@43d6628`: `uint32 feeDuration`, the fixed-base table of [`decayed_fee`].
+    /// `LaunchCreated` topic `0x3a4e8111…098f`, `create` `0x662af306`.
+    #[cfg_attr(feature = "serde", serde(rename = "fixed_base_duration_v1"))]
+    FixedBaseDurationV1,
+    /// `evm-contracts@3d6378f`: `uint64 decayRateX32`, the tick-rate decay of
+    /// [`tick_rate_decayed_fee`]. `LaunchCreated` topic `0x8f81ce1b…5888`, `create` `0xf91810d2`.
+    #[cfg_attr(feature = "serde", serde(rename = "tick_rate_v2"))]
+    TickRateV2,
+}
+
+/// The decay parameter of a launch, the 10th field of `LaunchParameters` and 3rd of `Launch`. Its
+/// variant must be the fee model of the launch's deployment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "model"))]
+pub enum ZeroSeedLaunchFeeDecay {
+    /// [`ZeroSeedLaunchFeeModel::FixedBaseDurationV1`]: seconds from `trading_start` to
+    /// `final_fee`. Not zero.
+    #[cfg_attr(feature = "serde", serde(rename = "fixed_base_duration_v1"))]
+    FixedBaseDuration { fee_duration: u32 },
+    /// [`ZeroSeedLaunchFeeModel::TickRateV2`]: unsigned Q32.32 ticks per second (`2**32` is one
+    /// tick per second). Every value is valid; 0 keeps the fee flat at `initial_fee`.
+    #[cfg_attr(feature = "serde", serde(rename = "tick_rate_v2"))]
+    TickRate { decay_rate_x32: u64 },
+}
+
+impl ZeroSeedLaunchFeeDecay {
+    /// The fee model whose `LaunchParameters` carry this parameter.
+    #[must_use]
+    pub fn model(&self) -> ZeroSeedLaunchFeeModel {
+        match self {
+            Self::FixedBaseDuration { .. } => ZeroSeedLaunchFeeModel::FixedBaseDurationV1,
+            Self::TickRate { .. } => ZeroSeedLaunchFeeModel::TickRateV2,
+        }
+    }
+}
+
 /// Creator fee schedule, as in `LaunchParameters`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZeroSeedLaunchFeeSchedule {
     /// First timestamp at which swaps are accepted; the decay starts here.
     pub trading_start: u64,
-    /// Seconds from `trading_start` to `final_fee`. Not zero.
-    pub fee_duration: u32,
+    /// `feeDuration` (v1) or `decayRateX32` (v2).
+    #[cfg_attr(feature = "serde", serde(flatten))]
+    pub decay: ZeroSeedLaunchFeeDecay,
     /// Creator fee until `trading_start`, Q0.64.
     pub initial_fee: u64,
-    /// Creator fee from `trading_start + fee_duration` on, Q0.64.
+    /// Q0.64. v1: the creator fee from `trading_start + fee_duration` on. v2: the long-run floor
+    /// the fee approaches, reached only by rounding or saturation.
     pub final_fee: u64,
 }
 
 impl ZeroSeedLaunchFeeSchedule {
     /// `feeAt`: the creator fee at `timestamp`, Q0.64.
     ///
-    /// `initial_fee` until `trading_start`, then [`decayed_fee`] of the elapsed seconds, which is
-    /// `final_fee` from `elapsed >= fee_duration` on. Elapsed time is not narrowed, as in the
-    /// contract.
+    /// `initial_fee` until `trading_start` (inclusive), then [`decayed_fee`] (v1) or
+    /// [`tick_rate_decayed_fee`] (v2) of the elapsed seconds. Elapsed time is not narrowed, as in
+    /// the contract.
     #[must_use]
     pub fn fee_at(&self, timestamp: u64) -> u64 {
         if timestamp <= self.trading_start {
             return self.initial_fee;
         }
-        decayed_fee(
-            self.initial_fee,
-            self.final_fee,
-            self.fee_duration,
-            timestamp - self.trading_start,
-        )
+        let elapsed = timestamp - self.trading_start;
+        match self.decay {
+            ZeroSeedLaunchFeeDecay::FixedBaseDuration { fee_duration } => {
+                decayed_fee(self.initial_fee, self.final_fee, fee_duration, elapsed)
+            }
+            ZeroSeedLaunchFeeDecay::TickRate { decay_rate_x32 } => {
+                tick_rate_decayed_fee(self.initial_fee, self.final_fee, decay_rate_x32, elapsed)
+            }
+        }
     }
+
+    /// `feeDuration` of a v1 schedule.
+    #[must_use]
+    pub fn fee_duration(&self) -> Option<u32> {
+        match self.decay {
+            ZeroSeedLaunchFeeDecay::FixedBaseDuration { fee_duration } => Some(fee_duration),
+            ZeroSeedLaunchFeeDecay::TickRate { .. } => None,
+        }
+    }
+
+    /// `decayRateX32` of a v2 schedule.
+    #[must_use]
+    pub fn decay_rate_x32(&self) -> Option<u64> {
+        match self.decay {
+            ZeroSeedLaunchFeeDecay::FixedBaseDuration { .. } => None,
+            ZeroSeedLaunchFeeDecay::TickRate { decay_rate_x32 } => Some(decay_rate_x32),
+        }
+    }
+
+    /// `InvalidFeeSchedule` of the schedule's model: `final_fee > initial_fee`, and for v1 also a
+    /// zero duration. A v2 rate of 0 is valid.
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.final_fee <= self.initial_fee
+            && !matches!(
+                self.decay,
+                ZeroSeedLaunchFeeDecay::FixedBaseDuration { fee_duration: 0 }
+            )
+    }
+}
+
+/// Largest tick magnitude the EVM tick helper supports, `MAX_TICK_MAGNITUDE` of the contracts.
+pub const ZERO_SEED_LAUNCH_MAX_TICK_MAGNITUDE: u64 = 88_722_835;
+
+/// `MAX_DECAY_PRODUCT` of `math/feeDecay.sol` (v2): `(MAX_TICK_MAGNITUDE + 1) * 2**32 - 1`, the
+/// largest `decayRateX32 * elapsed` whose magnitude the tick helper supports.
+pub const ZERO_SEED_LAUNCH_MAX_DECAY_PRODUCT: u64 =
+    ((ZERO_SEED_LAUNCH_MAX_TICK_MAGNITUDE + 1) << 32) - 1;
+
+/// Consumer default `decayRateX32` (v2): a one-day half-life of the excess over the floor,
+/// [`decay_rate_x32_for_half_life`] of 86400. A creation parameter choice, not a contract
+/// constant.
+pub const ZERO_SEED_LAUNCH_DEFAULT_DECAY_RATE_X32: u64 = 68_913_100_933;
+
+/// `floor(2 * ln 2 / ln 1.000001 * 2**32 * 10**30)`: ticks per half-life of the excess, Q32.32,
+/// scaled by `10**30`. The normative integer for every half-life conversion; never use a float.
+pub const ZERO_SEED_LAUNCH_HALF_LIFE_X32_E30: &str =
+    "5954091920683119788732747343471285361579197626";
+
+fn half_life_x32_e30() -> U256 {
+    U256::from_str(ZERO_SEED_LAUNCH_HALF_LIFE_X32_E30).expect("static constant")
+}
+
+/// `decayRateX32` for a half-life of the excess of `seconds`:
+/// `floor(HALF_LIFE_X32_E30 / (seconds * 10**30))`. `None` for 0 seconds. A half-life above
+/// about `5.95e15` seconds gives 0, a flat fee.
+#[must_use]
+pub fn decay_rate_x32_for_half_life(seconds: u64) -> Option<u64> {
+    if seconds == 0 {
+        return None;
+    }
+    let rate = half_life_x32_e30() / (U256::from(seconds) * U256::from(10).pow(U256::from(30)));
+    Some(rate.to::<u64>())
+}
+
+/// The half-life of the excess for `decay_rate_x32`, in whole microseconds, floored:
+/// `floor(HALF_LIFE_X32_E30 * 10**6 / (decay_rate_x32 * 10**30))`. `None` for rate 0 (no decay).
+/// Display only: the fee follows [`tick_rate_decayed_fee`], not this value.
+#[must_use]
+pub fn half_life_micros(decay_rate_x32: u64) -> Option<u128> {
+    if decay_rate_x32 == 0 {
+        return None;
+    }
+    let micros =
+        half_life_x32_e30() / (U256::from(decay_rate_x32) * U256::from(10).pow(U256::from(24)));
+    // At most HALF_LIFE_X32_E30 / 10**24 < 2**73.
+    Some(micros.to::<u128>())
+}
+
+/// The last elapsed second at which the v2 curve is still evaluated:
+/// `floor(MAX_DECAY_PRODUCT / decay_rate_x32)`. From the next second the fee is exactly
+/// `final_fee` by numerical saturation; this is not a schedule end. `None` for rate 0.
+#[must_use]
+pub fn saturation_elapsed_seconds(decay_rate_x32: u64) -> Option<u64> {
+    (decay_rate_x32 != 0).then(|| ZERO_SEED_LAUNCH_MAX_DECAY_PRODUCT / decay_rate_x32)
+}
+
+/// `toFixed(tickToSqrtRatio(-magnitude))` of the contracts: the compact (94-bit mantissa, rounded
+/// down) sqrt ratio as 64.128 fixed point, at most `2**128`. `None` above
+/// [`ZERO_SEED_LAUNCH_MAX_TICK_MAGNITUDE`], where the helper reverts `InvalidTick`.
+#[must_use]
+pub fn tick_rate_factor_q128(magnitude: u64) -> Option<U256> {
+    if magnitude > ZERO_SEED_LAUNCH_MAX_TICK_MAGNITUDE {
+        return None;
+    }
+    to_sqrt_ratio::<Evm>(-(magnitude as i32))
+}
+
+/// `decayedFee` from `math/feeDecay.sol` at `evm-contracts@3d6378f` (v2), in its normative order:
+/// rate 0 is `initial_fee`; `elapsed > MAX_DECAY_PRODUCT / rate` (integer division, before any
+/// multiply) is `final_fee`; else `m = (rate * elapsed) >> 32` and
+/// `final_fee + floor((initial_fee - final_fee) * tick_rate_factor_q128(m) / 2**128)`. Creation
+/// requires `final_fee <= initial_fee`; for other inputs the subtraction wraps as in the contract's
+/// `unchecked` block.
+#[must_use]
+pub fn tick_rate_decayed_fee(
+    initial_fee: u64,
+    final_fee: u64,
+    decay_rate_x32: u64,
+    elapsed: u64,
+) -> u64 {
+    if decay_rate_x32 == 0 {
+        return initial_fee;
+    }
+    if elapsed > ZERO_SEED_LAUNCH_MAX_DECAY_PRODUCT / decay_rate_x32 {
+        return final_fee;
+    }
+    // The guard bounds the product by MAX_DECAY_PRODUCT < 2**59.
+    let magnitude = (u128::from(decay_rate_x32) * u128::from(elapsed)) >> 32;
+    let factor = tick_rate_factor_q128(magnitude as u64).expect("guarded magnitude");
+    let excess: U256 = (U256::from(initial_fee.wrapping_sub(final_fee)) * factor) >> 128;
+    final_fee.wrapping_add(excess.to::<u64>())
 }
 
 /// `decayedFee` from `math/feeDecay.sol`.
@@ -739,9 +960,14 @@ pub enum ZeroSeedLaunchParameterError {
     /// `InvalidParameters`: supply, tick spacing or range out of bounds.
     #[error("invalid launch parameters")]
     InvalidParameters,
-    /// `InvalidFeeSchedule`: final fee above the initial fee or zero duration.
+    /// `InvalidFeeSchedule`: final fee above the initial fee, or (v1 only) zero duration.
     #[error("invalid fee schedule")]
     InvalidFeeSchedule,
+    /// The fee decay parameter is not of the instance's fee model: a v1 instance takes a
+    /// `feeDuration`, a v2 instance a `decayRateX32`. SDK refusal; the contract cannot decode the
+    /// other shape.
+    #[error("fee decay parameter does not match the instance's fee model")]
+    FeeModelMismatch,
     /// `InvalidTradingStart`: trading start before the creation block.
     #[error("trading start is in the past")]
     InvalidTradingStart,
@@ -789,9 +1015,9 @@ fn validate_scalar_parameters(
     {
         return Err(E::InvalidParameters);
     }
-    // Every `u64` rate is valid; only the schedule shape is checked.
+    // Every `u64` fee rate and decay rate is valid; only the schedule shape is checked.
     let fee = &parameters.fee;
-    if fee.final_fee > fee.initial_fee || fee.fee_duration == 0 {
+    if !fee.is_valid() {
         return Err(E::InvalidFeeSchedule);
     }
     if fee.trading_start < now {
@@ -909,7 +1135,8 @@ pub struct ZeroSeedLaunchConfig {
     pub range: ZeroSeedLaunchRange,
     /// The event's `liquidity`, the computed constant liquidity of the launch position.
     pub liquidity: u128,
-    /// `LaunchParameters.tradingStart`, `feeDuration`, `initialFee` and `finalFee`.
+    /// `LaunchParameters.tradingStart`, `feeDuration` (v1) or `decayRateX32` (v2), `initialFee`
+    /// and `finalFee`.
     pub fee: ZeroSeedLaunchFeeSchedule,
 }
 
@@ -960,6 +1187,9 @@ pub enum ZeroSeedLaunchPoolConstructionError {
     /// The instance is not the supported one, or the pool key's extension is not its extension.
     #[error("unsupported launch instance")]
     UnsupportedInstance,
+    /// The launch's fee decay parameter is not of the instance's fee model.
+    #[error("launch fee model does not match the instance")]
+    FeeModelMismatch,
     /// The launch's quote is refused by the contract or not supported: see
     /// [`ZeroSeedLaunchQuoteObservation::supported_kind`].
     #[error("quote token is not supported")]
@@ -1072,6 +1302,9 @@ impl ZeroSeedLaunchPool {
         if key.config.extension != instance.extension {
             return Err(E::UnsupportedInstance);
         }
+        if launch.fee.decay.model() != instance.fee_model {
+            return Err(E::FeeModelMismatch);
+        }
         if quote.chain_id != instance.chain_id
             || quote.quote != launch.quote_token
             || quote.supported_kind().is_err()
@@ -1134,8 +1367,7 @@ impl ZeroSeedLaunchPool {
             || upper % tick_spacing as i32 != 0
             || launch.liquidity == 0
             || launch.liquidity > max_liquidity_per_tick(tick_spacing)
-            || fee_schedule.final_fee > fee_schedule.initial_fee
-            || fee_schedule.fee_duration == 0
+            || !fee_schedule.is_valid()
         {
             return Err(E::InvalidLaunchConfig);
         }
@@ -1742,7 +1974,7 @@ mod tests {
             liquidity: 1_000_000,
             fee: ZeroSeedLaunchFeeSchedule {
                 trading_start: 0,
-                fee_duration: 3600,
+                decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration { fee_duration: 3600 },
                 initial_fee: 0,
                 final_fee: 0,
             },
@@ -1792,7 +2024,9 @@ mod tests {
     fn fee_schedule_is_monotone_and_bounded() {
         let schedule = ZeroSeedLaunchFeeSchedule {
             trading_start: 1_000,
-            fee_duration: 3_600,
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                fee_duration: 3_600,
+            },
             initial_fee: ZERO_SEED_LAUNCH_MAX_CREATOR_FEE,
             final_fee: 0,
         };

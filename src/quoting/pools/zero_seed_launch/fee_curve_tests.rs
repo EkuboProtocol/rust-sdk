@@ -231,7 +231,9 @@ fn every_second_of_twelve_curves_matches_the_decimal_oracle() {
         );
         let schedule = ZeroSeedLaunchFeeSchedule {
             trading_start: START,
-            fee_duration: duration,
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                fee_duration: duration,
+            },
             initial_fee: initial,
             final_fee,
         };
@@ -302,7 +304,9 @@ fn generator_fee_rows_and_contract_fee_rows() {
     for row in v["fee"].as_array().unwrap() {
         let schedule = ZeroSeedLaunchFeeSchedule {
             trading_start: big(&fixture["trading_start"]) as u64,
-            fee_duration: big(&row["duration"]) as u32,
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                fee_duration: big(&row["duration"]) as u32,
+            },
             initial_fee: big(&fixture["fee_initial_q64"]) as u64,
             final_fee: big(&fixture["fee_final_q64"]) as u64,
         };
@@ -406,7 +410,7 @@ fn validation_accepts_the_full_range_and_checks_the_schedule() {
         },
         fee: ZeroSeedLaunchFeeSchedule {
             trading_start: START,
-            fee_duration: 3600,
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration { fee_duration: 3600 },
             initial_fee: RATE_MAX,
             final_fee: FEE_03,
         },
@@ -450,7 +454,9 @@ fn validation_accepts_the_full_range_and_checks_the_schedule() {
             for duration in [1, 3600, u32::MAX] {
                 let fee = ZeroSeedLaunchFeeSchedule {
                     trading_start: START,
-                    fee_duration: duration,
+                    decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                        fee_duration: duration,
+                    },
                     initial_fee: initial,
                     final_fee,
                 };
@@ -480,7 +486,7 @@ fn validation_accepts_the_full_range_and_checks_the_schedule() {
                     );
                 }
                 let zero = ZeroSeedLaunchFeeSchedule {
-                    fee_duration: 0,
+                    decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration { fee_duration: 0 },
                     ..fee
                 };
                 assert_eq!(
@@ -555,7 +561,9 @@ fn fixture_with(
     };
     let fee = ZeroSeedLaunchFeeSchedule {
         trading_start: START,
-        fee_duration: duration,
+        decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+            fee_duration: duration,
+        },
         initial_fee: initial,
         final_fee,
     };

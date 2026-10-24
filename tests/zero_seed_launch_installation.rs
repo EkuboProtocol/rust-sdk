@@ -15,9 +15,9 @@ use ekubo_sdk::{
         tick::to_sqrt_ratio,
     },
     quoting::pools::zero_seed_launch::{
-        ZeroSeedLaunchFeeSchedule, ZeroSeedLaunchInstallation, ZeroSeedLaunchParameterError,
-        ZeroSeedLaunchParameters, ZeroSeedLaunchRange, installation_math, max_liquidity_per_tick,
-        preview_installation_math,
+        ZeroSeedLaunchFeeDecay, ZeroSeedLaunchFeeSchedule, ZeroSeedLaunchInstallation,
+        ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters, ZeroSeedLaunchRange,
+        installation_math, max_liquidity_per_tick, preview_installation_math,
     },
 };
 use serde_json::Value;
@@ -26,7 +26,9 @@ const VECTORS: &str = include_str!("vectors/zero-seed-launch-installation.json")
 
 const CANONICAL_FEE: ZeroSeedLaunchFeeSchedule = ZeroSeedLaunchFeeSchedule {
     trading_start: 1_000,
-    fee_duration: 3_600,
+    decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+        fee_duration: 3_600,
+    },
     initial_fee: 9_223_372_036_854_775_808,
     final_fee: 55_340_232_221_128_654,
 };

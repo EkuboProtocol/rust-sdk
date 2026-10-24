@@ -16,9 +16,10 @@ use ekubo_sdk::{
             concentrated::TickSpacing,
             zero_seed_launch::{
                 MINTABLE_ERC20_CREATION_CODE, MINTABLE_ERC20_CREATION_CODE_KECCAK,
-                ZERO_SEED_LAUNCH_MAX_CREATOR_FEE, ZeroSeedLaunchConfig, ZeroSeedLaunchFeeSchedule,
-                ZeroSeedLaunchFullFillError, ZeroSeedLaunchInstallation, ZeroSeedLaunchInstance,
-                ZeroSeedLaunchLocalPreview, ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters,
+                ZERO_SEED_LAUNCH_MAX_CREATOR_FEE, ZeroSeedLaunchConfig, ZeroSeedLaunchFeeDecay,
+                ZeroSeedLaunchFeeModel, ZeroSeedLaunchFeeSchedule, ZeroSeedLaunchFullFillError,
+                ZeroSeedLaunchInstallation, ZeroSeedLaunchInstance, ZeroSeedLaunchLocalPreview,
+                ZeroSeedLaunchParameterError, ZeroSeedLaunchParameters,
                 ZeroSeedLaunchPoolConstructionError, ZeroSeedLaunchPoolQuoteError,
                 ZeroSeedLaunchPoolState, ZeroSeedLaunchQuoteKind, ZeroSeedLaunchQuoteObservation,
                 ZeroSeedLaunchRange, extension_token_salt, installation_math, launch_token_address,
@@ -113,7 +114,9 @@ fn state(v: &Value) -> ZeroSeedLaunchPoolState {
 fn fee_schedule(v: &Value) -> ZeroSeedLaunchFeeSchedule {
     ZeroSeedLaunchFeeSchedule {
         trading_start: num(v, "tradingStart"),
-        fee_duration: num(v, "feeDuration"),
+        decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+            fee_duration: num(v, "feeDuration"),
+        },
         initial_fee: num(v, "initialFee"),
         final_fee: num(v, "finalFee"),
     }
@@ -204,6 +207,7 @@ fn pinned_instance() -> ZeroSeedLaunchInstance {
         periphery_runtime: U256::from_str(s(f, "peripheryRuntimeKeccak")).unwrap(),
         core: address(s(f, "core")),
         core_runtime: U256::from_str(s(f, "coreRuntimeKeccak")).unwrap(),
+        fee_model: ZeroSeedLaunchFeeModel::FixedBaseDurationV1,
     }
 }
 
@@ -282,6 +286,7 @@ fn fixture_instance(fixture: &Value) -> ZeroSeedLaunchInstance {
         periphery_runtime: U256::from_str(s(entry, "peripheryRuntimeKeccak")).unwrap(),
         core: address(s(&fixture["addresses"], "core")),
         core_runtime: U256::from_str(s(&fixture["provenance"], "coreRuntimeKeccak")).unwrap(),
+        fee_model: ZeroSeedLaunchFeeModel::FixedBaseDurationV1,
     }
 }
 
@@ -660,7 +665,9 @@ fn indexed_launches(fixture: &Value) -> HashMap<String, IndexedLaunch> {
                 liquidity: word_u128(&data, 4),
                 fee: ZeroSeedLaunchFeeSchedule {
                     trading_start: word(&data, p + 8).to::<u64>(),
-                    fee_duration: word(&data, p + 9).to::<u32>(),
+                    decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                        fee_duration: word(&data, p + 9).to::<u32>(),
+                    },
                     initial_fee: word(&data, p + 10).to::<u64>(),
                     final_fee: word(&data, p + 11).to::<u64>(),
                 },
@@ -1030,12 +1037,12 @@ fn indexer_trades_ledgers_owners_and_fees_replay() {
     // Both maximum-rate launches are created normally at `2**64 - 1`.
     let l5 = &launches["l5"].config.fee;
     assert_eq!(
-        (l5.initial_fee, l5.final_fee, l5.fee_duration),
+        (l5.initial_fee, l5.final_fee, l5.fee_duration().unwrap()),
         (u64::MAX, 55_340_232_221_128_654, 3600)
     );
     let l6 = &launches["l6"].config.fee;
     assert_eq!(
-        (l6.initial_fee, l6.final_fee, l6.fee_duration),
+        (l6.initial_fee, l6.final_fee, l6.fee_duration().unwrap()),
         (u64::MAX, u64::MAX, 1)
     );
     let paid = 184_817_928_874_495_997_640_704;
@@ -1147,6 +1154,7 @@ fn parity_instance(created: &Value) -> ZeroSeedLaunchInstance {
         periphery_runtime: U256::from_str(s(created, "peripheryCodehash")).unwrap(),
         core: address("0x00000000000014aa86c5d3c41765bb24e11bd701"),
         core_runtime: U256::from_str(s(created, "coreCodehash")).unwrap(),
+        fee_model: ZeroSeedLaunchFeeModel::FixedBaseDurationV1,
     }
 }
 
@@ -1645,6 +1653,7 @@ fn installation_preview_and_creation_match_the_contract() {
             periphery_runtime: U256::ZERO,
             core: Address::ZERO,
             core_runtime: U256::ZERO,
+            fee_model: ZeroSeedLaunchFeeModel::FixedBaseDurationV1,
         };
         let quote_runtime = s(preview, "quoteCodehash");
         let context = ZeroSeedLaunchLocalPreview {
@@ -1819,7 +1828,9 @@ fn creator_fee_range_verdicts() {
         },
         fee: ZeroSeedLaunchFeeSchedule {
             trading_start: 1_000,
-            fee_duration: 3_600,
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                fee_duration: 3_600,
+            },
             initial_fee: 0,
             final_fee: 0,
         },
@@ -1838,7 +1849,7 @@ fn creator_fee_range_verdicts() {
             #[cfg(feature = "serde")]
             {
                 let json = format!(
-                    r#"{{"trading_start":1000,"fee_duration":{duration},"initial_fee":{},"final_fee":{}}}"#,
+                    r#"{{"trading_start":1000,"model":"fixed_base_duration_v1","fee_duration":{duration},"initial_fee":{},"final_fee":{}}}"#,
                     s(vector, "initialFee"),
                     s(vector, "finalFee"),
                 );
@@ -1848,14 +1859,16 @@ fn creator_fee_range_verdicts() {
         }
         let fee = ZeroSeedLaunchFeeSchedule {
             trading_start: 1_000,
-            fee_duration: u32::try_from(duration).unwrap(),
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                fee_duration: u32::try_from(duration).unwrap(),
+            },
             initial_fee: initial.unwrap(),
             final_fee: final_fee.unwrap(),
         };
         #[cfg(feature = "serde")]
         assert_eq!(
             serde_json::from_str::<ZeroSeedLaunchFeeSchedule>(&format!(
-                r#"{{"trading_start":1000,"fee_duration":{duration},"initial_fee":{},"final_fee":{}}}"#,
+                r#"{{"trading_start":1000,"model":"fixed_base_duration_v1","fee_duration":{duration},"initial_fee":{},"final_fee":{}}}"#,
                 fee.initial_fee, fee.final_fee
             ))
             .unwrap(),
@@ -1868,7 +1881,7 @@ fn creator_fee_range_verdicts() {
                 assert_eq!(result, Ok(()), "{vector}");
                 assert_eq!(fee.fee_at(1_000), fee.initial_fee);
                 assert_eq!(
-                    fee.fee_at(1_000 + u64::from(fee.fee_duration)),
+                    fee.fee_at(1_000 + u64::from(fee.fee_duration().unwrap())),
                     fee.final_fee
                 );
                 let mut previous = fee.initial_fee;
@@ -1877,7 +1890,7 @@ fn creator_fee_range_verdicts() {
                     assert!(fee.final_fee <= rate && rate <= previous, "{vector} {t}");
                     previous = rate;
                 }
-                if fee.fee_duration == u32::MAX {
+                if fee.fee_duration() == Some(u32::MAX) {
                     assert_eq!(fee.fee_at(1_000 + 76_800), fee.final_fee);
                 }
             }
@@ -1901,7 +1914,9 @@ fn creator_fee_range_verdicts() {
         let schedule = &range["reference_schedules"][label];
         let fee = ZeroSeedLaunchFeeSchedule {
             trading_start: 1_000,
-            fee_duration: num(schedule, "feeDuration"),
+            decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+                fee_duration: num(schedule, "feeDuration"),
+            },
             initial_fee: num(schedule, "initialFee"),
             final_fee: num(schedule, "finalFee"),
         };
@@ -1925,7 +1940,9 @@ fn frozen_integer_vectors() {
     let fixture = &vectors["fixture"];
     let fee = |duration: u32| ZeroSeedLaunchFeeSchedule {
         trading_start: num(fixture, "trading_start"),
-        fee_duration: duration,
+        decay: ZeroSeedLaunchFeeDecay::FixedBaseDuration {
+            fee_duration: duration,
+        },
         initial_fee: num(fixture, "fee_initial_q64"),
         final_fee: num(fixture, "fee_final_q64"),
     };

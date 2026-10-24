@@ -2,9 +2,25 @@
 """Converts the PARITY| lines of ZeroSeedLaunchSdkParity.t.sol into zero-seed-launch-parity.json.
 
 Usage: forge test --offline --match-contract ZeroSeedLaunchSdkParity -vv | python3 parity_to_json.py > out.json
+       forge test --offline --match-contract ZeroSeedLaunchSdkParityV2 -vv | python3 parity_to_json.py v2 > out.json
+The `v2` argument labels the tick-rate fee model's vectors (evm-contracts 3d6378f).
 Values are copied as decimal strings exactly as the contracts printed them."""
 import json
 import sys
+
+SOURCES = {
+    "v1": (
+        "EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e (tree 9ab869d1a453b8df48d47c2e0e2fb2d4ca8f67bf)",
+        "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol",
+        "fixed_base_duration_v1",
+    ),
+    "v2": (
+        "EkuboProtocol/evm-contracts@3d6378f585591dc7eabeea6976932c30524bb8ea (tree a8944891df9a814523bb29d3f8a4713318ccfd60)",
+        "tests/vectors/generator/ZeroSeedLaunchSdkParityV2.t.sol",
+        "tick_rate_v2",
+    ),
+}
+CONTRACTS, GENERATOR, FEE_MODEL = SOURCES[sys.argv[1] if len(sys.argv) > 1 else "v1"]
 
 
 def state(v):
@@ -81,11 +97,12 @@ json.dump(
     {
         "version": 3,
         "label": "LOCAL FIXTURE PARITY VECTORS - not live evidence",
+        **({"fee_model": FEE_MODEL} if FEE_MODEL != "fixed_base_duration_v1" else {}),
         "source": {
-            "contracts": "EkuboProtocol/evm-contracts@43d6628841b3ce91dafa048b7ceef64bed55fc8e (tree 9ab869d1a453b8df48d47c2e0e2fb2d4ca8f67bf)",
+            "contracts": CONTRACTS,
             "core": "local Core built at that commit, runtime keccak 0xc5f90c9d0dbc5037f8f9e248f4bb292e7c1824f584eb6550cb4cad525b38c71a (asserted in every scenario)",
             "flow": "one extension (constructor (core)) and one periphery per test serve native and ERC-20 quotes; launches created through ZeroSeedLaunchPeriphery with the requested supply unchanged; swaps are Core.forward(extension, abi.encode(PoolKey, SwapParameters)) from the test locker or test/LaunchTestRouter.sol; native ETH settled by value",
-            "generator": "tests/vectors/generator/ZeroSeedLaunchSdkParity.t.sol",
+            "generator": GENERATOR,
         },
         "scenarios": list(scenarios.values()),
         "previews": previews,

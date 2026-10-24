@@ -257,6 +257,58 @@ with fresh time, with owner, user salt, metadata (31 UTF-8 bytes each) and decim
 predicted token and so the token order against the launch's quote (`TokenOrderMismatch`). Submit
 the requested supply unchanged; the returned installation is for display.
 
+## Second fee model: tick-rate decay (`evm-contracts@3d6378f`)
+
+`EkuboProtocol/evm-contracts@3d6378f585591dc7eabeea6976932c30524bb8ea` (tree
+`a8944891df9a814523bb29d3f8a4713318ccfd60`) replaces `uint32 feeDuration` with `uint64
+decayRateX32` (unsigned Q32.32 ticks per second) in the same position of `LaunchParameters` and
+`Launch`. Everything else above is unchanged. The fee model is a property of the deployment
+(`ZeroSeedLaunchInstance::fee_model`), never inferred from an event: a deployment of `43d6628`
+keeps `FixedBaseDurationV1` and its table math, a deployment of `3d6378f` uses `TickRateV2`.
+Parameters or launches of the other model are refused (`FeeModelMismatch`).
+
+- Fee after `tradingStart`: rate 0 is `initialFee`; `elapsed > MAX_DECAY_PRODUCT / rate`
+  (`381061679028371455`, integer division first) is `finalFee`; otherwise
+  `m = (rate * elapsed) >> 32` and `finalFee + ((initialFee - finalFee) * toFixed(tickToSqrtRatio(-m))) >> 128`
+  (`tick_rate_decayed_fee`, using the SDK's EVM `to_sqrt_ratio`). `finalFee` is the long-run
+  floor, reached only by rounding or by saturation; there is no fee end.
+- Validation: only `finalFee <= initialFee`. Every `uint64` rate is valid, including 0.
+- Selectors/topics: `create 0xf91810d2`, `previewInstallation 0xb665ec4d`, `LaunchCreated
+  0x8f81ce1b...5888`. Executed runtimes: extension `0xe08ad382...dfc3`, periphery `0xfa8ef7df...0444`
+  (asserted in every parity scenario).
+- Half-life of the excess: `decay_rate_x32_for_half_life(H) = floor(HALF_LIFE_X32_E30 / (H * 10**30))`
+  with the normative integer `ZERO_SEED_LAUNCH_HALF_LIFE_X32_E30 = 5954091920683119788732747343471285361579197626`;
+  one day is `68913100933` (`ZERO_SEED_LAUNCH_DEFAULT_DECAY_RATE_X32`). `half_life_micros` and
+  `saturation_elapsed_seconds` are display values.
+
+Vectors in `tests/vectors/v2/`, checked by `tests/zero_seed_launch_tick_rate.rs`:
+
+- `zero-seed-launch.json`: the contract's frozen vectors v7 verbatim (sha256 `4c1245ca...66605`):
+  40 fee rows, the five curve tables, tick steps, saturation seconds, five SHA-256 chains pinned by
+  the contract tests and the independent Python oracle, and the 13 fee-range verdicts.
+- `zero-seed-launch-parity.json`: `ZeroSeedLaunchSdkParityV2.t.sol` executed on the frozen
+  contracts: 17 scenarios at rates 0, 1, 2**30, the one-day default, the 600 s rate and 2**64 - 1,
+  native ETH and 18/6-decimal ERC-20 quotes, both token orders, test locker and router; 722 steps
+  (641 executed, 81 refused), 14 claims, 145 previews and creations. Deltas, `LaunchSwapped`,
+  `feeAt`, fee ledger, Core and holder balances, post state and claims all match.
+
+Reproduce (`ZeroSeedLaunchSdkParityV2.t.sol` is generated from the v1 generator):
+
+```sh
+python3 tests/vectors/generator/make_tick_rate_parity.py
+cp -a <evm-contracts at 3d6378f, built> <scratch>
+cp tests/vectors/generator/ZeroSeedLaunchSdkParityV2.t.sol <scratch>/test/extensions/
+(cd <scratch> && forge test --offline --match-contract ZeroSeedLaunchSdkParityV2 -vv) > <parity-log>
+python3 tests/vectors/generator/parity_to_json.py v2 < <parity-log> > tests/vectors/v2/zero-seed-launch-parity.json
+cp <scratch>/test/vectors/zero-seed-launch.json tests/vectors/v2/zero-seed-launch.json   # verbatim
+cargo test --features evm,starknet,serde --test zero_seed_launch_tick_rate
+```
+
+No v2 deployment exists. `ZeroSeedLaunchInstance::validate` accepts two LOCAL fixture instances, one
+per model: the `43d6628` one and the indexer's `3d6378f` anvil fixture
+(`tests/vectors/v2/zero-seed-launch-indexer.json`, verbatim, sha256 `52377ccd...1d2f`), each only with
+its own fee model.
+
 ## Gas
 
 SDK gas constants are unchanged UNCALIBRATED estimates. Against the regenerated parity vectors the
