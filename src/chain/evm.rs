@@ -62,6 +62,11 @@ use crate::quoting::pools::ve33::{
     Ve33Pool, Ve33PoolConfig, Ve33PoolConstructionError, Ve33PoolKey, Ve33PoolQuoteError,
     Ve33PoolResources, Ve33PoolState, Ve33StandalonePoolResources,
 };
+use crate::quoting::pools::zero_seed_launch::{
+    ZeroSeedLaunchConfig, ZeroSeedLaunchPool, ZeroSeedLaunchPoolConfig,
+    ZeroSeedLaunchPoolConstructionError, ZeroSeedLaunchPoolKey, ZeroSeedLaunchPoolQuoteError,
+    ZeroSeedLaunchPoolResources, ZeroSeedLaunchPoolState, ZeroSeedLaunchPoolTypeConfig,
+};
 use crate::quoting::types::{PoolConfig, PoolKey, TokenAmount};
 
 pub type EvmConcentratedPool = ConcentratedPool<Evm>;
@@ -151,6 +156,16 @@ pub type EvmBoostedFeesStableswapPoolResources = BoostedFeesStableswapPoolResour
 pub type EvmBoostedFeesStableswapPoolState = BoostedFeesStableswapPoolState;
 pub type EvmBoostedFeesStableswapPoolQuoteError = BoostedFeesStableswapPoolQuoteError;
 pub type EvmBoostedFeesStableswapPoolTypeConfig = BoostedFeesStableswapPoolTypeConfig;
+
+pub type EvmZeroSeedLaunchPool = ZeroSeedLaunchPool;
+pub type EvmZeroSeedLaunchConfig = ZeroSeedLaunchConfig;
+pub type EvmZeroSeedLaunchPoolConstructionError = ZeroSeedLaunchPoolConstructionError;
+pub type EvmZeroSeedLaunchPoolConfig = ZeroSeedLaunchPoolConfig;
+pub type EvmZeroSeedLaunchPoolKey = ZeroSeedLaunchPoolKey;
+pub type EvmZeroSeedLaunchPoolQuoteError = ZeroSeedLaunchPoolQuoteError;
+pub type EvmZeroSeedLaunchPoolResources = ZeroSeedLaunchPoolResources;
+pub type EvmZeroSeedLaunchPoolState = ZeroSeedLaunchPoolState;
+pub type EvmZeroSeedLaunchPoolTypeConfig = ZeroSeedLaunchPoolTypeConfig;
 
 pub type EvmVe33ConcentratedPool = Ve33Pool<ConcentratedPool<Evm>>;
 pub type EvmVe33ConcentratedPoolConstructionError = Ve33PoolConstructionError;
