@@ -213,6 +213,16 @@ fn replays_every_contract_vector_exactly() {
                 .map(|c| c.surcharge0 + c.surcharge1)
                 .sum::<u128>()
         );
+        assert_eq!(
+            swap.surcharge0,
+            expected.iter().map(|c| s::<u128>(&c["fee0"])).sum::<u128>(),
+            "{name}: independent token0 surcharge"
+        );
+        assert_eq!(
+            swap.surcharge1,
+            expected.iter().map(|c| s::<u128>(&c["fee1"])).sum::<u128>(),
+            "{name}: independent token1 surcharge"
+        );
     }
     assert_eq!(calls_checked, 266);
     assert!(exact_in > 0 && exact_out > 0 && token0 > 0 && token1 > 0 && skip > 0);
@@ -485,6 +495,13 @@ fn quote_runs_anchor_update_then_segments() {
         .unwrap();
     assert_eq!(same.consumed_amount, direct.delta1);
     assert_eq!(same.calculated_amount, direct.delta0.unsigned_abs());
+    assert_eq!(same.fees.core0, 0);
+    assert_eq!(
+        same.fees.core1,
+        direct.calls.iter().map(|c| c.fees_paid).sum::<u128>()
+    );
+    assert_eq!(same.fees.extension0, direct.surcharge0);
+    assert_eq!(same.fees.extension1, direct.surcharge1);
     assert_eq!(same.execution_resources.anchor_updates, 0);
     assert!(direct.surcharge0 > 0);
     let later = quote(13);

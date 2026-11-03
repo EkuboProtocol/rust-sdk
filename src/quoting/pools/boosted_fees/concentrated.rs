@@ -227,6 +227,7 @@ impl Pool for BoostedFeesConcentratedPool {
             execution_resources: underlying_execution_resources,
             state_after: underlying_state_after,
             fees_paid,
+            fees,
         } = self
             .underlying_pool
             .quote(QuoteParams {
@@ -242,6 +243,7 @@ impl Pool for BoostedFeesConcentratedPool {
             consumed_amount,
             calculated_amount,
             fees_paid,
+            fees,
             execution_resources: BoostedFeesConcentratedPoolResources {
                 concentrated: underlying_execution_resources,
                 boosted_fees: BoostedFeesConcentratedStandalonePoolResources {

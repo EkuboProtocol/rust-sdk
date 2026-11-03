@@ -232,10 +232,12 @@ impl Pool for MevCapturePool {
                 let state_update_count = u32::from(pool_time != current_time);
 
                 let mut calculated_amount = quote.calculated_amount;
+                let extension_fee;
 
                 if params.token_amount.amount >= 0 {
-                    calculated_amount -=
+                    extension_fee =
                         compute_fee::<Evm>(calculated_amount, fixed_point_additional_fee);
+                    calculated_amount -= extension_fee;
                 } else {
                     let input_amount_fee: u128 =
                         compute_fee::<Evm>(calculated_amount, pool_config.fee);
@@ -245,6 +247,7 @@ impl Pool for MevCapturePool {
                         amount_before_fee::<Evm>(input_amount, fixed_point_additional_fee)
                     {
                         let fee = bf - input_amount;
+                        extension_fee = fee;
                         calculated_amount += fee;
                     } else {
                         return Err(ConcentratedPoolQuoteError::FailedComputeSwapStep(
@@ -261,6 +264,10 @@ impl Pool for MevCapturePool {
                         mev_capture: MevCaptureStandalonePoolResources { state_update_count },
                     },
                     fees_paid: quote.fees_paid,
+                    fees: quote.fees.add_extension(
+                        extension_fee,
+                        params.token_amount.token == self.key().token0,
+                    ),
                     is_price_increasing: quote.is_price_increasing,
                     state_after: MevCapturePoolState {
                         last_update_time: current_time,
@@ -658,6 +665,58 @@ mod tests {
             assert_eq!(
                 (quote.consumed_amount, quote.calculated_amount),
                 (consumed, calculated)
+            );
+
+            // Independent underlying step aggregate at the identical state/limit.
+            // Extension retention must agree with its raw Q0.64 rounding, not
+            // an estimate obtained from the configured tier or economic input.
+            let base = pool
+                .concentrated_pool
+                .quote(QuoteParams {
+                    token_amount: TokenAmount {
+                        amount,
+                        token: if is_token1 {
+                            Evm::one_address()
+                        } else {
+                            Evm::zero_address()
+                        },
+                    },
+                    sqrt_ratio_limit: limit_tick.map(|tick| to_sqrt_ratio::<Evm>(tick).unwrap()),
+                    override_state: state.map(|s: MevCapturePoolState| s.concentrated_pool_state),
+                    meta: (),
+                })
+                .unwrap();
+            let tick_after =
+                pool.tick_after_swap(base.state_after.sqrt_ratio, base.is_price_increasing);
+            let config = pool.concentrated_pool.key().config;
+            let rate = additional_fee(
+                tick_after.abs_diff(pool.tick),
+                config.pool_type_config.0,
+                config.fee,
+            );
+            let extension = if amount >= 0 {
+                compute_fee::<Evm>(base.calculated_amount, rate)
+            } else {
+                let net =
+                    base.calculated_amount - compute_fee::<Evm>(base.calculated_amount, config.fee);
+                amount_before_fee::<Evm>(net, rate).unwrap() - net
+            };
+            assert_eq!(quote.fees, base.fees.add_extension(extension, !is_token1));
+            assert_eq!(
+                quote.fees.core0,
+                if base.is_price_increasing {
+                    0
+                } else {
+                    base.fees_paid
+                }
+            );
+            assert_eq!(
+                quote.fees.core1,
+                if base.is_price_increasing {
+                    base.fees_paid
+                } else {
+                    0
+                }
             );
 
             state = Some(quote.state_after);

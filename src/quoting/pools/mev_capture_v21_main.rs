@@ -1102,6 +1102,9 @@ impl Pool for MevCaptureV21MainPool {
             execution_resources: swap.resources,
             state_after: swap.state_after,
             fees_paid: swap.fees_paid,
+            fees: crate::quoting::types::QuoteFees::core(swap.fees_paid, is_token1 != (amount < 0))
+                .add_extension(swap.surcharge0, false)
+                .add_extension(swap.surcharge1, true),
         })
     }
 

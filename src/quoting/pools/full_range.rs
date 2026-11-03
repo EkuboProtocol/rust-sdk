@@ -141,6 +141,7 @@ impl Pool for FullRangePool {
                 execution_resources: Default::default(),
                 state_after: state,
                 fees_paid: 0,
+                fees: Default::default(),
             });
         }
 
@@ -157,6 +158,7 @@ impl Pool for FullRangePool {
                 execution_resources: Default::default(),
                 state_after: state,
                 fees_paid: 0,
+                fees: Default::default(),
             });
         }
 
@@ -212,6 +214,7 @@ impl Pool for FullRangePool {
             execution_resources: resources,
             state_after,
             fees_paid: step.fee_amount,
+            fees: crate::quoting::types::QuoteFees::core(step.fee_amount, is_increasing),
         })
     }
 

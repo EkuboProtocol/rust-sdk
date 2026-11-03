@@ -339,6 +339,7 @@ impl<C: Chain> Pool for ConcentratedPool<C> {
                 execution_resources: ConcentratedPoolResources::default(),
                 state_after: state,
                 fees_paid: 0,
+                fees: Default::default(),
             });
         }
 
@@ -478,6 +479,7 @@ impl<C: Chain> Pool for ConcentratedPool<C> {
             execution_resources: resources,
             state_after,
             fees_paid,
+            fees: crate::quoting::types::QuoteFees::core(fees_paid, is_increasing),
         })
     }
 

@@ -419,6 +419,7 @@ impl Pool for LimitOrderPool {
                 limit_order: LimitOrderStandalonePoolResources { orders_pulled },
             },
             fees_paid,
+            fees: crate::quoting::types::QuoteFees::core(fees_paid, is_increasing),
             is_price_increasing: is_increasing,
             state_after: LimitOrderPoolState {
                 concentrated_pool_state,
