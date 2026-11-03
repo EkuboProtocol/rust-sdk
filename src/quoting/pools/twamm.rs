@@ -363,6 +363,7 @@ impl<C: Chain> Pool for TwammPool<C> {
             consumed_amount: final_quote.consumed_amount,
             calculated_amount: final_quote.calculated_amount,
             fees_paid: final_quote.fees_paid,
+            fees: final_quote.fees,
             execution_resources: TwammPoolResources {
                 full_range: full_range_pool_execution_resources + final_quote.execution_resources,
                 twamm: TwammStandalonePoolResources {

@@ -154,6 +154,7 @@ impl<C: Chain> Pool for OraclePool<C> {
                 },
             },
             fees_paid: result.fees_paid,
+            fees: result.fees,
             is_price_increasing: result.is_price_increasing,
             state_after: OraclePoolState {
                 full_range_pool_state: result.state_after,

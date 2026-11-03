@@ -268,6 +268,7 @@ impl Pool for StableswapPool {
                 liquidity,
             },
             fees_paid,
+            fees: crate::quoting::types::QuoteFees::core(fees_paid, increasing),
         })
     }
 

@@ -182,6 +182,7 @@ where
             execution_resources: underlying_execution_resources,
             state_after: underlying_state_after,
             fees_paid,
+            fees,
         } = self
             .underlying_pool
             .quote(QuoteParams {
@@ -211,6 +212,7 @@ where
             consumed_amount,
             calculated_amount,
             fees_paid: fees_paid + ve33_fee,
+            fees: fees.add_extension(ve33_fee, token_amount.token == self.key().token0),
             execution_resources: Ve33PoolResources {
                 underlying: underlying_execution_resources,
                 ve33: Ve33StandalonePoolResources {
@@ -319,6 +321,10 @@ mod tests {
             underlying_quote.calculated_amount - expected_fee
         );
         assert_eq!(ve33_quote.fees_paid, expected_fee);
+        assert_eq!(
+            ve33_quote.fees,
+            crate::quoting::types::QuoteFees::default().add_extension(expected_fee, true)
+        );
         assert_eq!(ve33_quote.execution_resources.ve33.fees_accumulated, 1);
     }
 
@@ -355,6 +361,14 @@ mod tests {
         assert_eq!(
             ve33_quote.fees_paid,
             ve33_quote.calculated_amount - underlying_quote.calculated_amount
+        );
+        assert_eq!(ve33_quote.fees.core0, 0);
+        assert_eq!(ve33_quote.fees.core1, 0);
+        assert_eq!(ve33_quote.fees.extension0, 0);
+        assert_eq!(
+            ve33_quote.fees.extension1,
+            amount_before_fee::<Evm>(underlying_quote.calculated_amount, ONE_PERCENT_FEE).unwrap()
+                - underlying_quote.calculated_amount
         );
     }
 

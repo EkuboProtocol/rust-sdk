@@ -84,8 +84,53 @@ pub struct Quote<R, S> {
     pub execution_resources: R,
     /// Pool state after the simulated swap.
     pub state_after: S,
-    /// Fees paid during the swap.
+    /// Legacy model-dependent scalar. Do not add amounts denominated in different tokens.
     pub fees_paid: u128,
+    /// Exact charges retained by the selected calculation, in pool-key token order.
+    pub fees: QuoteFees,
+}
+
+/// Unsigned charges in token base units. No current model produces rebates.
+/// Core and extension charges are disjoint; virtual orders/donations are excluded.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct QuoteFees {
+    pub core0: u128,
+    pub core1: u128,
+    pub extension0: u128,
+    pub extension1: u128,
+}
+
+impl QuoteFees {
+    pub fn core(amount: u128, input_is_token1: bool) -> Self {
+        if input_is_token1 {
+            Self {
+                core1: amount,
+                ..Self::default()
+            }
+        } else {
+            Self {
+                core0: amount,
+                ..Self::default()
+            }
+        }
+    }
+
+    pub fn add_extension(mut self, amount: u128, is_token1: bool) -> Self {
+        if is_token1 {
+            self.extension1 += amount;
+        } else {
+            self.extension0 += amount;
+        }
+        self
+    }
+
+    pub fn fees0(self) -> u128 {
+        self.core0 + self.extension0
+    }
+    pub fn fees1(self) -> u128 {
+        self.core1 + self.extension1
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
